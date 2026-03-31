@@ -1238,6 +1238,25 @@ function buildSubPlanHTML(){
         ?`<span style="font-size:9px;color:var(--green)">✓ ${sub.off.size} off, ${sub.on.size} on</span>`
         :mismatch?`<span style="font-size:9px;color:var(--warn)">Select equal off/on</span>`:'';
 
+      // Compute post-sub court lineup
+      const afterCourtIds = getCourtAtPlanPoint(halfKey, i+1);
+      const afterCourtHTML = isValid ? (() => {
+        const names = [...afterCourtIds].map(id=>filtered[id]).filter(Boolean);
+        const posLine = names.map(nm=>{
+          const pos = posLabelForName(nm);
+          const posBadge = pos ? `<span style="font-size:7px;font-weight:700;padding:1px 3px;border-radius:3px;background:rgba(62,207,110,.18);color:var(--green)">${pos}</span>` : '';
+          return `<span style="font-size:10px;color:var(--text);font-weight:600">${nm.split(' ')[0]}</span>${posBadge}`;
+        }).join('<span style="color:var(--dim);margin:0 3px;font-size:9px">·</span>');
+        const covered = coveredPositions(names);
+        const missing = ['1','2','3','4','5'].filter(p=>!covered.has(p));
+        const missingBit = missing.length && names.some(n=>allPositionsForName(n).length>0)
+          ? `<span style="font-size:9px;color:var(--warn);margin-left:6px">missing ${missing.join(',')}</span>` : '';
+        return `<div style="background:rgba(62,207,110,.07);border-radius:6px;padding:5px 8px;margin-top:6px;">
+          <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:3px;font-weight:700">On court after ▶</div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;">${posLine}${missingBit}</div>
+        </div>`;
+      })() : '';
+
       h+=`<div class="plan-slot${isValid?' done':''}">
         <div class="plan-slot-hdr">
           <span class="plan-slot-title">SUB ${i+1} @ ${fmt(atTime)}</span>
@@ -1250,6 +1269,7 @@ function buildSubPlanHTML(){
         <div class="plan-chips">${courtChips||'<span style="color:var(--dim);font-size:10px">Empty court</span>'}</div>
         <div class="plan-row-lbl">Bench — tap to sub on ▲</div>
         <div class="plan-chips">${benchChips||'<span style="color:var(--dim);font-size:10px">Empty bench</span>'}</div>
+        ${afterCourtHTML}
       </div>`;
     }
     return h;
@@ -2184,17 +2204,16 @@ async function generateAIRotation(){
   showAIRotationModal(null, true);
 
   // Build prompt
-  const h1Subs = Math.max(0, Math.ceil(S.h1Dur*60/S.h1Int)-1);
-  const h2Subs = Math.max(0, Math.ceil(S.h2Dur*60/S.h2Int)-1);
   const totalSecs = (S.h1Dur+S.h2Dur)*60;
   const fairShare = Math.round(totalSecs*COURT_SIZE/filtered.length);
 
   const h2PresetNote = S.useH2Preset && S.h2PresetIds.size===COURT_SIZE
-    ? `2nd half starting 5: ${[...S.h2PresetIds].map(i=>filtered[i]).join(', ')}`
-    : 'No 2nd half preset';
+    ? 'H2 starting 5: ' + [...S.h2PresetIds].map(i=>filtered[i]).join(', ')
+    : 'No H2 starting 5 preset — you choose';
   const finalNote = S.useFinalPreset && S.finalPresetIds.size===COURT_SIZE
-    ? `Final 5 (must finish game): ${[...S.finalPresetIds].map(i=>filtered[i]).join(', ')}`
-    : 'No final 5 preset';
+    ? 'Final 5 (must finish game): ' + [...S.finalPresetIds].map(i=>filtered[i]).join(', ')
+    : 'No final 5 constraint';
+  const priorityNames = [...S.priorityPlayerIds].map(i=>filtered[i]).filter(Boolean);
 
   const playerSummary = buildPlayerRatingSummary(filtered);
   const hasAnyRatings = filtered.some(name=>{
@@ -2203,52 +2222,52 @@ async function generateAIRotation(){
     return player && Object.keys(getPlayerRatings(T.activeTeamId, player.id)).length > 0;
   });
 
-  const prompt = [
-    'You are a basketball coaching assistant helping plan substitutions for a junior game.',
+  const fairShareFmt = Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
+
+  const promptLines = [
+    'You are an expert basketball coaching assistant devising the optimal substitution rotation for a junior game.',
     '',
-    'GAME SETTINGS:',
-    `  Players: ${filtered.join(', ')}`,
-    `  Game: ${S.h1Dur} min H1 + ${S.h2Dur} min H2 = ${S.h1Dur+S.h2Dur} min total`,
-    `  H1: ${h1Subs} sub${h1Subs!==1?'s':''} (every ${Math.floor(S.h1Int/60)}:${String(S.h1Int%60).padStart(2,'0')}, ${S.h1Sps} player${S.h1Sps!==1?'s':''} per sub)`,
-    `  H2: ${h2Subs} sub${h2Subs!==1?'s':''} (every ${Math.floor(S.h2Int/60)}:${String(S.h2Int%60).padStart(2,'0')}, ${S.h2Sps} player${S.h2Sps!==1?'s':''} per sub)`,
-    `  Fair share per player: ~${Math.floor(fairShare/60)}:${String(fairShare%60).padStart(2,'0')}`,
-    `  ${h2PresetNote}`,
-    `  ${finalNote}`,
+    'GAME DETAILS:',
+    '  Players (' + filtered.length + '): ' + filtered.join(', '),
+    '  Game: ' + S.h1Dur + ' min H1 + ' + S.h2Dur + ' min H2 = ' + (S.h1Dur+S.h2Dur) + ' min total',
+    '  Court size: 5 players at all times',
+    '  Fair court time if perfectly even: ~' + fairShareFmt + ' per player',
+    '  ' + h2PresetNote,
+    '  ' + finalNote,
+    priorityNames.length ? ('  Priority players (give slightly more time if uneven): ' + priorityNames.join(', ')) : null,
     '',
-    hasAnyRatings ? 'PLAYER RATINGS (0-10 per attribute):' : 'PLAYER RATINGS: Not yet entered — base plan on equal time distribution.',
-    hasAnyRatings ? playerSummary : '',
+    hasAnyRatings ? 'PLAYER RATINGS (0-10, higher = better):' : 'PLAYER RATINGS: None entered — distribute time evenly.',
+    hasAnyRatings ? playerSummary : null,
     '',
-    'YOUR TASK:',
-    `Generate a substitution plan with exactly ${h1Subs} H1 sub${h1Subs!==1?'s':''} and ${h2Subs} H2 sub${h2Subs!==1?'s':''}.`,
-    `Each sub must swap exactly ${S.h1Sps} player${S.h1Sps!==1?'s':''} (H1) and ${S.h2Sps} player${S.h2Sps!==1?'s':''} (H2).`,
-    'Goals (in priority order):',
-    '  1. Distribute playing time as evenly as possible across all players',
-    hasAnyRatings ? '  2. At every sub, ensure the 5 players on court cover as many different positions (1-5) as possible using primary AND alternate positions. Avoid leaving a position completely uncovered.' : '',
-    hasAnyRatings ? '  3. Put stronger offensive players on together when possible' : '',
-    hasAnyRatings ? '  4. Ensure good defensive coverage on court at all times' : '',
-    '  5. Respect any H2 starting 5 and final 5 presets',
-    '  6. Avoid putting players back on immediately after they just came off',
-    hasAnyRatings ? '  Note: A player can cover a position if it is their primary OR either alternate position.' : '',
+    'YOUR TASK — devise the OPTIMAL rotation:',
+    'You are NOT restricted to a fixed sub interval or players-per-sub.',
+    'Choose timing and size of each sub to MAXIMISE team strength while keeping time as even as possible.',
+    'You may make 1-5 subs per half at any minute, swapping 1-5 players — whatever produces the best outcome.',
     '',
-    'Return ONLY a JSON object, no markdown, no explanation:',
+    'GOALS (priority order):',
+    '1. Maximise team strength on court — put best available combinations together',
+    hasAnyRatings ? '2. Ensure court lineup always covers as many of positions 1-5 as possible (primary AND alternate positions count)' : null,
+    hasAnyRatings ? '3. Balance offensive firepower with defensive coverage in each lineup' : null,
+    '4. Each player within 2-3 minutes of fair share unless using priority players',
+    '5. No player sits for more than one consecutive sub window if avoidable',
+    '6. Respect H2 starting 5 and final 5 if set',
+    '7. Never return a player immediately after they just came off',
+    '',
+    'Return ONLY valid JSON, no markdown:',
     '{',
-    '  "rationale": "2-3 sentence explanation of your rotation strategy",',
-    '  "h1": [',
-    '    {"subNum": 1, "atTime": "3:00", "off": ["Player A"], "on": ["Player B"], "note": "optional short note"},',
-    '    {"subNum": 2, "atTime": "6:00", "off": ["Player C"], "on": ["Player D"], "note": ""}',
-    '  ],',
-    '  "h2": [',
-    '    {"subNum": 1, "atTime": "3:00", "off": ["Player E"], "on": ["Player F"], "note": ""}',
-    '  ],',
-    '  "expectedTimes": {"Player A": "12:00", "Player B": "8:00"}',
+    '  "rationale": "2-3 sentences on strategy and key decisions",',
+    '  "h1": [{"subNum":1,"atTime":"4:00","off":["Player A","Player B"],"on":["Player C","Player D"],"note":"brief reason"}],',
+    '  "h2": [{"subNum":1,"atTime":"5:00","off":["Player E"],"on":["Player A"],"note":""}],',
+    '  "expectedTimes": {"Player A":"14:00"}',
     '}',
     '',
-    `The starting 5 on court are: ${filtered.slice(0, COURT_SIZE).join(', ')}.`,
-    `Bench players at start: ${filtered.slice(COURT_SIZE).join(', ') || 'none'}.`,
-    `CRITICAL: In your JSON response, use EXACTLY these player names (copy-paste them):`,
-    `All players: ${filtered.join(', ')}`,
-    'Do not shorten, modify, or reformat the names in any way.'
+    'Starting 5: ' + filtered.slice(0,5).join(', '),
+    'Starting bench: ' + (filtered.slice(5).join(', ') || 'none'),
+    'CRITICAL — use these EXACT player name strings in your JSON:',
+    filtered.join(', ')
   ].filter(l=>l!==null).join('\n');
+
+  const prompt = promptLines;
 
   const timeoutPromise = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')),60000));
   const fetchPromise = fetch('https://api.anthropic.com/v1/messages',{
