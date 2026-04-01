@@ -671,16 +671,18 @@ const DEFAULTS = {
     purple:  '#c084fc',
   },
   apiKey: '',
+  geminiKey: '',
+  aiProvider: 'claude', // 'claude' | 'gemini'
 };
-const CFG = { theme: DEFAULTS.theme, colors: {...DEFAULTS.colors}, apiKey: '' };
+const CFG = { theme: DEFAULTS.theme, colors: {...DEFAULTS.colors}, apiKey: '', geminiKey: '', aiProvider: 'claude' };
 
 function saveSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({theme:CFG.theme,colors:CFG.colors,apiKey:CFG.apiKey})); }catch(_){}
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({theme:CFG.theme,colors:CFG.colors,apiKey:CFG.apiKey,geminiKey:CFG.geminiKey,aiProvider:CFG.aiProvider})); }catch(_){}
 }
 function loadSettings(){
   try{
     const raw=localStorage.getItem(SETTINGS_KEY);
-    if(raw){ const d=JSON.parse(raw); CFG.theme=d.theme||'dark'; CFG.colors={...DEFAULTS.colors,...(d.colors||{})}; CFG.apiKey=d.apiKey||''; }
+    if(raw){ const d=JSON.parse(raw); CFG.theme=d.theme||'dark'; CFG.colors={...DEFAULTS.colors,...(d.colors||{})}; CFG.apiKey=d.apiKey||''; CFG.geminiKey=d.geminiKey||''; CFG.aiProvider=d.aiProvider||'claude'; }
   }catch(_){}
   applyTheme();
 }
@@ -2188,9 +2190,71 @@ function buildPlayerRatingSummary(filtered){
   }).join('\n');
 }
 
+// ─── Universal AI call — routes to Claude or Gemini based on CFG.aiProvider ───
+async function callAI(prompt, maxTokens){
+  maxTokens = maxTokens || 2000;
+  const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')), 90000));
+
+  if(CFG.aiProvider === 'gemini'){
+    if(!CFG.geminiKey){ throw new Error('No Gemini API key — add it in ⚙ Settings'); }
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + CFG.geminiKey;
+    const fetchP = fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
+      })
+    });
+    const resp = await Promise.race([fetchP, timeout]);
+    if(!resp.ok){
+      let msg = 'Gemini HTTP ' + resp.status;
+      try{ const d=await resp.json(); msg += ': ' + (d.error?.message||JSON.stringify(d)); }catch(_){}
+      if(resp.status===400) msg = 'Gemini: Bad request — check your API key in ⚙ Settings';
+      if(resp.status===403) msg = 'Gemini API key invalid or not enabled. Visit aistudio.google.com to get a key.';
+      if(resp.status===429) msg = 'Gemini rate limit. Wait a moment and try again.';
+      throw new Error(msg);
+    }
+    const data = await resp.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if(!text) throw new Error('Gemini returned empty response');
+    return text;
+
+  } else {
+    // Claude (default)
+    if(!CFG.apiKey){ throw new Error('No Anthropic API key — add it in ⚙ Settings'); }
+    const fetchP = fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CFG.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const resp = await Promise.race([fetchP, timeout]);
+    if(!resp.ok){
+      let msg = 'HTTP ' + resp.status;
+      try{ const d=await resp.json(); msg += ': ' + (d.error?.message||JSON.stringify(d)); }catch(_){}
+      if(resp.status===401) msg = 'Invalid Anthropic API key — check ⚙ Settings';
+      if(resp.status===429) msg = 'Rate limit. Wait 30s and try again.';
+      throw new Error(msg);
+    }
+    const data = await resp.json();
+    if(data.error) throw new Error('Claude: ' + data.error.message);
+    return (data.content||[]).map(c=>c.text||'').join('').trim();
+  }
+}
+
 async function generateAIRotation(){
-  if(!CFG.apiKey){
-    alert('Please add your Anthropic API key in ⚙ Settings first.');
+  const hasKey = CFG.aiProvider==='gemini' ? !!CFG.geminiKey : !!CFG.apiKey;
+  if(!hasKey){
+    alert('Please add your ' + (CFG.aiProvider==='gemini'?'Google Gemini':'Anthropic') + ' API key in ⚙ Settings first.');
     return;
   }
 
@@ -2269,48 +2333,18 @@ async function generateAIRotation(){
 
   const prompt = promptLines;
 
-  const timeoutPromise = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')),60000));
-  const fetchPromise = fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key':CFG.apiKey,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true',
-    },
-    body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',
-      max_tokens:2000,
-      messages:[{role:'user',content:prompt}]
-    })
-  });
+  const timeoutPromise = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')),90000));
 
-  let resp;
-  try { resp = await Promise.race([fetchPromise,timeoutPromise]); }
-  catch(err){
+  let rawText;
+  try {
+    rawText = await callAI(prompt, 2000);
+  } catch(err){
     closeAIRotationModal();
     alert(err.message==='TIMEOUT'
       ? 'Request timed out. Check your API key in ⚙ Settings and try again.'
-      : 'Network error: '+err.message);
+      : 'AI Error: '+err.message);
     return;
   }
-
-  if(!resp.ok){
-    let msg='HTTP '+resp.status;
-    try{ const d=await resp.json(); msg+=': '+(d.error?.message||JSON.stringify(d)); }catch(_){}
-    if(resp.status===401) msg='Invalid API key — check ⚙ Settings.';
-    if(resp.status===429) msg='Rate limit. Wait 30s and try again.';
-    closeAIRotationModal();
-    alert('API Error: '+msg);
-    return;
-  }
-
-  let data;
-  try{ data=await resp.json(); }
-  catch(e){ closeAIRotationModal(); alert('Bad response: '+e.message); return; }
-  if(data.error){ closeAIRotationModal(); alert('Claude error: '+data.error.message); return; }
-
-  const rawText=(data.content||[]).map(c=>c.text||'').join('').trim();
   let clean=rawText.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
   const oi=clean.indexOf('{'), ci=clean.lastIndexOf('}');
   if(oi!==-1&&ci>oi) clean=clean.slice(oi,ci+1);
@@ -3120,10 +3154,26 @@ function renderSettings(){
   <div class="settings-body">
     <div class="s-sec">
       <div class="s-hdr">AI FEATURES</div>
-      <div class="s-lbl">Anthropic API Key</div>
-      <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;">Required for Grade Stats PDF parsing. Get a key at <span style="color:var(--blue)">console.anthropic.com</span>. Stored locally on this device only.</div>
-      <input class="apikey-input" type="password" value="${CFG.apiKey||''}" placeholder="sk-ant-..." oninput="CFG.apiKey=this.value" onchange="saveSettings()">
-      ${CFG.apiKey?`<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ API key saved</div>`:''}
+      <div class="s-lbl">AI Provider</div>
+      <div class="theme-btns" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
+        <div class="theme-btn${CFG.aiProvider==='claude'?' active':''}" onclick="CFG.aiProvider='claude';saveSettings();renderSettings()">
+          <span class="theme-btn-icon">🤖</span>
+          <span class="theme-btn-lbl">Claude (Anthropic)</span>
+        </div>
+        <div class="theme-btn${CFG.aiProvider==='gemini'?' active':''}" onclick="CFG.aiProvider='gemini';saveSettings();renderSettings()">
+          <span class="theme-btn-icon">✦</span>
+          <span class="theme-btn-lbl">Gemini (Google)</span>
+        </div>
+      </div>
+      ${CFG.aiProvider==='claude'?`
+        <div class="s-lbl">Anthropic API Key</div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;">Get a free key at <span style="color:var(--blue)">console.anthropic.com</span>. Stored on this device only.</div>
+        <input class="apikey-input" type="password" value="${CFG.apiKey||''}" placeholder="sk-ant-..." oninput="CFG.apiKey=this.value" onchange="saveSettings()">
+        ${CFG.apiKey?'<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ API key saved</div>':''}`:`
+        <div class="s-lbl">Google Gemini API Key</div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;">Get a free key at <span style="color:var(--blue)">aistudio.google.com</span>. Select Gemini 2.0 Flash. Stored on this device only.</div>
+        <input class="apikey-input" type="password" value="${CFG.geminiKey||''}" placeholder="AIza..." oninput="CFG.geminiKey=this.value" onchange="saveSettings()">
+        ${CFG.geminiKey?'<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ Gemini key saved</div>':''}`}
     </div>
     <div class="s-sec">
       <div class="s-hdr">APPEARANCE</div>
