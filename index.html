@@ -77,19 +77,19 @@ body{
   transition: background .2s, color .2s;
 }
 
-.bb{font-family:Impact,'Arial Narrow',Arial,sans-serif;letter-spacing:.08em;}
+.bb{font-family:Impact,sans-serif;letter-spacing:.08em;}
 
 /* ── TEAM MANAGEMENT ── */
 .tm{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 .tm-hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top, 0px) + 14px) calc(env(safe-area-inset-right, 0px) + 13px) 11px calc(env(safe-area-inset-left, 0px) + 13px);display:flex;align-items:center;gap:10px;flex-shrink:0;}
-.tm-hdr-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);flex:1;}
+.tm-hdr-title{font-family:Impact,sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);flex:1;}
 .tm-back{background:none;border:none;color:var(--dim);font-size:22px;cursor:pointer;padding:2px 6px;}
-.tm-add-btn{background:var(--accent);color:#111;border:none;border-radius:9px;padding:8px 14px;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;}
+.tm-add-btn{background:var(--accent);color:#111;border:none;border-radius:9px;padding:8px 14px;font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;}
 .tm-body{flex:1;overflow-y:auto;padding:10px 12px;}
 .tm-empty{text-align:center;color:var(--dim);font-size:13px;padding:40px 20px;line-height:1.8;}
 .team-card{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;cursor:pointer;}
 .team-card:active{opacity:.8;}
-.team-card-name{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:1px;color:var(--accent);margin-bottom:3px;}
+.team-card-name{font-family:Impact,sans-serif;font-size:20px;letter-spacing:1px;color:var(--accent);margin-bottom:3px;}
 .team-card-meta{font-size:11px;color:var(--dim);margin-bottom:6px;}
 .team-card-row{display:flex;align-items:center;justify-content:space-between;}
 .team-card-players{font-size:11px;color:var(--green);}
@@ -106,15 +106,15 @@ body{
 .te-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .te-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
 .te-footer{background:var(--surface);border-top:1px solid var(--border);padding:10px calc(env(safe-area-inset-right, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 10px) calc(env(safe-area-inset-left, 0px) + 12px);display:flex;gap:8px;flex-shrink:0;}
-.te-save{flex:1;background:var(--accent);color:#111;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:2px;border:none;border-radius:10px;padding:13px;cursor:pointer;}
-.te-cancel{background:var(--card);border:1.5px solid var(--border);color:var(--dim);font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:16px;letter-spacing:1px;border-radius:10px;padding:13px 16px;cursor:pointer;}
-.te-section-hdr{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:13px;letter-spacing:2px;color:var(--blue);border-bottom:1px solid var(--border);padding-bottom:5px;margin:16px 0 10px;display:flex;align-items:center;justify-content:space-between;}
+.te-save{flex:1;background:var(--accent);color:#111;font-family:Impact,sans-serif;font-size:20px;letter-spacing:2px;border:none;border-radius:10px;padding:13px;cursor:pointer;}
+.te-cancel{background:var(--card);border:1.5px solid var(--border);color:var(--dim);font-family:Impact,sans-serif;font-size:16px;letter-spacing:1px;border-radius:10px;padding:13px 16px;cursor:pointer;}
+.te-section-hdr{font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px;color:var(--blue);border-bottom:1px solid var(--border);padding-bottom:5px;margin:16px 0 10px;display:flex;align-items:center;justify-content:space-between;}
 .te-add-player{width:100%;background:var(--blueDim);border:1.5px dashed var(--border);border-radius:9px;padding:10px;color:var(--blue);font-size:12px;cursor:pointer;text-align:center;margin-top:6px;}
 .player-row{background:var(--card);border:1.5px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:6px;display:flex;align-items:center;gap:8px;}
 .player-row-info{flex:1;min-width:0;}
 .player-row-name{font-size:13px;font-weight:700;color:var(--text);}
 .player-row-sub{font-size:10px;color:var(--dim);margin-top:1px;}
-.player-row-num{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:18px;color:var(--accent);letter-spacing:.05em;flex-shrink:0;}
+.player-row-num{font-family:Impact,sans-serif;font-size:18px;color:var(--accent);letter-spacing:.05em;flex-shrink:0;}
 .player-row-edit{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:4px;}
 .player-row-del{background:none;border:none;color:rgba(255,85,85,.5);font-size:16px;cursor:pointer;padding:4px;}
 .player-edit-panel{background:var(--surface);border:1.5px solid var(--blue);border-radius:10px;padding:10px 11px;margin-bottom:6px;}
@@ -122,13 +122,13 @@ body{
 .pep-input{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-size:13px;outline:none;}
 .pep-input:focus{border-color:var(--blue);}
 .pep-row{display:flex;gap:7px;}
-.pep-save{flex:1;background:#3ecf6e;color:#0a1a0a;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:15px;letter-spacing:1px;border:none;border-radius:8px;padding:9px;cursor:pointer;}
+.pep-save{flex:1;background:#3ecf6e;color:#0a1a0a;font-family:Impact,sans-serif;font-size:15px;letter-spacing:1px;border:none;border-radius:8px;padding:9px;cursor:pointer;}
 .pep-cancel{background:#2e3350;border:none;color:#7a80a0;font-size:13px;border-radius:8px;padding:9px 13px;cursor:pointer;}
 
 /* team selector in setup */
 .team-selector{background:#1a1e2a;border:1.5px solid #2e3350;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;cursor:pointer;}
 .ts-info{flex:1;min-width:0;}
-.ts-name{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:16px;letter-spacing:1px;color:#f08c00;}
+.ts-name{font-family:Impact,sans-serif;font-size:16px;letter-spacing:1px;color:#f08c00;}
 .ts-meta{font-size:10px;color:#7a80a0;margin-top:1px;}
 .ts-arrow{color:#7a80a0;font-size:16px;flex-shrink:0;}
 .team-select-dropdown{background:#1a1e2a;border:1.5px solid #2e3350;border-radius:10px;overflow:hidden;margin-bottom:10px;}
@@ -136,7 +136,7 @@ body{
 .tsd-item:last-child{border-bottom:none;}
 .tsd-item:active{background:#222736;}
 .tsd-item.active{background:#1a2e1a;}
-.tsd-name{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:14px;letter-spacing:1px;color:#f08c00;flex:1;}
+.tsd-name{font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;color:#f08c00;flex:1;}
 .tsd-meta{font-size:10px;color:#7a80a0;}
 .tsd-check{color:#3ecf6e;font-size:16px;flex-shrink:0;}
 .opponent-input{width:100%;background:#222736;border:1.5px solid #2e3350;border-radius:9px;padding:10px 12px;color:#eef0f8;font-size:14px;outline:none;margin-top:0;}
@@ -145,31 +145,31 @@ body{
 /* ── EXPORT MODAL ── */
 .export-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;display:flex;align-items:flex-end;padding:0;backdrop-filter:blur(3px);}
 .export-modal-box{background:var(--surface);border-top:1px solid var(--border);border-radius:18px 18px 0 0;padding:20px 16px 30px;width:100%;max-height:70vh;display:flex;flex-direction:column;gap:12px;}
-.export-modal-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:2px;color:var(--accent);}
+.export-modal-title{font-family:Impact,sans-serif;font-size:20px;letter-spacing:2px;color:var(--accent);}
 .export-modal-sub{font-size:12px;color:var(--dim);margin-top:-6px;}
 .export-textarea{flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:9px;padding:10px;color:var(--text);font-family:monospace;font-size:11px;resize:none;min-height:120px;outline:none;}
 .export-btns{display:flex;gap:8px;}
-.export-share-btn{flex:1;background:var(--accent);color:#111;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:17px;letter-spacing:1px;border:none;border-radius:10px;padding:12px;cursor:pointer;}
-.export-copy-btn{flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:17px;letter-spacing:1px;border-radius:10px;padding:12px;cursor:pointer;}
+.export-share-btn{flex:1;background:var(--accent);color:#111;font-family:Impact,sans-serif;font-size:17px;letter-spacing:1px;border:none;border-radius:10px;padding:12px;cursor:pointer;}
+.export-copy-btn{flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:Impact,sans-serif;font-size:17px;letter-spacing:1px;border-radius:10px;padding:12px;cursor:pointer;}
 .export-cancel-btn{background:none;border:none;color:var(--dim);font-size:13px;cursor:pointer;padding:4px;text-align:center;width:100%;}
 
 /* ── CONFIRMATION MODAL ── */
 .confirm-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);}
 .confirm-box{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:24px 20px;max-width:320px;width:100%;text-align:center;}
-.confirm-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:28px;letter-spacing:2px;margin-bottom:8px;}
+.confirm-title{font-family:Impact,sans-serif;font-size:28px;letter-spacing:2px;margin-bottom:8px;}
 .confirm-title.danger{color:var(--red);}
 .confirm-title.warn{color:var(--amber);}
 .confirm-body{font-size:13px;color:var(--dim);margin-bottom:20px;line-height:1.6;}
 .confirm-btns{display:flex;gap:10px;}
-.confirm-cancel{flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:18px;letter-spacing:1px;border-radius:10px;padding:12px;cursor:pointer;}
-.confirm-ok{flex:1;border:none;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:18px;letter-spacing:1px;border-radius:10px;padding:12px;cursor:pointer;}
+.confirm-cancel{flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:Impact,sans-serif;font-size:18px;letter-spacing:1px;border-radius:10px;padding:12px;cursor:pointer;}
+.confirm-ok{flex:1;border:none;font-family:Impact,sans-serif;font-size:18px;letter-spacing:1px;border-radius:10px;padding:12px;cursor:pointer;}
 .confirm-ok.danger{background:var(--red);color:#fff;}
 .confirm-ok.warn{background:var(--amber);color:#111;}
 
 /* ── SETTINGS SCREEN ── */
 .settings{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 .settings-hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top, 0px) + 14px) calc(env(safe-area-inset-right, 0px) + 13px) 11px calc(env(safe-area-inset-left, 0px) + 13px);display:flex;align-items:center;gap:10px;flex-shrink:0;}
-.settings-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);flex:1;}
+.settings-title{font-family:Impact,sans-serif;font-size:28px;letter-spacing:2px;color:var(--accent);flex:1;}
 .settings-body{flex:1;overflow-y:auto;padding:12px 13px 30px;}
 .theme-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;}
 .theme-btn{background:var(--card);border:1.5px solid var(--border);border-radius:9px;padding:10px 6px;cursor:pointer;text-align:center;}
@@ -201,10 +201,10 @@ body{
 
 /* ── SETUP ── */
 .setup{height:100dvh;height:100vh;overflow-y:auto;padding:calc(env(safe-area-inset-top, 0px) + 18px) calc(env(safe-area-inset-right, 0px) + 13px) 40px calc(env(safe-area-inset-left, 0px) + 13px);max-width:540px;margin:0 auto;}
-.setup-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:46px;letter-spacing:3px;color:#f08c00;line-height:1;}
+.setup-title{font-family:Impact,sans-serif;font-size:46px;letter-spacing:3px;color:#f08c00;line-height:1;}
 .setup-sub{color:#7a80a0;font-size:12px;margin-top:3px;margin-bottom:20px;}
 .s-sec{margin-bottom:18px;}
-.s-hdr{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:13px;letter-spacing:2px;color:#f08c00;border-bottom:1px solid #2e3350;padding-bottom:5px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.s-hdr{font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px;color:#f08c00;border-bottom:1px solid #2e3350;padding-bottom:5px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
 .s-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:#7a80a0;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;}
 .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
 .pw{position:relative;}
@@ -215,14 +215,14 @@ body{
 .rmv{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#7a80a0;cursor:pointer;font-size:13px;padding:3px;}
 .h-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
 .ni-wrap{display:flex;flex-direction:column;}
-.ni{width:100%;background:#222736;border:1.5px solid #2e3350;border-radius:9px;padding:9px 6px;color:#eef0f8;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:24px;text-align:center;outline:none;}
+.ni{width:100%;background:#222736;border:1.5px solid #2e3350;border-radius:9px;padding:9px 6px;color:#eef0f8;font-family:Impact,sans-serif;font-size:24px;text-align:center;outline:none;}
 .ni:focus{border-color:#f08c00;}
 /* ── STEPPER ── */
 .stepper-wrap{display:flex;flex-direction:column;gap:3px;}
 .stepper{display:flex;align-items:center;gap:0;border-radius:9px;overflow:hidden;border:1.5px solid var(--border);}
 .stepper button{background:var(--border);border:none;color:var(--text);font-size:22px;font-weight:700;width:44px;height:48px;cursor:pointer;flex-shrink:0;line-height:1;}
 .stepper button:active{background:var(--dim);}
-.stepper-val{flex:1;background:var(--card);color:var(--text);font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:18px;text-align:center;padding:4px 2px;letter-spacing:.05em;min-width:70px;}
+.stepper-val{flex:1;background:var(--card);color:var(--text);font-family:Impact,sans-serif;font-size:18px;text-align:center;padding:4px 2px;letter-spacing:.05em;min-width:70px;}
 .addbtn{background:#222736;border:1.5px dashed #2e3350;border-radius:9px;padding:9px;color:#7a80a0;font-size:12px;cursor:pointer;text-align:center;width:100%;}
 .toggle-row{display:flex;align-items:center;gap:9px;margin-bottom:8px;}
 .tog{width:42px;height:22px;border-radius:11px;background:#2e3350;border:none;cursor:pointer;position:relative;flex-shrink:0;}
@@ -234,9 +234,9 @@ body{
 .chip{padding:5px 10px;border-radius:7px;border:1.5px solid #2e3350;background:#222736;color:#7a80a0;font-size:12px;font-weight:600;cursor:pointer;}
 .chip.on{background:#1a2e1a;border-color:#3ecf6e;color:#3ecf6e;}
 .chip.dim-chip{opacity:.4;cursor:not-allowed;}
-.startbtn{width:100%;background:#f08c00;color:#111;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:24px;letter-spacing:2px;border:none;border-radius:12px;padding:14px;cursor:pointer;margin-top:4px;}
+.startbtn{width:100%;background:#f08c00;color:#111;font-family:Impact,sans-serif;font-size:24px;letter-spacing:2px;border:none;border-radius:12px;padding:14px;cursor:pointer;margin-top:4px;}
 .startbtn:disabled{background:#555;color:#888;cursor:not-allowed;}
-.contbtn{width:100%;background:#1a1e2a;color:#3ecf6e;border:1.5px solid rgba(62,207,110,.35);font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:19px;letter-spacing:2px;border-radius:12px;padding:11px;cursor:pointer;margin-bottom:7px;display:flex;align-items:center;justify-content:center;gap:9px;}
+.contbtn{width:100%;background:#1a1e2a;color:#3ecf6e;border:1.5px solid rgba(62,207,110,.35);font-family:Impact,sans-serif;font-size:19px;letter-spacing:2px;border-radius:12px;padding:11px;cursor:pointer;margin-bottom:7px;display:flex;align-items:center;justify-content:center;gap:9px;}
 .cgt{font-size:12px;color:#7a80a0;font-family:-apple-system,sans-serif;letter-spacing:0;font-weight:500;}
 .squad-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
 .sq-chip{padding:6px 10px;border-radius:8px;border:1.5px solid #2e3350;background:#222736;color:#7a80a0;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;}
@@ -249,18 +249,18 @@ body{
 .game{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;position:relative;}
 .ghdr{background:var(--surface);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top, 0px) + 7px) env(safe-area-inset-right, 9px) 7px env(safe-area-inset-left, 9px);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:5px;}
 .hll{display:flex;flex-direction:column;gap:1px;}
-.gclock{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:28px;line-height:1;letter-spacing:.05em;}
+.gclock{font-family:Impact,sans-serif;font-size:28px;line-height:1;letter-spacing:.05em;}
 .glbl{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#7a80a0;}
-.hbadge{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:10px;letter-spacing:2px;padding:2px 6px;border-radius:4px;margin-top:2px;display:inline-block;}
+.hbadge{font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;padding:2px 6px;border-radius:4px;margin-top:2px;display:inline-block;}
 .hbadge.h1{background:rgba(74,158,255,.13);color:#4a9eff;}
 .hbadge.h2{background:rgba(192,132,252,.13);color:#c084fc;}
 .ghctr{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;}
-.hrem{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:26px;line-height:1;letter-spacing:.05em;}
-.stimer{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:13px;letter-spacing:.05em;}
+.hrem{font-family:Impact,sans-serif;font-size:26px;line-height:1;letter-spacing:.05em;}
+.stimer{font-family:Impact,sans-serif;font-size:13px;letter-spacing:.05em;}
 .hbtns{display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
-.pbtn{background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:9px 14px;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;color:var(--text);white-space:nowrap;min-width:96px;text-align:center;}
+.pbtn{background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:9px 14px;font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;color:var(--text);white-space:nowrap;min-width:96px;text-align:center;}
 .pbtn.live{border-color:rgba(62,207,110,.35);color:#3ecf6e;}
-.endbtn{border-radius:8px;padding:5px 9px;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;white-space:nowrap;border:1.5px solid;}
+.endbtn{border-radius:8px;padding:5px 9px;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;white-space:nowrap;border:1.5px solid;}
 .endbtn.h1e{background:#2e1a00;border-color:rgba(255,140,0,.27);color:#ff8c00;}
 .endbtn.h2e{background:rgba(255,85,85,.13);border-color:rgba(255,85,85,.27);color:#ff5555;}
 .endbtn.urgent{animation:upulse .8s infinite;}
@@ -269,10 +269,10 @@ body{
 
 .target-bar{background:#0d1a0d;border-bottom:1px solid rgba(62,207,110,.14);padding:4px 10px;display:flex;align-items:center;justify-content:center;gap:10px;flex-shrink:0;}
 .target-lbl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#7a80a0;}
-.target-val{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:15px;color:#3ecf6e;letter-spacing:.05em;}
+.target-val{font-family:Impact,sans-serif;font-size:15px;color:#3ecf6e;letter-spacing:.05em;}
 .target-info{font-size:9px;color:#7a80a0;}
 
-.abar{text-align:center;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:13px;letter-spacing:2px;padding:5px;flex-shrink:0;}
+.abar{text-align:center;font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px;padding:5px;flex-shrink:0;}
 .abar.warn{background:#332800;color:#ffcc00;}
 .abar.now{background:#330000;color:#ff5555;animation:blink .8s infinite;}
 .abar.half{background:#1a0d2e;color:#c084fc;animation:blink .8s infinite;}
@@ -281,14 +281,14 @@ body{
 .subbar{background:#0d1a2e;border-top:1px solid rgba(74,158,255,.2);border-bottom:1px solid rgba(74,158,255,.2);padding:5px 8px;display:flex;align-items:center;gap:6px;flex-shrink:0;}
 .subbar-info{flex:1;font-size:11px;color:#7a80a0;}
 .subbar-info strong{color:#eef0f8;font-weight:700;}
-.sub-go{background:#3ecf6e;color:#0a1a0a;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:15px;letter-spacing:1.5px;border:none;border-radius:8px;padding:8px 13px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.sub-go{background:#3ecf6e;color:#0a1a0a;font-family:Impact,sans-serif;font-size:15px;letter-spacing:1.5px;border:none;border-radius:8px;padding:8px 13px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 .sub-go:disabled{background:#2a4a2a;color:#7a80a0;cursor:not-allowed;}
 .sub-clr{background:#222736;border:1.5px solid #2e3350;color:#7a80a0;font-size:11px;border-radius:7px;padding:6px 8px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 
 .cols{flex:1;display:flex;overflow:hidden;}
 .col{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:4px calc(env(safe-area-inset-right, 0px) + 4px) 4px calc(env(safe-area-inset-left, 0px) + 4px);gap:3px;}
 .col.bench-col{overflow-y:auto;}
-.chdr{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:2px;border-radius:5px;flex-shrink:0;}
+.chdr{font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:2px;border-radius:5px;flex-shrink:0;}
 .chdr.court{background:rgba(62,207,110,.12);color:var(--green);}
 .chdr.bench{background:rgba(74,158,255,.1);color:var(--blue);}
 .pc{border-radius:10px;padding:7px 9px;border:1.5px solid;user-select:none;position:relative;flex-shrink:0;}
@@ -309,14 +309,14 @@ body{
 .pc.fo{border-color:rgba(255,85,85,.55) !important;opacity:.75;}
 .ctop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px;}
 .cname{font-weight:700;font-size:clamp(11px,2.8vw,16px);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.cbadge{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:9px;letter-spacing:1px;padding:1px 5px;border-radius:4px;margin-left:3px;flex-shrink:0;}
+.cbadge{font-family:Impact,sans-serif;font-size:9px;letter-spacing:1px;padding:1px 5px;border-radius:4px;margin-left:3px;flex-shrink:0;}
 .bo{background:rgba(255,140,0,.2);color:var(--amber);}
 .bi{background:rgba(0,207,180,.2);color:var(--teal);}
 .bsel{background:rgba(74,158,255,.2);color:var(--blue);}
 .bred{background:rgba(255,85,85,.2);color:var(--red);}
 .cstats{display:flex;gap:6px;margin-bottom:3px;flex-wrap:nowrap;overflow:hidden;}
 .stat{display:flex;flex-direction:column;}
-.sv{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:clamp(11px,2.6vw,15px);letter-spacing:.03em;}
+.sv{font-family:Impact,sans-serif;font-size:clamp(11px,2.6vw,15px);letter-spacing:.03em;}
 .svg{color:var(--green);} .svb{color:var(--blue);} .svt{color:var(--teal);font-size:clamp(10px,2.2vw,13px);}
 .sk{font-size:clamp(7px,1.6vw,9px);text-transform:uppercase;letter-spacing:1px;color:var(--dim);}
 .fr{display:flex;align-items:center;gap:4px;}
@@ -329,13 +329,13 @@ body{
 /* ── PAUSE OVERLAY ── */
 .povl{position:absolute;inset:0;background:rgba(8,10,16,.72);display:flex;flex-direction:column;align-items:stretch;z-index:100;cursor:pointer;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);overflow-y:auto;}
 .po-top{display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 14px) calc(env(safe-area-inset-right,0px) + 16px) 10px calc(env(safe-area-inset-left,0px) + 16px);flex-shrink:0;}
-.potitle{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:66px;letter-spacing:6px;color:#eef0f8;line-height:1;text-shadow:0 2px 12px rgba(0,0,0,.8);}
-.potime{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:28px;color:#f08c00;margin-top:3px;letter-spacing:.05em;}
+.potitle{font-family:Impact,sans-serif;font-size:66px;letter-spacing:6px;color:#eef0f8;line-height:1;text-shadow:0 2px 12px rgba(0,0,0,.8);}
+.potime{font-family:Impact,sans-serif;font-size:28px;color:#f08c00;margin-top:3px;letter-spacing:.05em;}
 .posub{color:#7a80a0;font-size:13px;margin-top:8px;}
 .postart{color:#3ecf6e;font-size:15px;margin-top:8px;}
 .po-roster{display:flex;flex:1;min-height:0;border-top:1px solid rgba(255,255,255,.08);}
 .po-col{flex:1;padding:7px calc(env(safe-area-inset-right,0px) + 6px) calc(env(safe-area-inset-bottom,0px) + 7px) calc(env(safe-area-inset-left,0px) + 6px);display:flex;flex-direction:column;gap:4px;overflow-y:auto;}
-.po-chdr{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:3px;border-radius:5px;margin-bottom:2px;flex-shrink:0;}
+.po-chdr{font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:3px;border-radius:5px;margin-bottom:2px;flex-shrink:0;}
 .po-chdr.court{background:rgba(62,207,110,.18);color:#3ecf6e;}
 .po-chdr.bench{background:rgba(74,158,255,.15);color:#4a9eff;}
 .po-chdr.sub-out{background:rgba(255,140,0,.18);color:#ff8c00;}
@@ -344,19 +344,19 @@ body{
 .po-pill.bench{background:rgba(30,34,50,.65);border-color:rgba(74,158,255,.18);}
 .po-pill.sub-out{background:rgba(46,26,0,.65);border-color:rgba(255,140,0,.35);}
 .po-pname{font-weight:700;font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.5);}
-.po-ptime{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:12px;color:#7a80a0;flex-shrink:0;letter-spacing:.03em;}
+.po-ptime{font-family:Impact,sans-serif;font-size:12px;color:#7a80a0;flex-shrink:0;letter-spacing:.03em;}
 .po-ptime.g{color:#3ecf6e;} .po-ptime.b{color:#4a9eff;} .po-ptime.a{color:#ff8c00;}
 
 /* ── HALFTIME ── */
 .ht{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 .ht-hdr{background:#1a0d2e;border-bottom:2px solid rgba(192,132,252,.27);padding:calc(env(safe-area-inset-top,0px) + 14px) calc(env(safe-area-inset-right,0px) + 13px) 11px calc(env(safe-area-inset-left,0px) + 13px);text-align:center;flex-shrink:0;}
-.ht-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:54px;letter-spacing:4px;color:#c084fc;line-height:1;}
+.ht-title{font-family:Impact,sans-serif;font-size:54px;letter-spacing:4px;color:#c084fc;line-height:1;}
 .ht-sub{color:#7a80a0;font-size:11px;margin-top:3px;}
-.ht-count{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:16px;color:#eef0f8;margin-top:5px;letter-spacing:.05em;}
+.ht-count{font-family:Impact,sans-serif;font-size:16px;color:#eef0f8;margin-top:5px;letter-spacing:.05em;}
 .ht-count .ok{color:#3ecf6e;} .ht-count .bad{color:#ffcc00;}
 .ht-cols{flex:1;display:flex;overflow:hidden;}
 .ht-col{flex:1;padding:7px 5px;display:flex;flex-direction:column;gap:5px;overflow-y:auto;}
-.ht-chdr{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:11px;letter-spacing:2px;text-align:center;padding:3px;border-radius:5px;flex-shrink:0;}
+.ht-chdr{font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;text-align:center;padding:3px;border-radius:5px;flex-shrink:0;}
 .ht-chdr.court{background:rgba(62,207,110,.12);color:#3ecf6e;}
 .ht-chdr.bench{background:rgba(192,132,252,.1);color:#c084fc;}
 .ht-card{border-radius:10px;padding:8px 10px;cursor:pointer;border:1.5px solid;}
@@ -364,34 +364,34 @@ body{
 .ht-card.bench{background:#1a0d2e;border-color:rgba(192,132,252,.27);}
 .ht-name{font-weight:700;font-size:13px;margin-bottom:2px;}
 .ht-stat{font-size:10px;color:#7a80a0;}
-.ht-stat span{color:#3ecf6e;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:12px;letter-spacing:.03em;}
+.ht-stat span{color:#3ecf6e;font-family:Impact,sans-serif;font-size:12px;letter-spacing:.03em;}
 .ht-footer{background:#1a1e2a;border-top:1px solid #2e3350;padding:9px 13px;flex-shrink:0;}
-.ht-start{width:100%;background:#3ecf6e;color:#0a1a0a;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:22px;letter-spacing:2px;border:none;border-radius:11px;padding:13px;cursor:pointer;}
+.ht-start{width:100%;background:#3ecf6e;color:#0a1a0a;font-family:Impact,sans-serif;font-size:22px;letter-spacing:2px;border:none;border-radius:11px;padding:13px;cursor:pointer;}
 .ht-start:disabled{background:#2a4a2a;color:#7a80a0;cursor:not-allowed;}
 .ht-note{text-align:center;font-size:10px;color:#7a80a0;margin-top:5px;}
 
 /* ── GAME OVER ── */
 .go{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 .go-hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top,0px) + 14px) calc(env(safe-area-inset-right,0px) + 13px) 14px calc(env(safe-area-inset-left,0px) + 13px);text-align:center;flex-shrink:0;}
-.go-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:54px;letter-spacing:4px;color:#f08c00;line-height:1;}
+.go-title{font-family:Impact,sans-serif;font-size:54px;letter-spacing:4px;color:#f08c00;line-height:1;}
 .go-sub{color:#7a80a0;font-size:11px;margin-top:3px;}
 .go-body{flex:1;overflow-y:auto;padding:12px;}
 .stats-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px;}
 .stats-tbl th{background:#222736;color:#7a80a0;font-size:8px;text-transform:uppercase;letter-spacing:1px;padding:7px 5px;text-align:left;border-bottom:1px solid #2e3350;}
 .stats-tbl td{padding:7px 5px;border-bottom:1px solid rgba(46,51,80,.5);}
 .stats-tbl tr:nth-child(even) td{background:rgba(255,255,255,.02);}
-.pt{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:14px;color:#3ecf6e;letter-spacing:.03em;}
-.log-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:14px;letter-spacing:2px;color:#7a80a0;margin-bottom:7px;}
+.pt{font-family:Impact,sans-serif;font-size:14px;color:#3ecf6e;letter-spacing:.03em;}
+.log-title{font-family:Impact,sans-serif;font-size:14px;letter-spacing:2px;color:#7a80a0;margin-bottom:7px;}
 .log-entry{background:#222736;border-radius:7px;padding:6px 9px;margin-bottom:4px;font-size:11px;}
-.log-time{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:12px;color:#f08c00;letter-spacing:.03em;}
+.log-time{font-family:Impact,sans-serif;font-size:12px;color:#f08c00;letter-spacing:.03em;}
 .go-footer{background:var(--surface);border-top:1px solid var(--border);padding:9px calc(env(safe-area-inset-right, 0px) + 13px) calc(env(safe-area-inset-bottom, 0px) + 9px) calc(env(safe-area-inset-left, 0px) + 13px);display:flex;gap:7px;flex-shrink:0;}
-.exp-btn{flex:1;background:#f08c00;color:#111;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:19px;letter-spacing:2px;border:none;border-radius:10px;padding:12px;cursor:pointer;}
-.new-btn{background:#222736;border:1.5px solid #2e3350;color:#eef0f8;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:17px;letter-spacing:1px;border-radius:10px;padding:12px 14px;cursor:pointer;}
+.exp-btn{flex:1;background:#f08c00;color:#111;font-family:Impact,sans-serif;font-size:19px;letter-spacing:2px;border:none;border-radius:10px;padding:12px;cursor:pointer;}
+.new-btn{background:#222736;border:1.5px solid #2e3350;color:#eef0f8;font-family:Impact,sans-serif;font-size:17px;letter-spacing:1px;border-radius:10px;padding:12px 14px;cursor:pointer;}
 
 /* ── PLAN BUILDER ── */
 .plan-slot{background:#1a1e2a;border:1.5px solid #2e3350;border-radius:10px;padding:8px 10px;margin-bottom:7px;}
 .plan-slot-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
-.plan-slot-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:12px;letter-spacing:1.5px;color:#f08c00;}
+.plan-slot-title{font-family:Impact,sans-serif;font-size:12px;letter-spacing:1.5px;color:#f08c00;}
 .plan-slot.done{border-color:rgba(62,207,110,.35);}
 .plan-row-lbl{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#7a80a0;margin-bottom:4px;}
 .plan-chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;}
@@ -418,40 +418,40 @@ body{
 .ratings-screen{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 .ratings-hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top, 0px) + 11px) calc(env(safe-area-inset-right, 0px) + 13px) 11px calc(env(safe-area-inset-left, 0px) + 13px);display:flex;align-items:center;gap:9px;flex-shrink:0;}
 .ratings-body{flex:1;overflow-y:auto;padding:12px 13px 30px;}
-.ratings-player-name{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:1px;color:var(--accent);}
+.ratings-player-name{font-family:Impact,sans-serif;font-size:20px;letter-spacing:1px;color:var(--accent);}
 .rat-group{margin-bottom:16px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;overflow:hidden;}
-.rat-group-hdr{background:var(--surface);padding:8px 12px;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:12px;letter-spacing:2px;color:var(--blue);}
+.rat-group-hdr{background:var(--surface);padding:8px 12px;font-family:Impact,sans-serif;font-size:12px;letter-spacing:2px;color:var(--blue);}
 .rat-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);}
 .rat-row:last-child{border-bottom:none;}
 .rat-lbl{flex:1;font-size:12px;color:var(--text);min-width:0;}
-.rat-val{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:18px;color:var(--accent);width:26px;text-align:right;flex-shrink:0;}
+.rat-val{font-family:Impact,sans-serif;font-size:18px;color:var(--accent);width:26px;text-align:right;flex-shrink:0;}
 .rat-slider{-webkit-appearance:none;appearance:none;width:100px;height:4px;border-radius:2px;background:var(--border);outline:none;flex-shrink:0;}
 .rat-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--accent);cursor:pointer;}
 .rat-select{background:var(--card);border:1.5px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:12px;outline:none;}
-.rat-save-btn{width:100%;background:var(--accent);color:#111;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:2px;border:none;border-radius:10px;padding:14px;cursor:pointer;margin-top:8px;}
+.rat-save-btn{width:100%;background:var(--accent);color:#111;font-family:Impact,sans-serif;font-size:20px;letter-spacing:2px;border:none;border-radius:10px;padding:14px;cursor:pointer;margin-top:8px;}
 .player-row-rate{background:rgba(74,158,255,.1);border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;}
 
 /* ── AI SUMMARY ── */
 .ai-summary-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;display:flex;align-items:flex-end;backdrop-filter:blur(3px);}
 .ai-summary-box{background:var(--surface);border-top:1px solid var(--border);border-radius:18px 18px 0 0;padding:18px 16px 30px;width:100%;max-height:80vh;display:flex;flex-direction:column;gap:10px;}
-.ai-summary-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);}
+.ai-summary-title{font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);}
 .ai-summary-content{flex:1;overflow-y:auto;font-size:13px;color:var(--text);line-height:1.7;white-space:pre-wrap;}
 .ai-summary-close{background:var(--card);border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:10px;cursor:pointer;font-size:13px;font-weight:600;}
 /* ── AI ROTATION GENERATOR ── */
 .ai-rot-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;display:flex;align-items:flex-end;backdrop-filter:blur(3px);}
 .ai-rot-box{background:var(--surface);border-top:1px solid var(--border);border-radius:18px 18px 0 0;padding:20px 16px 32px;width:100%;max-height:82vh;display:flex;flex-direction:column;gap:12px;}
-.ai-rot-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:20px;letter-spacing:2px;color:var(--accent);}
+.ai-rot-title{font-family:Impact,sans-serif;font-size:20px;letter-spacing:2px;color:var(--accent);}
 .ai-rot-body{flex:1;overflow-y:auto;font-size:13px;color:var(--text);line-height:1.65;}
 .ai-rot-section{background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:10px;}
-.ai-rot-section-title{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:12px;letter-spacing:1.5px;color:var(--blue);margin-bottom:8px;}
+.ai-rot-section-title{font-family:Impact,sans-serif;font-size:12px;letter-spacing:1.5px;color:var(--blue);margin-bottom:8px;}
 .ai-rot-sub-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);}
 .ai-rot-sub-row:last-child{border-bottom:none;}
-.ai-rot-sub-num{font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:13px;color:var(--accent);width:44px;flex-shrink:0;}
+.ai-rot-sub-num{font-family:Impact,sans-serif;font-size:13px;color:var(--accent);width:44px;flex-shrink:0;}
 .ai-rot-off{color:#f472b6;font-size:12px;flex:1;}
 .ai-rot-on{color:#a78bfa;font-size:12px;flex:1;}
 .ai-rot-note{font-size:11px;color:var(--dim);font-style:italic;margin-top:6px;line-height:1.5;}
-.ai-rot-load-btn{flex:1;background:var(--green);color:#0a1a0a;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:18px;letter-spacing:1.5px;border:none;border-radius:10px;padding:13px;cursor:pointer;}
-.ai-rot-cancel-btn{background:var(--card);border:1.5px solid var(--border);color:var(--dim);font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:15px;border-radius:10px;padding:13px 16px;cursor:pointer;}
+.ai-rot-load-btn{flex:1;background:var(--green);color:#0a1a0a;font-family:Impact,sans-serif;font-size:18px;letter-spacing:1.5px;border:none;border-radius:10px;padding:13px;cursor:pointer;}
+.ai-rot-cancel-btn{background:var(--card);border:1.5px solid var(--border);color:var(--dim);font-family:Impact,sans-serif;font-size:15px;border-radius:10px;padding:13px 16px;cursor:pointer;}
 .ai-rot-spinner{text-align:center;padding:30px 0;color:var(--dim);}
 .ai-rot-spinner .spin{font-size:32px;display:inline-block;animation:spin 1s linear infinite;margin-bottom:10px;}
 
@@ -760,6 +760,7 @@ const S = {
   opponent: '',
   h1Dur:20, h2Dur:20,
   h1Int:180, h2Int:180,  // stored in SECONDS (180 = 3min)
+  finalsMode: false,      // AI uses 15-20% more time for top-rated players
   h1Sps:2,  h2Sps:2,
   useH2Preset: false,
   h2PresetIds: new Set(),
@@ -1531,11 +1532,11 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
   const allPos     = allPositionsForPlayer(p.id);
   // Court: show primary position. Bench planned-on: show all positions they cover.
   const posDisplay = role==='court' && primaryPos
-    ? `<span style="font-size:8px;font-weight:700;font-family:Impact,'Arial Narrow',Arial,sans-serif;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(74,158,255,.15);color:#7ab8ff;margin-left:3px;">${primaryPos}</span>`
+    ? `<span style="font-size:8px;font-weight:700;font-family:Impact,sans-serif;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(74,158,255,.15);color:#7ab8ff;margin-left:3px;">${primaryPos}</span>`
     : role==='bench' && isPlannedOn && allPos.length
-    ? `<span style="font-size:8px;font-weight:700;font-family:Impact,'Arial Narrow',Arial,sans-serif;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(167,139,250,.2);color:#a78bfa;margin-left:3px;">${allPos.join('/')}</span>`
+    ? `<span style="font-size:8px;font-weight:700;font-family:Impact,sans-serif;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(167,139,250,.2);color:#a78bfa;margin-left:3px;">${allPos.join('/')}</span>`
     : role==='bench' && isHigh && primaryPos
-    ? `<span style="font-size:8px;font-weight:700;font-family:Impact,'Arial Narrow',Arial,sans-serif;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(74,158,255,.15);color:#7ab8ff;margin-left:3px;">${primaryPos}</span>`
+    ? `<span style="font-size:8px;font-weight:700;font-family:Impact,sans-serif;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(74,158,255,.15);color:#7ab8ff;margin-left:3px;">${primaryPos}</span>`
     : '';
 
   let badge='';
@@ -2197,27 +2198,37 @@ async function callAI(prompt, maxTokens){
 
   if(CFG.aiProvider === 'gemini'){
     if(!CFG.geminiKey){ throw new Error('No Gemini API key — add it in ⚙ Settings'); }
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + CFG.geminiKey;
+    // gemini-3.1-pro-preview with thinkingLevel HIGH via direct REST (x-goog-api-key for browser CORS)
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent';
     const fetchP = fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': CFG.geminiKey   // required for browser CORS
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature: 0.4,
+          thinkingConfig: { thinkingLevel: 'HIGH' }  // Deep Think Mini — best for complex rotation logic
+        }
       })
     });
     const resp = await Promise.race([fetchP, timeout]);
     if(!resp.ok){
       let msg = 'Gemini HTTP ' + resp.status;
       try{ const d=await resp.json(); msg += ': ' + (d.error?.message||JSON.stringify(d)); }catch(_){}
-      if(resp.status===400) msg = 'Gemini: Bad request — check your API key in ⚙ Settings';
-      if(resp.status===403) msg = 'Gemini API key invalid or not enabled. Visit aistudio.google.com to get a key.';
+      if(resp.status===400) msg = 'Gemini: Bad request. Ensure your key is enabled for Gemini 3.1 Pro at aistudio.google.com';
+      if(resp.status===403) msg = 'Gemini API key invalid or not enabled for this model. Visit aistudio.google.com';
       if(resp.status===429) msg = 'Gemini rate limit. Wait a moment and try again.';
       throw new Error(msg);
     }
     const data = await resp.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if(!text) throw new Error('Gemini returned empty response');
+    // Extract text from response — filter out thought parts (type: "thought")
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const text = parts.filter(p=>!p.thought).map(p=>p.text||'').join('').trim();
+    if(!text) throw new Error('Gemini returned empty response — try again');
     return text;
 
   } else {
@@ -2260,22 +2271,22 @@ async function generateAIRotation(){
 
   const filtered = S.names.filter(n=>n.trim());
   if(filtered.length < COURT_SIZE){
-    alert(`Add at least ${COURT_SIZE} players to the roster first.`);
+    alert('Add at least ' + COURT_SIZE + ' players to the roster first.');
     return;
   }
 
-  // Show loading modal
   showAIRotationModal(null, true);
 
-  // Build prompt
   const totalSecs = (S.h1Dur+S.h2Dur)*60;
   const fairShare = Math.round(totalSecs*COURT_SIZE/filtered.length);
+  const fairShareFmt = Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
+  const finalsMode = S.finalsMode || false;
 
   const h2PresetNote = S.useH2Preset && S.h2PresetIds.size===COURT_SIZE
-    ? 'H2 starting 5: ' + [...S.h2PresetIds].map(i=>filtered[i]).join(', ')
-    : 'No H2 starting 5 preset — you choose';
+    ? 'H2 starting 5 (MANDATORY): ' + [...S.h2PresetIds].map(i=>filtered[i]).join(', ')
+    : 'No H2 starting 5 set — you choose';
   const finalNote = S.useFinalPreset && S.finalPresetIds.size===COURT_SIZE
-    ? 'Final 5 (must finish game): ' + [...S.finalPresetIds].map(i=>filtered[i]).join(', ')
+    ? 'Final 5 — must finish game (MANDATORY): ' + [...S.finalPresetIds].map(i=>filtered[i]).join(', ')
     : 'No final 5 constraint';
   const priorityNames = [...S.priorityPlayerIds].map(i=>filtered[i]).filter(Boolean);
 
@@ -2286,99 +2297,131 @@ async function generateAIRotation(){
     return player && Object.keys(getPlayerRatings(T.activeTeamId, player.id)).length > 0;
   });
 
-  const fairShareFmt = Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
-
-  const promptLines = [
-    'You are an expert basketball coaching assistant devising the optimal substitution rotation for a junior game.',
+  const systemPrompt = [
+    '=== BASKETBALL ROTATION PLANNER — SYSTEM RULES ===',
     '',
-    'GAME DETAILS:',
-    '  Players (' + filtered.length + '): ' + filtered.join(', '),
-    '  Game: ' + S.h1Dur + ' min H1 + ' + S.h2Dur + ' min H2 = ' + (S.h1Dur+S.h2Dur) + ' min total',
-    '  Court size: 5 players at all times',
-    '  Fair court time if perfectly even: ~' + fairShareFmt + ' per player',
+    'You are an expert junior basketball coach devising substitution rotation plans.',
+    'Think deeply and systematically. This is a multi-constraint optimisation problem.',
+    '',
+    'GAME RULES:',
+    '  Total game: ' + (S.h1Dur+S.h2Dur) + ' minutes (' + S.h1Dur + ' min H1 + ' + S.h2Dur + ' min H2)',
+    '  5 players on court at all times from a squad of ' + filtered.length,
+    '  Fair court time if equal: ~' + fairShareFmt + ' per player',
     '  ' + h2PresetNote,
     '  ' + finalNote,
-    priorityNames.length ? ('  Priority players (give slightly more time if uneven): ' + priorityNames.join(', ')) : null,
     '',
-    hasAnyRatings ? 'PLAYER RATINGS (0-10, higher = better):' : 'PLAYER RATINGS: None entered — distribute time evenly.',
-    hasAnyRatings ? playerSummary : null,
+    '=== ROTATION GOALS (evaluate in this order) ===',
     '',
-    'YOUR TASK — devise the OPTIMAL rotation:',
-    'You are NOT restricted to a fixed sub interval or players-per-sub.',
-    'Choose timing and size of each sub to MAXIMISE team strength while keeping time as even as possible.',
-    'You may make 1-5 subs per half at any minute, swapping 1-5 players — whatever produces the best outcome.',
+    '1. TEAM STRENGTH: Never put a weak lineup on court.',
+    '   - Evaluate each sub combination using player ratings',
+    '   - Avoid subbing out multiple high-rated players simultaneously',
+    '   - Ensure every lineup has at least one strong ball-handler (pos 1 or 2)',
+    '   - Ensure every lineup has at least one strong rebounder/interior player (pos 4 or 5)',
     '',
-    'GOALS (priority order):',
-    '1. Maximise team strength on court — put best available combinations together',
-    hasAnyRatings ? '2. Ensure court lineup always covers as many of positions 1-5 as possible (primary AND alternate positions count)' : null,
-    hasAnyRatings ? '3. Balance offensive firepower with defensive coverage in each lineup' : null,
-    '4. Each player within 2-3 minutes of fair share unless using priority players',
-    '5. No player sits for more than one consecutive sub window if avoidable',
-    '6. Respect H2 starting 5 and final 5 if set',
-    '7. Never return a player immediately after they just came off',
+    '2. POSITION COVERAGE: Each lineup should cover as many of positions 1-5 as possible.',
+    '   - Use each player\'s PRIMARY position first, then alt1, then alt2',
+    '   - Never have a lineup missing both a point guard and a shooting guard',
+    '   - Try to have all 5 positions covered in key lineups',
     '',
-    'Return ONLY valid JSON, no markdown:',
+    '3. PLAYING TIME:',
+    finalsMode
+      ? '   FINALS MODE ACTIVE: Higher-rated players may receive 15-20% more time than fair share.'
+      : '   STANDARD MODE: Aim for roughly equal time. Core players may have 10-15% more if it creates a significantly stronger net lineup.',
+    '   - No player should sit for more than 2 consecutive sub windows without returning',
+    '   - Priority players (if set) get extra time when minutes cannot split evenly',
+    priorityNames.length ? ('   Priority players: ' + priorityNames.join(', ')) : null,
+    '',
+    '4. SUBSTITUTION QUALITY:',
+    '   - Never return a player immediately in the next sub after they just came off',
+    '   - When subbing multiple players, stagger combinations to maintain lineup cohesion',
+    '   - Sub timing should be spread to give players proper rest periods',
+    '',
+    hasAnyRatings ? ('=== PLAYER DATA ===\n' + playerSummary) : 'PLAYER DATA: No ratings entered — base decisions on position and equal time.',
+    '',
+    '=== YOUR TASK ===',
+    '',
+    'Generate EXACTLY 3 rotation plans with DIFFERENT sub patterns:',
+    '  Plan A: "Balanced" — frequent smaller subs (1-2 players at a time), maximise flexibility',
+    '  Plan B: "Block" — larger subs (2-4 players at once) at key moments, keep cohesive units together longer',
+    '  Plan C: "Strength-first" — optimise entirely for strongest lineup on court, accept slightly less even time',
+    '',
+    'You are NOT restricted to fixed intervals. Choose timing freely.',
+    '',
+    'Starting 5 on court: ' + filtered.slice(0,COURT_SIZE).join(', '),
+    'Starting bench: ' + (filtered.slice(COURT_SIZE).join(', ') || 'none'),
+    '',
+    'CRITICAL: Use EXACTLY these player name strings — copy them precisely:',
+    filtered.join(', '),
+    '',
+    'Return ONLY valid JSON (no markdown, no explanation outside the JSON):',
     '{',
-    '  "rationale": "2-3 sentences on strategy and key decisions",',
-    '  "h1": [{"subNum":1,"atTime":"4:00","off":["Player A","Player B"],"on":["Player C","Player D"],"note":"brief reason"}],',
-    '  "h2": [{"subNum":1,"atTime":"5:00","off":["Player E"],"on":["Player A"],"note":""}],',
-    '  "expectedTimes": {"Player A":"14:00"}',
-    '}',
-    '',
-    'Starting 5: ' + filtered.slice(0,5).join(', '),
-    'Starting bench: ' + (filtered.slice(5).join(', ') || 'none'),
-    'CRITICAL — use these EXACT player name strings in your JSON:',
-    filtered.join(', ')
+    '  "plans": [',
+    '    {',
+    '      "id": "A",',
+    '      "label": "Balanced",',
+    '      "rationale": "2-3 sentences explaining this plan\'s approach",',
+    '      "h1": [{"subNum":1,"atTime":"4:00","off":["Player A"],"on":["Player B"],"note":"reason"}],',
+    '      "h2": [{"subNum":1,"atTime":"5:00","off":["Player C"],"on":["Player D"],"note":"reason"}],',
+    '      "expectedTimes": {"Player A":"14:00","Player B":"12:00"}',
+    '    },',
+    '    { "id": "B", "label": "Block", "rationale": "...", "h1": [], "h2": [], "expectedTimes": {} },',
+    '    { "id": "C", "label": "Strength-first", "rationale": "...", "h1": [], "h2": [], "expectedTimes": {} }',
+    '  ]',
+    '}'
   ].filter(l=>l!==null).join('\n');
-
-  const prompt = promptLines;
-
-  const timeoutPromise = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')),90000));
 
   let rawText;
   try {
-    rawText = await callAI(prompt, 2000);
+    rawText = await callAI(systemPrompt, 6000);
   } catch(err){
     closeAIRotationModal();
     alert(err.message==='TIMEOUT'
-      ? 'Request timed out. Check your API key in ⚙ Settings and try again.'
+      ? 'Request timed out. Gemini Deep Think can take 30-60s. Try again.'
       : 'AI Error: '+err.message);
     return;
   }
-  let clean=rawText.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-  const oi=clean.indexOf('{'), ci=clean.lastIndexOf('}');
-  if(oi!==-1&&ci>oi) clean=clean.slice(oi,ci+1);
+
+  let clean = rawText.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
+  const oi = clean.indexOf('{'), ci = clean.lastIndexOf('}');
+  if(oi!==-1&&ci>oi) clean = clean.slice(oi,ci+1);
 
   let result;
-  try{ result=JSON.parse(clean); }
-  catch(e){ closeAIRotationModal(); alert('Could not parse AI response. Try again.\n\n'+rawText.slice(0,300)); return; }
+  try{ result = JSON.parse(clean); }
+  catch(e){
+    // Try wrapping as single plan for backwards compat
+    try{
+      const single = JSON.parse(clean);
+      result = { plans: [{ id:'A', label:'Plan', rationale:single.rationale||'', h1:single.h1||[], h2:single.h2||[], expectedTimes:single.expectedTimes||{} }] };
+    } catch(_){
+      closeAIRotationModal();
+      alert('Could not parse AI response. Try again.\n\n'+rawText.slice(0,300));
+      return;
+    }
+  }
+
+  // Normalise: if no plans array, wrap single result
+  if(!result.plans && (result.h1||result.h2)){
+    result = { plans: [{ id:'A', label:'Plan', rationale:result.rationale||'', h1:result.h1||[], h2:result.h2||[], expectedTimes:result.expectedTimes||{} }] };
+  }
 
   showAIRotationModal(result, false, filtered);
 }
 
-function applyAIRotation(result, filtered){
-  // Convert AI result into S.subPlan format
-  // S.names entries look like "Maggie #18" or "Saskia #10"
-  // AI may return just first name, first+last, or the full display name
+function applyAIRotation(plan, filtered){
+  // plan is a single plan object {id, label, h1, h2, ...}
   const nameToIdx = {};
   filtered.forEach((n,i)=>{ nameToIdx[n]=i; });
 
-  // Fuzzy lookup: try exact match first, then first-word match, then partial
   function findIdx(aiName){
-    // 1. Exact match
     if(nameToIdx[aiName] !== undefined) return nameToIdx[aiName];
-    // 2. Case-insensitive exact
     const lower = aiName.toLowerCase();
     for(const [n,i] of Object.entries(nameToIdx)){
       if(n.toLowerCase()===lower) return i;
     }
-    // 3. Check if any filtered name starts with or contains the AI name
     for(const [n,i] of Object.entries(nameToIdx)){
       const nLower = n.toLowerCase();
-      // e.g. "Maggie #18" contains "Maggie"
       if(nLower.startsWith(lower) || nLower.includes(lower)) return i;
     }
-    // 4. Check if AI name contains any filtered name's first word
     for(const [n,i] of Object.entries(nameToIdx)){
       const firstName = n.split(' ')[0].toLowerCase();
       if(lower.startsWith(firstName) || lower.includes(firstName)) return i;
@@ -2394,10 +2437,8 @@ function applyAIRotation(result, filtered){
     });
   }
 
-  const h1Plan = parseHalf(result.h1);
-  const h2Plan = parseHalf(result.h2);
-
-  // Check how many subs actually matched
+  const h1Plan = parseHalf(plan.h1);
+  const h2Plan = parseHalf(plan.h2);
   const totalSubs = h1Plan.length + h2Plan.length;
   const filledSubs = [...h1Plan,...h2Plan].filter(s=>s.off.size>0&&s.on.size>0).length;
 
@@ -2406,11 +2447,62 @@ function applyAIRotation(result, filtered){
   closeAIRotationModal();
   renderSetup(true);
 
-  if(filledSubs === 0 && totalSubs > 0){
-    showToast(`⚠ Plan loaded but player names didn't match — check roster`);
+  if(filledSubs===0 && totalSubs>0){
+    showToast('⚠ Plan ' + (plan.label||plan.id) + ' loaded but names didn\'t match — check roster');
   } else {
-    showToast(`AI rotation plan loaded ✓ (${filledSubs}/${totalSubs} subs matched)`);
+    showToast('Plan ' + (plan.label||plan.id) + ' loaded ✓ (' + filledSubs + '/' + totalSubs + ' subs)');
   }
+}
+
+function renderPlanBody(plan){
+  let html = '';
+  // Rationale
+  if(plan.rationale){
+    html += '<div class="ai-rot-section"><div class="ai-rot-section-title">STRATEGY</div>' +
+      '<div style="font-size:12px;color:var(--text);line-height:1.6;">' + plan.rationale + '</div></div>';
+  }
+  // Subs per half
+  ['h1','h2'].forEach(function(half){
+    const subs = plan[half]||[];
+    if(!subs.length) return;
+    const halfLabel = half==='h1'?'1ST HALF':'2ND HALF';
+    let rows = '';
+    subs.forEach(function(s){
+      rows += '<div class="ai-rot-sub-row">' +
+        '<span class="ai-rot-sub-num">SUB ' + s.subNum + '<br><span style="font-size:9px;color:var(--dim)">@' + s.atTime + '</span></span>' +
+        '<span class="ai-rot-off">▼ ' + (s.off||[]).join(', ') + '</span>' +
+        '<span class="ai-rot-on">▲ ' + (s.on||[]).join(', ') + '</span>' +
+        '</div>';
+      if(s.note) rows += '<div style="font-size:10px;color:var(--dim);padding:0 0 4px 52px;font-style:italic">' + s.note + '</div>';
+    });
+    html += '<div class="ai-rot-section"><div class="ai-rot-section-title">' + halfLabel + ' — ' + subs.length + ' SUB' + (subs.length!==1?'S':'') + '</div>' + rows + '</div>';
+  });
+  // Expected times
+  const et = plan.expectedTimes || {};
+  if(Object.keys(et).length){
+    let timeRows = '';
+    Object.entries(et).sort((a,b)=>b[1].localeCompare(a[1])).forEach(function(e){
+      timeRows += '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);">' +
+        '<span style="font-size:12px;color:var(--text);">' + e[0] + '</span>' +
+        '<span style="font-family:Impact,sans-serif;font-size:13px;color:var(--green);">' + e[1] + '</span></div>';
+    });
+    html += '<div class="ai-rot-section"><div class="ai-rot-section-title">EXPECTED PLAYING TIME</div>' + timeRows + '</div>';
+  }
+  return html;
+}
+
+function selectAIPlan(idx){
+  window._aiRotSelectedPlan = idx;
+  const plans = (window._aiRotResult&&window._aiRotResult.plans)||[];
+  // Update tab active state
+  plans.forEach(function(p,i){
+    const tab = document.getElementById('ai-tab-'+i);
+    if(tab) tab.style.background = i===idx ? 'var(--accent)' : 'var(--card)';
+    if(tab) tab.style.color = i===idx ? '#111' : 'var(--dim)';
+  });
+  // Update body
+  const body = document.getElementById('ai-rot-body-inner');
+  if(body && plans[idx]) body.innerHTML = renderPlanBody(plans[idx]);
 }
 
 function showAIRotationModal(result, loading, filtered){
@@ -2420,78 +2512,64 @@ function showAIRotationModal(result, loading, filtered){
   const modal = document.createElement('div');
   modal.id = 'ai-rot-modal';
   modal.className = 'ai-rot-backdrop';
-  modal.onclick = e=>{ if(e.target===modal) closeAIRotationModal(); };
+  modal.onclick = function(e){ if(e.target===modal) closeAIRotationModal(); };
 
   let bodyHTML = '';
+  let tabsHTML = '';
+  let footerHTML = '';
 
   if(loading){
-    bodyHTML = `<div class="ai-rot-spinner">
-      <div class="spin">⟳</div>
-      <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">Generating rotation plan…</div>
-      <div style="font-size:12px;">Analysing player ratings and game settings</div>
-    </div>`;
+    const providerName = CFG.aiProvider==='gemini' ? 'Gemini 3.1 Pro (Deep Think)' : 'Claude Sonnet';
+    bodyHTML = '<div class="ai-rot-spinner">' +
+      '<div class="spin">⟳</div>' +
+      '<div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">Generating 3 rotation plans…</div>' +
+      '<div style="font-size:12px;color:var(--dim);margin-bottom:8px;">Using ' + providerName + '</div>' +
+      '<div style="font-size:11px;color:var(--dim);">Analysing player ratings, positions & game settings.<br>Deep reasoning can take 30–60 seconds.</div>' +
+      '</div>';
   } else {
-    // Rationale
-    if(result.rationale){
-      bodyHTML += `<div class="ai-rot-section">
-        <div class="ai-rot-section-title">STRATEGY</div>
-        <div style="font-size:12px;color:var(--text);line-height:1.6;">${result.rationale}</div>
-      </div>`;
+    const plans = (result&&result.plans)||[];
+    if(plans.length > 1){
+      // Render plan tabs
+      tabsHTML = '<div style="display:flex;gap:6px;flex-shrink:0;margin-bottom:2px;">';
+      plans.forEach(function(p,i){
+        tabsHTML += '<button id="ai-tab-'+i+'" onclick="selectAIPlan('+i+')" style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid var(--border);font-family:Impact;font-size:12px;letter-spacing:1px;cursor:pointer;background:'+(i===0?'var(--accent)':'var(--card)')+';color:'+(i===0?'#111':'var(--dim)')+';">' +
+          (p.label||('PLAN '+(p.id||i+1))) + '</button>';
+      });
+      tabsHTML += '</div>';
+      bodyHTML = '<div id="ai-rot-body-inner">' + renderPlanBody(plans[0]) + '</div>';
+    } else if(plans.length===1){
+      bodyHTML = renderPlanBody(plans[0]);
     }
 
-    // Render subs for each half
-    ['h1','h2'].forEach(half=>{
-      const subs = result[half]||[];
-      if(!subs.length) return;
-      const halfLabel = half==='h1'?'1ST HALF':'2ND HALF';
-      const rows = subs.map(s=>`
-        <div class="ai-rot-sub-row">
-          <span class="ai-rot-sub-num">SUB ${s.subNum}<br><span style="font-size:9px;color:var(--dim)">@${s.atTime}</span></span>
-          <span class="ai-rot-off">▼ ${(s.off||[]).join(', ')}</span>
-          <span class="ai-rot-on">▲ ${(s.on||[]).join(', ')}</span>
-        </div>
-        ${s.note?`<div style="font-size:10px;color:var(--dim);padding:0 0 4px 52px;font-style:italic">${s.note}</div>`:''}`).join('');
-      bodyHTML += `<div class="ai-rot-section">
-        <div class="ai-rot-section-title">${halfLabel} — ${subs.length} SUB${subs.length!==1?'S':''}</div>
-        ${rows}
-      </div>`;
-    });
-
-    // Expected times
-    if(result.expectedTimes && Object.keys(result.expectedTimes).length){
-      const timeRows = Object.entries(result.expectedTimes)
-        .sort((a,b)=>b[1].localeCompare(a[1]))
-        .map(([name,time])=>`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);">
-          <span style="font-size:12px;color:var(--text);">${name}</span>
-          <span style="font-family:Impact,sans-serif;font-size:13px;color:var(--green);">${time}</span>
-        </div>`).join('');
-      bodyHTML += `<div class="ai-rot-section">
-        <div class="ai-rot-section-title">EXPECTED PLAYING TIME</div>
-        ${timeRows}
-      </div>`;
-    }
+    footerHTML = '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+      '<button class="ai-rot-load-btn" onclick="applyAIRotation((window._aiRotResult.plans||[])[window._aiRotSelectedPlan||0], window._aiRotFiltered)">✓ USE THIS PLAN</button>' +
+      '<button class="ai-rot-cancel-btn" onclick="closeAIRotationModal()">CANCEL</button>' +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--dim);text-align:center;">You can edit individual subs after loading</div>';
   }
 
-  const footerHTML = loading ? '' : `
-    <div style="display:flex;gap:8px;flex-shrink:0;">
-      <button class="ai-rot-load-btn" onclick="applyAIRotation(window._aiRotResult, window._aiRotFiltered)">✓ USE THIS PLAN</button>
-      <button class="ai-rot-cancel-btn" onclick="closeAIRotationModal()">CANCEL</button>
-    </div>
-    <div style="font-size:10px;color:var(--dim);text-align:center;">You can edit individual subs after loading</div>`;
+  const finalsBtn = !loading ? (
+    '<button onclick="S.finalsMode=!S.finalsMode;closeAIRotationModal();generateAIRotation();" style="background:none;border:1.5px solid '+(S.finalsMode?'var(--accent)':'var(--border)')+';color:'+(S.finalsMode?'var(--accent)':'var(--dim)')+';border-radius:7px;padding:4px 10px;font-size:11px;font-family:Impact,sans-serif;letter-spacing:1px;cursor:pointer;flex-shrink:0;">★ FINALS MODE</button>'
+  ) : '';
 
-  modal.innerHTML = `
-    <div class="ai-rot-box">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-        <div class="ai-rot-title">🤖 AI ROTATION PLAN</div>
-        <button onclick="closeAIRotationModal()" style="background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;padding:2px;">✕</button>
-      </div>
-      <div class="ai-rot-body">${bodyHTML}</div>
-      ${footerHTML}
-    </div>`;
+  modal.innerHTML =
+    '<div class="ai-rot-box">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">' +
+        '<div class="ai-rot-title">🤖 AI ROTATION PLAN</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          finalsBtn +
+          '<button onclick="closeAIRotationModal()" style="background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;padding:2px;">✕</button>' +
+        '</div>' +
+      '</div>' +
+      (tabsHTML ? tabsHTML : '') +
+      '<div class="ai-rot-body">' + bodyHTML + '</div>' +
+      footerHTML +
+    '</div>';
 
   if(!loading && result){
     window._aiRotResult = result;
     window._aiRotFiltered = filtered;
+    window._aiRotSelectedPlan = 0;
   }
 
   document.body.appendChild(modal);
@@ -2692,7 +2770,10 @@ function renderSetup(restoreScroll){
 
   <div class="s-sec">
     <div class="s-hdr">SUB PLAN
-      <button onclick="generateAIRotation()" style="background:var(--purple);color:#fff;border:none;border-radius:7px;padding:4px 10px;font-family:Impact,'Arial Narrow',Arial,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">🤖 AI Plan</button>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button onclick="S.finalsMode=!S.finalsMode;renderSetup(true)" style="background:${S.finalsMode?'rgba(240,140,0,.2)':'none'};color:${S.finalsMode?'var(--accent)':'var(--dim)'};border:1.5px solid ${S.finalsMode?'var(--accent)':'var(--border)'};border-radius:7px;padding:3px 8px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">★ FINALS</button>
+        <button onclick="generateAIRotation()" style="background:var(--purple);color:#fff;border:none;border-radius:7px;padding:4px 10px;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">🤖 AI Plan</button>
+      </div>
     </div>
     <div class="toggle-row">
       <button class="tog${S.useSubPlan?' on':''}" onclick="toggleSubPlan()"></button>
