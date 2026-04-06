@@ -2529,86 +2529,117 @@ function applyAIRotation(plan, filtered){
   const nameToIdx = {};
   filtered.forEach((n,i)=>{ nameToIdx[n]=i; });
 
+  // Safe fuzzy lookup - prefers exact matches, avoids ambiguous guesses
   function findIdx(aiName){
     if(!aiName) return undefined;
-    if(nameToIdx[aiName] !== undefined) return nameToIdx[aiName];
-    const lower = aiName.toLowerCase();
+    const s = String(aiName).trim();
+    if(!s) return undefined;
+    // 1. Exact
+    if(nameToIdx[s] !== undefined) return nameToIdx[s];
+    const lower = s.toLowerCase();
+    // 2. Case-insensitive exact
     for(const [n,i] of Object.entries(nameToIdx)){
       if(n.toLowerCase()===lower) return i;
     }
-    for(const [n,i] of Object.entries(nameToIdx)){
-      const nLower = n.toLowerCase();
-      if(nLower.startsWith(lower) || nLower.includes(lower)) return i;
+    // 3. Roster name starts with AI name — safe only if unique match
+    const starts = Object.entries(nameToIdx).filter(([n])=>n.toLowerCase().startsWith(lower));
+    if(starts.length===1) return starts[0][1];
+    if(starts.length>1){
+      const exact = starts.filter(([n])=>n.toLowerCase().split(' ')[0]===lower);
+      if(exact.length===1) return exact[0][1];
+      return undefined; // ambiguous
     }
-    for(const [n,i] of Object.entries(nameToIdx)){
-      const firstName = n.split(' ')[0].toLowerCase();
-      if(lower.startsWith(firstName) || lower.includes(firstName)) return i;
-    }
-    return undefined;
+    // 4. AI name exactly matches a player's first word
+    const fw = Object.entries(nameToIdx).filter(([n])=>{
+      const fn = n.toLowerCase().split(' ')[0];
+      return lower===fn || lower.startsWith(fn+' ');
+    });
+    if(fw.length===1) return fw[0][1];
+    return undefined; // no safe match
   }
 
   function parseHalf(subs){
     return (subs||[]).map(sub=>{
-      const off = new Set((sub.off||[]).map(findIdx).filter(i=>i!==undefined));
-      const on  = new Set((sub.on||[]).map(findIdx).filter(i=>i!==undefined));
-      return {off, on};
+      // Track used indices to prevent duplicate matches collapsing Set size
+      const usedOff=new Set(), usedOn=new Set();
+      const offSet=new Set(), onSet=new Set();
+      (sub.off||[]).forEach(name=>{
+        const idx=findIdx(name);
+        if(idx!==undefined&&!usedOff.has(idx)){offSet.add(idx);usedOff.add(idx);}
+      });
+      (sub.on||[]).forEach(name=>{
+        const idx=findIdx(name);
+        if(idx!==undefined&&!usedOn.has(idx)){onSet.add(idx);usedOn.add(idx);}
+      });
+      // Enforce balance — off and on must be equal to keep 5 on court always
+      while(offSet.size>onSet.size){const l=[...offSet].pop();offSet.delete(l);}
+      while(onSet.size>offSet.size){const l=[...onSet].pop();onSet.delete(l);}
+      return {off:offSet, on:onSet};
     });
   }
 
-  // ── Auto-adjust sub intervals so slots match AI sub count ──
-  // Parse atTime strings from AI (e.g. "4:30" → 270 seconds)
-  function parseTime(t){
-    if(!t) return 0;
-    const parts = String(t).split(':');
-    return parseInt(parts[0])*60 + (parseInt(parts[1])||0);
-  }
+  // Auto-adjust sub intervals so slot count matches AI sub count
+  const h1Subs=(plan.h1||[]).length;
+  const h2Subs=(plan.h2||[]).length;
+  if(h1Subs>0){ S.h1Int=Math.max(20,Math.floor(S.h1Dur*60/(h1Subs+1))); }
+  if(h2Subs>0){ S.h2Int=Math.max(20,Math.floor(S.h2Dur*60/(h2Subs+1))); }
 
-  const h1Subs = (plan.h1||[]).length;
-  const h2Subs = (plan.h2||[]).length;
-
-  if(h1Subs > 0){
-    // Set interval so exactly h1Subs slots fit in H1
-    S.h1Int = Math.floor(S.h1Dur*60 / (h1Subs+1));
-    if(S.h1Int < 20) S.h1Int = 20;
-  }
-  if(h2Subs > 0){
-    S.h2Int = Math.floor(S.h2Dur*60 / (h2Subs+1));
-    if(S.h2Int < 20) S.h2Int = 20;
-  }
-
-  const h1Plan = parseHalf(plan.h1);
-  const h2Plan = parseHalf(plan.h2);
-
-  // ── Apply H2 starting 5 if AI provided one ──
-  if(plan.h2Starting5 && plan.h2Starting5.length === COURT_SIZE){
-    const ids = plan.h2Starting5.map(findIdx).filter(i=>i!==undefined);
-    if(ids.length === COURT_SIZE){
-      S.h2PresetIds = new Set(ids);
-      S.useH2Preset = true;
+  // Apply AI starting 5 — reorder S.names so getCourtAtPlanPoint tracks correctly
+  if(plan.starting5&&plan.starting5.length===COURT_SIZE){
+    const s5Ids=plan.starting5.map(findIdx).filter(i=>i!==undefined);
+    const uniq=[...new Set(s5Ids)];
+    if(uniq.length===COURT_SIZE){
+      const benchIds=filtered.map((_,i)=>i).filter(i=>!uniq.includes(i));
+      S.names=[...uniq,...benchIds].map(i=>filtered[i]);
     }
   }
 
-  // ── Apply finishing 5 as final preset if AI provided it ──
-  if(plan.finishing5 && plan.finishing5.length === COURT_SIZE){
-    const ids = plan.finishing5.map(findIdx).filter(i=>i!==undefined);
-    if(ids.length === COURT_SIZE){
-      S.finalPresetIds = new Set(ids);
-      S.useFinalPreset = true;
-    }
+  const newFiltered=S.names.filter(n=>n.trim());
+  const newNameToIdx={};
+  newFiltered.forEach((n,i)=>{ newNameToIdx[n]=i; });
+
+  // Helper: remap original filtered index → new filtered index
+  function remap(origIdx){
+    const name=filtered[origIdx];
+    return name!==undefined?newNameToIdx[name]:undefined;
   }
 
-  const totalSubs = h1Plan.length + h2Plan.length;
-  const filledSubs = [...h1Plan,...h2Plan].filter(s=>s.off.size>0&&s.on.size>0).length;
+  // Apply H2 starting 5
+  if(plan.h2Starting5&&plan.h2Starting5.length===COURT_SIZE){
+    const ids=plan.h2Starting5.map(findIdx).map(remap).filter(i=>i!==undefined);
+    const uniq=[...new Set(ids)];
+    if(uniq.length===COURT_SIZE){S.h2PresetIds=new Set(uniq);S.useH2Preset=true;}
+  }
 
-  S.subPlan = { h1: h1Plan, h2: h2Plan };
-  S.useSubPlan = true;
+  // Apply finishing 5
+  if(plan.finishing5&&plan.finishing5.length===COURT_SIZE){
+    const ids=plan.finishing5.map(findIdx).map(remap).filter(i=>i!==undefined);
+    const uniq=[...new Set(ids)];
+    if(uniq.length===COURT_SIZE){S.finalPresetIds=new Set(uniq);S.useFinalPreset=true;}
+  }
+
+  // Parse subs then remap to new order
+  const h1Plan=parseHalf(plan.h1).map(sub=>({
+    off:new Set([...sub.off].map(remap).filter(i=>i!==undefined)),
+    on: new Set([...sub.on ].map(remap).filter(i=>i!==undefined))
+  }));
+  const h2Plan=parseHalf(plan.h2).map(sub=>({
+    off:new Set([...sub.off].map(remap).filter(i=>i!==undefined)),
+    on: new Set([...sub.on ].map(remap).filter(i=>i!==undefined))
+  }));
+
+  const totalSubs=h1Plan.length+h2Plan.length;
+  const filledSubs=[...h1Plan,...h2Plan].filter(s=>s.off.size>0&&s.on.size>0).length;
+
+  S.subPlan={h1:h1Plan,h2:h2Plan};
+  S.useSubPlan=true;
   closeAIRotationModal();
   renderSetup(true);
 
-  if(filledSubs===0 && totalSubs>0){
-    showToast('⚠ Plan ' + (plan.label||plan.id) + ' loaded but names didn\'t match — check roster');
+  if(filledSubs===0&&totalSubs>0){
+    showToast('⚠ Plan loaded but names didn\'t match — check roster');
   } else {
-    showToast('Plan ' + (plan.label||plan.id) + ' loaded ✓ (' + filledSubs + '/' + totalSubs + ' subs)');
+    showToast('Plan '+(plan.label||plan.id)+' loaded ✓ ('+filledSubs+'/'+totalSubs+' subs)');
   }
 }
 
