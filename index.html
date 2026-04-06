@@ -518,16 +518,27 @@ body{
 }
 
 /* ── AI PLAN PARAMETERS ── */
-.ai-params-box{background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:8px;}
-.ai-param-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
-.ai-param-row:last-child{margin-bottom:0;}
-.ai-param-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);flex:0 0 auto;width:112px;line-height:1.3;}
-.ai-param-ctrl{flex:1;display:flex;align-items:center;gap:6px;}
-.ai-param-val{font-family:Impact,sans-serif;font-size:13px;color:var(--accent);min-width:38px;text-align:right;flex-shrink:0;}
-.ai-pslider{-webkit-appearance:none;appearance:none;flex:1;height:4px;border-radius:2px;background:var(--border);outline:none;}
-.ai-pslider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--surface);}
-.ai-pslider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--surface);}
-.ai-param-sep{font-size:11px;color:var(--dim);flex-shrink:0;}
+.ai-params-box{background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 12px 8px;margin-top:8px;}
+/* Each param: label row + slider row, stacked vertically */
+.aip{margin-bottom:14px;}
+.aip:last-child{margin-bottom:4px;}
+.aip-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.aip-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);}
+.aip-vals{font-family:Impact,sans-serif;font-size:14px;color:var(--accent);white-space:nowrap;}
+.aip-sliders{display:flex;flex-direction:column;gap:10px;}
+.aip-srow{display:flex;align-items:center;gap:8px;}
+.aip-tag{font-size:10px;color:var(--dim);width:26px;flex-shrink:0;text-align:right;}
+/* Big touch-friendly slider */
+.ai-pslider{-webkit-appearance:none;appearance:none;flex:1;height:6px;border-radius:3px;
+  background:var(--border);outline:none;min-width:0;cursor:pointer;
+  /* generous vertical touch area via transparent padding */
+  padding:10px 0;box-sizing:content-box;margin:-10px 0;}
+.ai-pslider::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;
+  border-radius:50%;background:var(--accent);cursor:pointer;
+  border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4);}
+.ai-pslider::-moz-range-thumb{width:28px;height:28px;
+  border-radius:50%;background:var(--accent);cursor:pointer;
+  border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4);}
 </style>
 </head>
 <body>
@@ -2344,92 +2355,90 @@ function updateAIParamDefaults(playerCount){
 }
 
 function renderAIParams(filtered){
-  const n = filtered.length;
-  const bench = Math.max(0, n - COURT_SIZE);
-  const maxPerSub = Math.min(bench, 5) || 1;
-  const p = S.aiParams;
+  const n=filtered.length;
+  const bench=Math.max(0,n-COURT_SIZE);
+  const maxPerSub=Math.min(bench,5)||1;
+  const p=S.aiParams;
+  const fair=Math.round((S.h1Dur+S.h2Dur)*60*COURT_SIZE/Math.max(n,COURT_SIZE));
 
-  const row = (lbl, html) =>
-    `<div class="ai-param-row"><div class="ai-param-lbl">${lbl}</div><div class="ai-param-ctrl">${html}</div></div>`;
+  // Helper: render one param block (stacked label + slider)
+  function param(id, label, valHTML, sliderHTML){
+    return '<div class="aip">' +
+      '<div class="aip-hdr"><span class="aip-lbl">' + label + '</span>' +
+      '<span class="aip-vals" id="aip-v-' + id + '">' + valHTML + '</span></div>' +
+      '<div class="aip-sliders">' + sliderHTML + '</div></div>';
+  }
 
-  const slider = (key, min, max, step, val, fmt) =>
-    `<input class="ai-pslider" type="range" min="${min}" max="${max}" step="${step}" value="${val}"
-      oninput="S.aiParams.${key}=+this.value;document.getElementById('aip-${key}').textContent='${fmt}'.replace('VAL',this.value==='${min}'&&${min}===0?'any':${key==='minSubsPerWindow'||key==='maxSubsPerWindow'?'this.value':key.includes('Pct')?'this.value+\\\'%\\\'':key.includes('Gap')||key.includes('Delay')||key.includes('Rest')?'fmtGap(+this.value)':'this.value'})">
-     <span id="aip-${key}" class="ai-param-val">${fmt.replace('VAL', val===min&&min===0?'any':key.includes('Gap')||key.includes('Delay')||key.includes('Rest')?fmtGap(val):key.includes('Pct')?val+'%':val)}</span>`;
 
-  // Build each row
-  const minSubsVal = p.minSubsPerWindow===0?'any':p.minSubsPerWindow;
-  const maxSubsVal = p.maxSubsPerWindow;
+  function slRow(tag, key, min, max, step, val, enforce){
+    const onchange = 'S.aiParams.'+key+'=+this.value;'+(enforce?enforce+';':'')+'renderSetup(true)';
+    return '<div class="aip-srow">' +
+      '<span class="aip-tag">'+tag+'</span>' +
+      '<input class="ai-pslider" type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" onchange="'+onchange+'">' +
+      '</div>';
+  }
 
-  return `<div class="ai-params-box">
-    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--dim);margin-bottom:10px;">⚙ AI ROTATION CONSTRAINTS</div>
 
-    <div class="ai-param-row">
-      <div class="ai-param-lbl">Subs per window</div>
-      <div class="ai-param-ctrl">
-        <span style="font-size:10px;color:var(--dim);">Min</span>
-        <input class="ai-pslider" type="range" min="0" max="${maxPerSub}" step="1" value="${p.minSubsPerWindow}"
-          oninput="S.aiParams.minSubsPerWindow=+this.value;if(S.aiParams.maxSubsPerWindow<+this.value)S.aiParams.maxSubsPerWindow=+this.value;renderSetup(true)">
-        <span class="ai-param-val">${p.minSubsPerWindow===0?'any':p.minSubsPerWindow}</span>
-        <span class="ai-param-sep">—</span>
-        <span style="font-size:10px;color:var(--dim);">Max</span>
-        <input class="ai-pslider" type="range" min="1" max="${maxPerSub}" step="1" value="${p.maxSubsPerWindow}"
-          oninput="S.aiParams.maxSubsPerWindow=+this.value;if(S.aiParams.minSubsPerWindow>+this.value)S.aiParams.minSubsPerWindow=+this.value;renderSetup(true)">
-        <span class="ai-param-val">${p.maxSubsPerWindow}</span>
-      </div>
-    </div>
+  const minSubVal = p.minSubsPerWindow===0?'any':String(p.minSubsPerWindow);
+  const fairFmt = fmtGap(fair);
+  const minPtFmt = fmtGap(Math.round(fair*p.minPlayTimePct/100));
+  const maxPtFmt = fmtGap(Math.round(fair*p.maxPlayTimePct/100));
 
-    <div class="ai-param-row">
-      <div class="ai-param-lbl">Gap between subs</div>
-      <div class="ai-param-ctrl">
-        <span style="font-size:10px;color:var(--dim);">Min</span>
-        <input class="ai-pslider" type="range" min="40" max="600" step="20" value="${p.minSubGap}"
-          oninput="S.aiParams.minSubGap=+this.value;if(S.aiParams.maxSubGap<+this.value)S.aiParams.maxSubGap=+this.value;renderSetup(true)">
-        <span class="ai-param-val">${fmtGap(p.minSubGap)}</span>
-        <span class="ai-param-sep">—</span>
-        <span style="font-size:10px;color:var(--dim);">Max</span>
-        <input class="ai-pslider" type="range" min="40" max="600" step="20" value="${p.maxSubGap}"
-          oninput="S.aiParams.maxSubGap=+this.value;if(S.aiParams.minSubGap>+this.value)S.aiParams.minSubGap=+this.value;renderSetup(true)">
-        <span class="ai-param-val">${fmtGap(p.maxSubGap)}</span>
-      </div>
-    </div>
+  return '<div class="ai-params-box">' +
+    '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--dim);margin-bottom:12px;">⚙ AI ROTATION CONSTRAINTS</div>' +
 
-    <div class="ai-param-row">
-      <div class="ai-param-lbl">First sub after</div>
-      <div class="ai-param-ctrl">
-        <input class="ai-pslider" type="range" min="0" max="600" step="20" value="${p.firstSubDelay}"
-          oninput="S.aiParams.firstSubDelay=+this.value;renderSetup(true)">
-        <span class="ai-param-val">${p.firstSubDelay===0?'any':fmtGap(p.firstSubDelay)}</span>
-      </div>
-    </div>
+    // Subs per window — dual slider
+    '<div class="aip">' +
+      '<div class="aip-hdr"><span class="aip-lbl">Players per sub</span>' +
+        '<span class="aip-vals">'+minSubVal+' — '+p.maxSubsPerWindow+'</span></div>' +
+      '<div class="aip-sliders">' +
+        slRow('Min', 'minSubsPerWindow', 0, maxPerSub, 1, p.minSubsPerWindow,
+          'if(S.aiParams.maxSubsPerWindow<S.aiParams.minSubsPerWindow)S.aiParams.maxSubsPerWindow=S.aiParams.minSubsPerWindow') +
+        slRow('Max', 'maxSubsPerWindow', 1, maxPerSub, 1, p.maxSubsPerWindow,
+          'if(S.aiParams.minSubsPerWindow>S.aiParams.maxSubsPerWindow)S.aiParams.minSubsPerWindow=S.aiParams.maxSubsPerWindow') +
+      '</div></div>' +
 
-    <div class="ai-param-row">
-      <div class="ai-param-lbl">Min bench rest</div>
-      <div class="ai-param-ctrl">
-        <input class="ai-pslider" type="range" min="0" max="600" step="20" value="${p.minBenchRest}"
-          oninput="S.aiParams.minBenchRest=+this.value;renderSetup(true)">
-        <span class="ai-param-val">${p.minBenchRest===0?'none':fmtGap(p.minBenchRest)}</span>
-      </div>
-    </div>
+    // Gap between subs — dual slider
+    '<div class="aip">' +
+      '<div class="aip-hdr"><span class="aip-lbl">Gap between subs</span>' +
+        '<span class="aip-vals">'+fmtGap(p.minSubGap)+' — '+fmtGap(p.maxSubGap)+'</span></div>' +
+      '<div class="aip-sliders">' +
+        slRow('Min', 'minSubGap', 40, 600, 20, p.minSubGap,
+          'if(S.aiParams.maxSubGap<S.aiParams.minSubGap)S.aiParams.maxSubGap=S.aiParams.minSubGap') +
+        slRow('Max', 'maxSubGap', 40, 600, 20, p.maxSubGap,
+          'if(S.aiParams.minSubGap>S.aiParams.maxSubGap)S.aiParams.minSubGap=S.aiParams.maxSubGap') +
+      '</div></div>' +
 
-    <div class="ai-param-row">
-      <div class="ai-param-lbl">Play time range</div>
-      <div class="ai-param-ctrl">
-        <input class="ai-pslider" type="range" min="50" max="100" step="5" value="${p.minPlayTimePct}"
-          oninput="S.aiParams.minPlayTimePct=+this.value;if(S.aiParams.maxPlayTimePct<+this.value)S.aiParams.maxPlayTimePct=+this.value;renderSetup(true)">
-        <span class="ai-param-val">${p.minPlayTimePct}%</span>
-        <span class="ai-param-sep">—</span>
-        <input class="ai-pslider" type="range" min="100" max="150" step="5" value="${p.maxPlayTimePct}"
-          oninput="S.aiParams.maxPlayTimePct=+this.value;if(S.aiParams.minPlayTimePct>+this.value)S.aiParams.minPlayTimePct=+this.value;renderSetup(true)">
-        <span class="ai-param-val">${p.maxPlayTimePct}%</span>
-      </div>
-    </div>
+    // First sub delay — single
+    '<div class="aip">' +
+      '<div class="aip-hdr"><span class="aip-lbl">First sub delay</span>' +
+        '<span class="aip-vals">'+(p.firstSubDelay===0?'immediate':fmtGap(p.firstSubDelay))+'</span></div>' +
+      '<div class="aip-sliders">' +
+        slRow('', 'firstSubDelay', 0, 600, 20, p.firstSubDelay, '') +
+      '</div></div>' +
 
-    <div style="font-size:9px;color:var(--dim);margin-top:6px;line-height:1.5;">
-      Play time % is relative to the fair share (~${fmtGap(Math.round((S.h1Dur+S.h2Dur)*60*COURT_SIZE/Math.max(n,COURT_SIZE)))}/player).
-      ${n>COURT_SIZE?'':'<span style="color:var(--warn)">Add more players to enable rotation constraints.</span>'}
-    </div>
-  </div>`;
+    // Min bench rest — single
+    '<div class="aip">' +
+      '<div class="aip-hdr"><span class="aip-lbl">Min bench rest</span>' +
+        '<span class="aip-vals">'+(p.minBenchRest===0?'none':fmtGap(p.minBenchRest))+'</span></div>' +
+      '<div class="aip-sliders">' +
+        slRow('', 'minBenchRest', 0, 600, 20, p.minBenchRest, '') +
+      '</div></div>' +
+
+    // Play time % — dual slider, note fair share
+    '<div class="aip">' +
+      '<div class="aip-hdr"><span class="aip-lbl">Play time per player</span>' +
+        '<span class="aip-vals">'+p.minPlayTimePct+'% — '+p.maxPlayTimePct+'%</span></div>' +
+      '<div style="font-size:9px;color:var(--dim);margin-bottom:6px;">Fair share ~'+fairFmt+' · Range: '+minPtFmt+' – '+maxPtFmt+'</div>' +
+      '<div class="aip-sliders">' +
+        slRow('Min', 'minPlayTimePct', 50, 100, 5, p.minPlayTimePct,
+          'if(S.aiParams.maxPlayTimePct<S.aiParams.minPlayTimePct)S.aiParams.maxPlayTimePct=S.aiParams.minPlayTimePct') +
+        slRow('Max', 'maxPlayTimePct', 100, 150, 5, p.maxPlayTimePct,
+          'if(S.aiParams.minPlayTimePct>S.aiParams.maxPlayTimePct)S.aiParams.minPlayTimePct=S.aiParams.maxPlayTimePct') +
+      '</div></div>' +
+
+    (n<=COURT_SIZE?'<div style="font-size:9px;color:var(--warn);">Add more players to enable rotation.</div>':'') +
+  '</div>';
 }
 
 async function generateAIRotation(){
