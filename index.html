@@ -2323,38 +2323,41 @@ async function callAI(prompt, maxTokens){
   if(CFG.aiProvider === 'gemini'){
     if(!CFG.geminiKey){ throw new Error('No Gemini API key — add it in ⚙ Settings'); }
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent';
-    const fetchP = fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': CFG.geminiKey
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          temperature: 0.4,
-          responseMimeType: 'application/json',  // forces clean JSON-only output
-          thinkingConfig: { thinkingLevel: 'LOW' }  // LOW: fast (5-15s), minimal token use, sufficient for scheduling
-        }
-      })
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: maxTokens,
+        temperature: 0.4,
+        responseMimeType: 'application/json',
+        thinkingConfig: { thinkingLevel: 'LOW' }
+      }
     });
-    const resp = await Promise.race([fetchP, timeout]);
-    if(!resp.ok){
-      let msg = 'Gemini HTTP ' + resp.status;
-      try{ const d=await resp.json(); msg += ': ' + (d.error?.message||JSON.stringify(d)); }catch(_){}
-      if(resp.status===400) msg = 'Gemini: Bad request. Check your key is enabled for Gemini 3.1 Pro at aistudio.google.com';
-      if(resp.status===403) msg = 'Gemini API key invalid or not enabled for this model. Visit aistudio.google.com';
-      if(resp.status===429) msg = 'Gemini rate limit. Wait a moment and try again.';
-      throw new Error(msg);
-    }
-    const data = await resp.json();
-    // Filter out thought parts (structured) and join only answer parts
-    const parts = data.candidates?.[0]?.content?.parts || [];
-    const text = parts.filter(p => !p.thought && p.text).map(p => p.text).join('').trim();
-    if(!text) throw new Error('Gemini returned empty response — try again');
-    return text;
+    const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.geminiKey };
 
+    // Attempt with one automatic retry on 429
+    async function attemptFetch(delayMs){
+      if(delayMs) await new Promise(r=>setTimeout(r,delayMs));
+      const fetchP = fetch(url, { method:'POST', headers, body });
+      const resp = await Promise.race([fetchP, timeout]);
+      if(resp.status===429){
+        // Rate limited — retry once after 8 seconds
+        if(!delayMs) return attemptFetch(8000);
+        throw new Error('Gemini rate limit — please wait 30 seconds then try again');
+      }
+      if(!resp.ok){
+        let msg='Gemini HTTP '+resp.status;
+        try{ const d=await resp.json(); msg+=': '+(d.error?.message||JSON.stringify(d)); }catch(_){}
+        if(resp.status===400) msg='Gemini: Bad request. Check key is enabled for Gemini 3.1 Pro at aistudio.google.com';
+        if(resp.status===403) msg='Gemini API key invalid or not enabled. Visit aistudio.google.com';
+        throw new Error(msg);
+      }
+      const data = await resp.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const text = parts.filter(p=>!p.thought&&p.text).map(p=>p.text).join('').trim();
+      if(!text) throw new Error('Gemini returned empty response — try again');
+      return text;
+    }
+    return attemptFetch(0);
   } else {
     // Claude (default)
     if(!CFG.apiKey){ throw new Error('No Anthropic API key — add it in ⚙ Settings'); }
@@ -2596,14 +2599,40 @@ async function generateAIRotation(){
     return parsed;
   }
 
-  // Run all 3 requests in parallel
-  const settled = await Promise.allSettled(planDefs.map((def,i) => fetchPlan(def,i)));
+  // Run plans sequentially to avoid rate limits — show progress in loading modal
   const plans = [];
   const errors = [];
-  settled.forEach((r,i) => {
-    if(r.status==='fulfilled') plans.push(r.value);
-    else errors.push(planDefs[i].label + ': ' + r.reason?.message);
-  });
+  for(let i=0; i<planDefs.length; i++){
+    const def = planDefs[i];
+    // Update loading spinner with current plan
+    const spinner = document.querySelector('#ai-rot-modal .ai-rot-spinner');
+    if(spinner){
+      const dots = spinner.querySelectorAll('[data-plan]');
+      if(dots[i]) dots[i].style.background='var(--accent)';
+      const progEl = spinner.querySelector('.ai-prog-lbl');
+      if(progEl) progEl.textContent = 'Generating Plan '+def.id+': '+def.label+'… ('+(i+1)+'/'+planDefs.length+')';
+    }
+    try {
+      const plan = await fetchPlan(def, i);
+      plans.push(plan);
+      // Mark as done in spinner
+      const spinner2 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
+      if(spinner2){
+        const dots = spinner2.querySelectorAll('[data-plan]');
+        if(dots[i]) { dots[i].style.background='var(--green)'; }
+      }
+    } catch(err){
+      errors.push(def.label+': '+err.message);
+      // Mark as failed in spinner
+      const spinner3 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
+      if(spinner3){
+        const dots = spinner3.querySelectorAll('[data-plan]');
+        if(dots[i]) dots[i].style.background='var(--red)';
+      }
+    }
+    // Brief pause between requests to avoid rate limits
+    if(i < planDefs.length-1) await new Promise(r=>setTimeout(r,500));
+  }
 
   // ── Plan D: equal time (client-side, always succeeds) ──
   (()=>{
@@ -2874,19 +2903,19 @@ function showAIRotationModal(result, loading, filtered){
     const providerName = CFG.aiProvider==='gemini' ? 'Gemini 3.1 Pro' : 'Claude Sonnet';
     bodyHTML = '<div class="ai-rot-spinner">' +
       '<div class="spin">⟳</div>' +
-      '<div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:6px;">Generating 3 rotation plans…</div>' +
-      '<div style="font-size:12px;color:var(--dim);margin-bottom:10px;">Using ' + providerName + '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">' +
-        ['A: Balanced','B: Block','C: Strength-first'].map(function(lbl){
-          return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);">' +
-            '<div style="width:10px;height:10px;border-radius:50%;background:var(--border);flex-shrink:0;"></div>' +
+      '<div class="ai-prog-lbl" style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:6px;">Starting…</div>' +
+      '<div style="font-size:12px;color:var(--dim);margin-bottom:10px;">Using ' + providerName + ' · plans generated one at a time</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">' +
+        ['A: Balanced','B: Block','C: Strength-first'].map(function(lbl, i){
+          return '<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim);">' +
+            '<div data-plan="'+i+'" style="width:12px;height:12px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .3s;"></div>' +
             '<span>Plan ' + lbl + '</span></div>';
         }).join('') +
-        '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--green);">' +
-          '<div style="width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0;"></div>' +
-          '<span>D: Equal Time (instant)</span></div>' +
+        '<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--green);">' +
+          '<div style="width:12px;height:12px;border-radius:50%;background:var(--green);flex-shrink:0;"></div>' +
+          '<span>D: Equal Time (instant — always available)</span></div>' +
       '</div>' +
-      '<div style="font-size:10px;color:var(--dim);line-height:1.5;">3 separate requests run in parallel.<br>Each plan is independent — partial results shown if any fail.</div>' +
+      '<div style="font-size:10px;color:var(--dim);line-height:1.5;">Each plan is a separate request.<br>If one fails, others continue.</div>' +
       '</div>';
   } else {
     const plans = (result&&result.plans)||[];
