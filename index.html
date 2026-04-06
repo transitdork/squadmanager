@@ -526,16 +526,21 @@ body{
 .aip-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);}
 .aip-vals{font-family:Impact,sans-serif;font-size:14px;color:var(--accent);white-space:nowrap;}
 .aip-sliders{display:flex;flex-direction:column;gap:10px;}
-.aip-srow{display:flex;align-items:center;gap:8px;}
+.aip-srow{display:flex;align-items:center;gap:8px;min-height:44px;}
 .aip-tag{font-size:10px;color:var(--dim);width:26px;flex-shrink:0;text-align:right;}
-/* Big touch-friendly slider */
-.ai-pslider{-webkit-appearance:none;appearance:none;flex:1;height:6px;border-radius:3px;
-  background:var(--border);outline:none;min-width:0;cursor:pointer;
-  /* generous vertical touch area via transparent padding */
-  padding:10px 0;box-sizing:content-box;margin:-10px 0;}
-.ai-pslider::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;
-  border-radius:50%;background:var(--accent);cursor:pointer;
+/* Touch-friendly slider: tall element, thin visual track */
+.ai-pslider{
+  -webkit-appearance:none;appearance:none;
+  flex:1;height:44px;background:transparent;
+  outline:none;min-width:0;cursor:pointer;}
+.ai-pslider::-webkit-slider-runnable-track{
+  height:6px;border-radius:3px;background:var(--border);margin-top:0;}
+.ai-pslider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:30px;height:30px;
+  margin-top:-12px;border-radius:50%;
+  background:var(--accent);cursor:pointer;
   border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4);}
+.ai-pslider::-moz-range-track{height:6px;border-radius:3px;background:var(--border);}
 .ai-pslider::-moz-range-thumb{width:28px;height:28px;
   border-radius:50%;background:var(--accent);cursor:pointer;
   border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4);}
@@ -793,6 +798,8 @@ const S = {
     maxSubGap: 360,         // max seconds between subs (6 min)
     firstSubDelay: 180,     // min seconds before first sub (3 min)
     minBenchRest: 180,      // min seconds player must sit before returning (3 min)
+    maxBenchRest: 0,        // max seconds player can sit before MUST return (0=no limit)
+    minGameTimeMins: 0,     // min guaranteed court time in minutes (0=use % only)
     minPlayTimePct: 85,     // min play time as % of fair share
     maxPlayTimePct: 115,    // max play time as % of fair share
   },
@@ -2425,6 +2432,24 @@ function renderAIParams(filtered){
         slRow('', 'minBenchRest', 0, 600, 20, p.minBenchRest, '') +
       '</div></div>' +
 
+    // Max bench rest — single
+    '<div class="aip">' +
+      '<div class="aip-hdr"><span class="aip-lbl">Max bench rest</span>' +
+        '<span class="aip-vals">'+(p.maxBenchRest===0?'no limit':fmtGap(p.maxBenchRest))+'</span></div>' +
+      '<div style="font-size:9px;color:var(--dim);margin-bottom:6px;">Player MUST return before this time</div>' +
+      '<div class="aip-sliders">' +
+        slRow('', 'maxBenchRest', 0, 600, 20, p.maxBenchRest, '') +
+      '</div></div>' +
+
+    // Min guaranteed game time — single (in minutes)
+    '<div class="aip">' +
+      '<div class="aip-hdr"><span class="aip-lbl">Min guaranteed time</span>' +
+        '<span class="aip-vals">'+(p.minGameTimeMins===0?'none':p.minGameTimeMins+' min')+'</span></div>' +
+      '<div style="font-size:9px;color:var(--dim);margin-bottom:6px;">Every player gets at least this many minutes</div>' +
+      '<div class="aip-sliders">' +
+        slRow('', 'minGameTimeMins', 0, Math.floor((S.h1Dur+S.h2Dur)*0.7), 1, p.minGameTimeMins, '') +
+      '</div></div>' +
+
     // Play time % — dual slider, note fair share
     '<div class="aip">' +
       '<div class="aip-hdr"><span class="aip-lbl">Play time per player</span>' +
@@ -2495,7 +2520,9 @@ async function generateAIRotation(){
     '  Subs per window: min ' + (S.aiParams.minSubsPerWindow===0?'no limit':S.aiParams.minSubsPerWindow) + ', max ' + S.aiParams.maxSubsPerWindow + ' players at a time',
     '  Gap between subs: min ' + fmtGap(S.aiParams.minSubGap) + ', max ' + fmtGap(S.aiParams.maxSubGap),
     '  First substitution: not before ' + (S.aiParams.firstSubDelay===0?'game start':fmtGap(S.aiParams.firstSubDelay) + ' into each half'),
-    '  Minimum bench rest: ' + (S.aiParams.minBenchRest===0?'none':fmtGap(S.aiParams.minBenchRest) + ' before a player can return to court'),
+    '  Minimum bench rest: ' + (S.aiParams.minBenchRest===0?'none':fmtGap(S.aiParams.minBenchRest) + ' — player must sit at least this long before returning'),
+    '  Maximum bench rest: ' + (S.aiParams.maxBenchRest===0?'no limit':fmtGap(S.aiParams.maxBenchRest) + ' — player must return to court before this time elapses'),
+    S.aiParams.minGameTimeMins>0 ? ('  Minimum court time: every player must receive at least ' + S.aiParams.minGameTimeMins + ' minutes (' + fmtGap(S.aiParams.minGameTimeMins*60) + ')') : null,
     '  Play time per player: between ' + S.aiParams.minPlayTimePct + '% and ' + S.aiParams.maxPlayTimePct + '% of fair share (' + fmtGap(Math.round(fairShare*S.aiParams.minPlayTimePct/100)) + ' – ' + fmtGap(Math.round(fairShare*S.aiParams.maxPlayTimePct/100)) + ')',
     '',
     '=== ROTATION GOALS (evaluate in this order) ===',
@@ -2674,14 +2701,22 @@ async function generateAIRotation(){
     // Number of subs: enough for 2 full rotations of bench players, capped at one every 90s
     function buildEqualHalf(halfSecs, startingIds){
       const benchSize = n - COURT_SIZE;
-      // 2 full rotations = 2*benchSize subs. Cap at one sub every 90 seconds.
-      const maxByTime = Math.floor(halfSecs/90);
-      const numSubs = Math.min(benchSize*2, maxByTime);
+      if(benchSize===0) return {subs:[], playTime:new Array(n).fill(halfSecs), finalCourt:new Set(startingIds)};
+
+      // How many players to swap per sub window (respect minSubsPerWindow)
+      const swapSize = Math.max(1, S.aiParams.minSubsPerWindow||1);
+      // Number of sub windows: enough for everyone to rotate, capped at one per minSubGap
+      const minGap = Math.max(S.aiParams.minSubGap||60, 60); // at least 60s between
+      const maxByTime = Math.floor(halfSecs / minGap);
+      // With swapSize players per sub, we need Math.ceil(benchSize/swapSize)*2 windows for 2 rotations
+      const rotationsNeeded = Math.ceil(benchSize/swapSize)*2;
+      const numSubs = Math.min(rotationsNeeded, maxByTime);
       if(numSubs===0) return {subs:[], playTime:new Array(n).fill(0), finalCourt:new Set(startingIds)};
 
       const interval = Math.floor(halfSecs/(numSubs+1));
       let onCourt = new Set(startingIds);
       const playTime = new Array(n).fill(0);
+      const benchRestTime = new Array(n).fill(0); // track how long each player has been on bench
       const subs = [];
       let prevTime = 0;
 
@@ -2689,23 +2724,34 @@ async function generateAIRotation(){
         const subSecs = (s+1)*interval;
         const elapsed = subSecs - prevTime;
         [...onCourt].forEach(id=>playTime[id]+=elapsed);
+        // Update bench rest time
+        filtered.forEach((_,id)=>{ if(!onCourt.has(id)) benchRestTime[id]+=elapsed; });
         prevTime = subSecs;
 
-        // Most time on court → goes off
+        // Sort court: most court time → first to come off
         const courtArr=[...onCourt].sort((a,b)=>playTime[b]-playTime[a]);
-        // Least time overall → comes on (from bench only)
+        // Sort bench: prioritise maxBenchRest violations, then least court time
+        const maxRest = S.aiParams.maxBenchRest||0;
         const benchArr=filtered.map((_,id)=>id).filter(id=>!onCourt.has(id))
-                               .sort((a,b)=>playTime[a]-playTime[b]);
+          .sort((a,b)=>{
+            const aMustReturn = maxRest>0 && benchRestTime[a]>=maxRest ? 1 : 0;
+            const bMustReturn = maxRest>0 && benchRestTime[b]>=maxRest ? 1 : 0;
+            if(aMustReturn!==bMustReturn) return bMustReturn-aMustReturn; // must-returns first
+            return playTime[a]-playTime[b]; // then least court time
+          });
 
-        if(benchArr.length>0){
-          const outId=courtArr[0], inId=benchArr[0];
-          onCourt.delete(outId); onCourt.add(inId);
+        const actualSwap = Math.min(swapSize, benchArr.length, courtArr.length);
+        if(actualSwap>0){
+          const outs=courtArr.slice(0,actualSwap);
+          const ins=benchArr.slice(0,actualSwap);
+          outs.forEach(id=>{onCourt.delete(id);benchRestTime[id]=0;});
+          ins.forEach(id=>{onCourt.add(id);benchRestTime[id]=0;});
           const mm=Math.floor(subSecs/60), ss=String(subSecs%60).padStart(2,'0');
           subs.push({subNum:s+1, atTime:mm+':'+ss,
-            off:[filtered[outId]], on:[filtered[inId]], note:'equal rotation'});
+            off:outs.map(id=>filtered[id]), on:ins.map(id=>filtered[id]),
+            note:'equal rotation'});
         }
       }
-      // Final stint
       [...onCourt].forEach(id=>playTime[id]+=(halfSecs-prevTime));
       return {subs, playTime, finalCourt:onCourt};
     }
