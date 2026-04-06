@@ -1301,7 +1301,7 @@ function buildSubPlanHTML(){
 
       h+=`<div class="plan-slot${isValid?' done':''}">
         <div class="plan-slot-hdr">
-          <span class="plan-slot-title">SUB ${i+1} @ ${fmt(atTime)}</span>
+          <span class="plan-slot-title">SUB ${i+1} @ ${sub.atTime||fmt(atTime)}</span>
           <div style="display:flex;align-items:center;gap:8px">
             ${statusHTML}
             ${hasAny?`<button style="background:none;border:none;color:var(--dim);font-size:10px;cursor:pointer" onclick="planClear('${halfKey}',${i})">✕ clear</button>`:''}
@@ -2474,51 +2474,90 @@ async function generateAIRotation(){
     result = { plans: [{ id:'A', label:'Plan', rationale:result.rationale||'', starting5:result.starting5||[], h2Starting5:result.h2Starting5||[], finishing5:result.finishing5||[], h1:result.h1||[], h2:result.h2||[], expectedTimes:result.expectedTimes||{} }] };
   }
 
-  // ── Generate equal-time Plan D client-side ──
+  // ── Generate equal-time Plan D client-side (greedy rotation algorithm) ──
   (()=>{
     const n = filtered.length;
     const totalSecs = (S.h1Dur+S.h2Dur)*60;
     const fairSecs = Math.round(totalSecs*COURT_SIZE/n);
-    // Rotate bench players through in order
-    // Each player sits out for (n-5)/n of the game
-    const h1Secs = S.h1Dur*60, h2Secs = S.h2Dur*60;
-    // Number of subs to get roughly equal time: n-5 bench players each need one turn
-    // Use round-robin: cycle through bench players
-    function buildEqualHalf(halfKey, halfSecs){
-      const startIds = halfKey==='h2' && S.useH2Preset && S.h2PresetIds.size===COURT_SIZE
-        ? [...S.h2PresetIds] : filtered.slice(0,COURT_SIZE).map((_,i)=>i);
-      let onCourt = new Set(startIds);
-      const subs = [];
-      if(n <= COURT_SIZE) return subs; // everyone plays all game
-      const bench = filtered.map((_,i)=>i).filter(i=>!onCourt.has(i));
-      // Rotate: each bench player comes on once per half if possible
-      const subsNeeded = Math.min(bench.length, Math.floor(halfSecs/60/4)); // at most every 4 min
-      const interval = Math.floor(halfSecs / (subsNeeded+1));
-      let benchIdx = 0;
-      for(let s=0; s<subsNeeded && benchIdx<bench.length; s++){
-        const atSecs = (s+1)*interval;
-        const atTime = Math.floor(atSecs/60)+':'+(String(atSecs%60).padStart(2,'0'));
-        // Rotate: player who has been on longest comes off
-        const courtArr = [...onCourt];
-        const outId = courtArr[s % courtArr.length];
-        const inId = bench[benchIdx++];
-        onCourt.delete(outId); onCourt.add(inId);
-        subs.push({subNum:s+1, atTime, off:[filtered[outId]], on:[filtered[inId]], note:'equal time rotation'});
-      }
-      return subs;
+
+    if(n<=COURT_SIZE){
+      // Everyone plays full game — no subs needed
+      const times={};
+      filtered.forEach(nm=>{ times[nm]=Math.floor(totalSecs/60)+':'+String(totalSecs%60).padStart(2,'0'); });
+      result.plans.push({id:'D',label:'Equal Time',rationale:'All players play the full game.',
+        starting5:filtered.slice(0,COURT_SIZE),h2Starting5:filtered.slice(0,COURT_SIZE),
+        finishing5:filtered.slice(0,COURT_SIZE),h1:[],h2:[],expectedTimes:times});
+      return;
     }
-    const dH1 = buildEqualHalf('h1', h1Secs);
-    const dH2 = buildEqualHalf('h2', h2Secs);
-    // Expected times: simple equal split
-    const times = {};
-    filtered.forEach(nm=>{ times[nm] = Math.floor(fairSecs/60)+':'+(String(fairSecs%60).padStart(2,'0')); });
+
+    // Greedy algorithm: at each sub window, sub out the player with MOST court time,
+    // sub in the bench player with LEAST court time.
+    // Number of subs: enough for 2 full rotations of bench players, capped at one every 90s
+    function buildEqualHalf(halfSecs, startingIds){
+      const benchSize = n - COURT_SIZE;
+      // 2 full rotations = 2*benchSize subs. Cap at one sub every 90 seconds.
+      const maxByTime = Math.floor(halfSecs/90);
+      const numSubs = Math.min(benchSize*2, maxByTime);
+      if(numSubs===0) return {subs:[], playTime:new Array(n).fill(0), finalCourt:new Set(startingIds)};
+
+      const interval = Math.floor(halfSecs/(numSubs+1));
+      let onCourt = new Set(startingIds);
+      const playTime = new Array(n).fill(0);
+      const subs = [];
+      let prevTime = 0;
+
+      for(let s=0; s<numSubs; s++){
+        const subSecs = (s+1)*interval;
+        const elapsed = subSecs - prevTime;
+        [...onCourt].forEach(id=>playTime[id]+=elapsed);
+        prevTime = subSecs;
+
+        // Most time on court → goes off
+        const courtArr=[...onCourt].sort((a,b)=>playTime[b]-playTime[a]);
+        // Least time overall → comes on (from bench only)
+        const benchArr=filtered.map((_,id)=>id).filter(id=>!onCourt.has(id))
+                               .sort((a,b)=>playTime[a]-playTime[b]);
+
+        if(benchArr.length>0){
+          const outId=courtArr[0], inId=benchArr[0];
+          onCourt.delete(outId); onCourt.add(inId);
+          const mm=Math.floor(subSecs/60), ss=String(subSecs%60).padStart(2,'0');
+          subs.push({subNum:s+1, atTime:mm+':'+ss,
+            off:[filtered[outId]], on:[filtered[inId]], note:'equal rotation'});
+        }
+      }
+      // Final stint
+      [...onCourt].forEach(id=>playTime[id]+=(halfSecs-prevTime));
+      return {subs, playTime, finalCourt:onCourt};
+    }
+
+    const h1Res = buildEqualHalf(S.h1Dur*60, filtered.slice(0,COURT_SIZE).map((_,i)=>i));
+
+    // H2 starts with the 5 players who played LEAST in H1 (balances the game)
+    const h2StartIds = filtered.map((_,i)=>({i,t:h1Res.playTime[i]}))
+      .sort((a,b)=>a.t-b.t).slice(0,COURT_SIZE).map(x=>x.i);
+
+    const h2Res = buildEqualHalf(S.h2Dur*60, h2StartIds);
+
+    // Combine play times
+    const totalPlay = h1Res.playTime.map((t,i)=>t+(h2Res.playTime[i]||0));
+    const times={};
+    filtered.forEach((nm,i)=>{
+      const t=totalPlay[i];
+      times[nm]=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+    });
+
+    const fairFmt=Math.floor(fairSecs/60)+':'+String(fairSecs%60).padStart(2,'0');
+    const finishing5=[...h2Res.finalCourt].map(i=>filtered[i]);
+    const h2Starting5=h2StartIds.map(i=>filtered[i]);
+
     result.plans.push({
       id:'D', label:'Equal Time',
-      rationale:'Purely equal playing time for all ' + n + ' players. Every player receives approximately ' + Math.floor(fairSecs/60) + ':' + String(fairSecs%60).padStart(2,'0') + '. No weighting for player strength or position.',
-      starting5: filtered.slice(0,COURT_SIZE),
-      h2Starting5: filtered.slice(0,COURT_SIZE),
-      finishing5: filtered.slice(0,COURT_SIZE),
-      h1: dH1, h2: dH2, expectedTimes: times
+      rationale:'Greedy equal-time rotation for all '+n+' players (~'+fairFmt+' each). Always subs in the player with least court time, out the player with most. H2 starts with the 5 who played least in H1.',
+      starting5:filtered.slice(0,COURT_SIZE),
+      h2Starting5, finishing5,
+      h1:h1Res.subs, h2:h2Res.subs,
+      expectedTimes:times
     });
   })();
 
@@ -2574,7 +2613,7 @@ function applyAIRotation(plan, filtered){
       // Enforce balance — off and on must be equal to keep 5 on court always
       while(offSet.size>onSet.size){const l=[...offSet].pop();offSet.delete(l);}
       while(onSet.size>offSet.size){const l=[...onSet].pop();onSet.delete(l);}
-      return {off:offSet, on:onSet};
+      return {off:offSet, on:onSet, atTime:sub.atTime||null};
     });
   }
 
@@ -2621,11 +2660,13 @@ function applyAIRotation(plan, filtered){
   // Parse subs then remap to new order
   const h1Plan=parseHalf(plan.h1).map(sub=>({
     off:new Set([...sub.off].map(remap).filter(i=>i!==undefined)),
-    on: new Set([...sub.on ].map(remap).filter(i=>i!==undefined))
+    on: new Set([...sub.on ].map(remap).filter(i=>i!==undefined)),
+    atTime: sub.atTime
   }));
   const h2Plan=parseHalf(plan.h2).map(sub=>({
     off:new Set([...sub.off].map(remap).filter(i=>i!==undefined)),
-    on: new Set([...sub.on ].map(remap).filter(i=>i!==undefined))
+    on: new Set([...sub.on ].map(remap).filter(i=>i!==undefined)),
+    atTime: sub.atTime
   }));
 
   const totalSubs=h1Plan.length+h2Plan.length;
