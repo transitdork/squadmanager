@@ -2239,44 +2239,80 @@ function autoModeTimeHTML(filtered){
 // ═══════════════════════════════════════════
 function buildPlayerRatingSummary(filtered){
   const team = T.teams.find(t=>t.id===T.activeTeamId);
-  const POS_OPTIONS = ['1 – Point Guard','2 – Shooting Guard','3 – Small Forward','4 – Power Forward','5 – Centre'];
-  const ALT_OPTIONS = ['None','1 – Point Guard','2 – Shooting Guard','3 – Small Forward','4 – Power Forward','5 – Centre'];
+  const POS_LABELS = ['1-PG','2-SG','3-SF','4-PF','5-C'];
+  const ALT_LABELS = ['None','1-PG','2-SG','3-SF','4-PF','5-C'];
 
-  return filtered.map(name=>{
+  // Compute overall rating and key role scores per player
+  const playerData = filtered.map(name=>{
     const player = team && team.players.find(p=>playerDisplayName(p)===name);
-    const ratings = player ? getPlayerRatings(T.activeTeamId, player.id) : {};
-    const hasRatings = Object.keys(ratings).length > 0;
-    if(!hasRatings) return `  ${name}: no ratings entered`;
+    const r = player ? getPlayerRatings(T.activeTeamId, player.id) : {};
+    const has = Object.keys(r).length > 0;
 
-    // Build position string prominently
-    const pri  = POS_OPTIONS[parseInt(ratings.position)||0]  || POS_OPTIONS[0];
-    const alt1 = ALT_OPTIONS[parseInt(ratings.position2)||0] || 'None';
-    const alt2 = ALT_OPTIONS[parseInt(ratings.position3)||0] || 'None';
-    const posStr = alt1!=='None' && alt2!=='None'
-      ? `Positions: ${pri} (primary), ${alt1} (alt1), ${alt2} (alt2)`
-      : alt1!=='None'
-        ? `Positions: ${pri} (primary), ${alt1} (alt1)`
-        : `Positions: ${pri} (primary)`;
+    if(!has) return { name, has:false };
 
-    // Summarise remaining skill groups (skip position fields — already shown above)
-    const groups = RATING_GROUPS.map(g=>{
-      const scores = g.fields
-        .filter(f=>!['position','position2','position3','height'].includes(f.key))
-        .map(f=>{
-          if(f.type==='select'){
-            const val = ratings[f.key] !== undefined ? parseInt(ratings[f.key]) : 0;
-            return `${f.label}=${f.options[val]||f.options[0]}`;
-          }
-          const val = ratings[f.key] !== undefined ? ratings[f.key] : 5;
-          return `${f.label}=${val}/10`;
-        });
-      return scores.length ? `${g.label}[${scores.join(', ')}]` : '';
-    }).filter(Boolean).join('; ');
+    const g = k => r[k] !== undefined ? Number(r[k]) : 5;
 
-    const height = ['Small','Medium','Tall'][parseInt(ratings.height)||0] || 'Medium';
+    // Derive composite scores that actually matter for lineup decisions
+    const offence  = (g('layup')+g('jumpshot')+g('three')+g('passing')+g('dribble')+g('sharing'))/6;
+    const defence  = (g('defplayer')+g('defset')+g('offdef')+g('rebdef'))/4;
+    const handling = (g('passing')+g('dribble')+g('dribblepressure')+g('sharing'))/4;
+    const interior = (g('reboff')+g('rebdef')+(g('height')===2?3:g('height')===1?1:0))/3; // height 0=small,1=med,2=tall
+    const energy   = (g('speed')+g('energy'))/2;
+    const iq       = (g('setplays')+g('composure'))/2;
+    const overall  = (offence+defence+energy+iq)/4;
 
-    return `  ${name}: ${posStr}; Height=${height}; ${groups}`;
-  }).join('\n');
+    // Primary and alt positions
+    const pos1 = POS_LABELS[parseInt(r.position)||0] || '1-PG';
+    const pos2 = parseInt(r.position2||0)>0 ? ALT_LABELS[parseInt(r.position2)] : null;
+    const pos3 = parseInt(r.position3||0)>0 ? ALT_LABELS[parseInt(r.position3)] : null;
+    const positions = [pos1, pos2, pos3].filter(Boolean).join('/');
+
+    // Role classification
+    const isHandler  = ['1-PG','2-SG'].some(p=>[pos1,pos2,pos3].includes(p));
+    const isInterior = ['4-PF','5-C'].some(p=>[pos1,pos2,pos3].includes(p));
+    const strengths  = [];
+    if(offence>=7)  strengths.push('scorer');
+    if(defence>=7)  strengths.push('defender');
+    if(handling>=7) strengths.push('ball-handler');
+    if(interior>=7) strengths.push('rebounder');
+    if(energy>=7)   strengths.push('high-energy');
+    if(iq>=7)       strengths.push('high-IQ');
+
+    return { name, has:true, overall, offence, defence, handling, interior, energy,
+             positions, isHandler, isInterior, strengths,
+             r1: Math.round(overall*10)/10 };
+  });
+
+  // Rank players by overall rating so AI can see relative strength
+  const ranked = [...playerData].filter(p=>p.has).sort((a,b)=>b.overall-a.overall);
+  const maxOvr = ranked.length ? ranked[0].overall : 10;
+
+  // Format each player as a concise briefing line
+  const lines = filtered.map(name=>{
+    const d = playerData.find(p=>p.name===name);
+    if(!d||!d.has) return `  ${name}: no ratings — treat as average`;
+
+    const starRating = '★'.repeat(Math.round(d.overall/2)) + '☆'.repeat(5-Math.round(d.overall/2));
+    const tier = d.overall >= maxOvr*0.85 ? 'CORE' : d.overall >= maxOvr*0.65 ? 'rotation' : 'reserve';
+    const strengthStr = d.strengths.length ? '  Strengths: '+d.strengths.join(', ') : '';
+    const posNote = d.isHandler ? ' [ball-handler]' : d.isInterior ? ' [interior]' : '';
+
+    return `  ${name} [${tier}] ${starRating} (${d.r1}/10)
+    Positions: ${d.positions}${posNote}
+    Off:${Math.round(d.offence*10)/10} Def:${Math.round(d.defence*10)/10} Handle:${Math.round(d.handling*10)/10} Interior:${Math.round(d.interior*10)/10} Energy:${Math.round(d.energy*10)/10}${strengthStr}`;
+  });
+
+  // Append lineup analysis: which 5-player combos are problematic
+  const handlers  = playerData.filter(p=>p.has&&p.isHandler).map(p=>p.name);
+  const interiors = playerData.filter(p=>p.has&&p.isInterior).map(p=>p.name);
+  const topPlayers = ranked.slice(0,Math.min(5,ranked.length)).map(p=>p.name);
+
+  const notes = [];
+  if(handlers.length<3)  notes.push(`Only ${handlers.length} ball-handler(s): ${handlers.join(', ')} — never bench all of them simultaneously`);
+  if(interiors.length<2) notes.push(`Only ${interiors.length} interior player(s): ${interiors.join(', ')} — keep at least one on court`);
+  if(topPlayers.length)  notes.push(`Top-rated players: ${topPlayers.join(', ')}`);
+
+  return lines.join('\n') + (notes.length ? '\n\nLINEUP RULES:\n  '+notes.join('\n  ') : '');
 }
 
 // ─── Universal AI call — routes to Claude or Gemini based on CFG.aiProvider ───
@@ -2299,7 +2335,7 @@ async function callAI(prompt, maxTokens){
           maxOutputTokens: maxTokens,
           temperature: 0.4,
           responseMimeType: 'application/json',  // forces clean JSON-only output
-          thinkingConfig: { thinkingLevel: 'MEDIUM' }  // MEDIUM avoids thought bleed-through, still deep reasoning
+          thinkingConfig: { thinkingLevel: 'LOW' }  // LOW: fast (5-15s), minimal token use, sufficient for scheduling
         }
       })
     });
@@ -2472,322 +2508,183 @@ async function generateAIRotation(){
     alert('Please add your ' + (CFG.aiProvider==='gemini'?'Google Gemini':'Anthropic') + ' API key in ⚙ Settings first.');
     return;
   }
-
   const filtered = S.names.filter(n=>n.trim());
   if(filtered.length < COURT_SIZE){
     alert('Add at least ' + COURT_SIZE + ' players to the roster first.');
     return;
   }
 
-  showAIRotationModal(null, true);
+  showAIRotationModal(null, true, filtered, 0);
 
-  const totalSecs = (S.h1Dur+S.h2Dur)*60;
-  const fairShare = Math.round(totalSecs*COURT_SIZE/filtered.length);
-  const fairShareFmt = Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
-  const finalsMode = S.finalsMode || false;
+  // ── Build shared context (sent with every plan request) ──
+  const totalSecs  = (S.h1Dur+S.h2Dur)*60;
+  const fairShare  = Math.round(totalSecs*COURT_SIZE/filtered.length);
+  const fairFmt    = Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
   const adheresToPresets = S.aiAdheresToPresets !== false;
-
+  const finalsMode = S.finalsMode || false;
   const h2PresetNote = adheresToPresets && S.useH2Preset && S.h2PresetIds.size===COURT_SIZE
-    ? 'H2 starting 5 (MANDATORY — must use): ' + [...S.h2PresetIds].map(i=>filtered[i]).join(', ')
-    : 'No H2 starting 5 constraint — AI chooses best H2 lineup';
+    ? 'H2 starting 5 (MANDATORY): ' + [...S.h2PresetIds].map(i=>filtered[i]).join(', ')
+    : 'AI chooses best H2 lineup';
   const finalNote = adheresToPresets && S.useFinalPreset && S.finalPresetIds.size===COURT_SIZE
-    ? 'Finishing 5 (MANDATORY — must finish game): ' + [...S.finalPresetIds].map(i=>filtered[i]).join(', ')
-    : 'No finishing 5 constraint — AI chooses best closing lineup';
+    ? 'Finishing 5 (MANDATORY): ' + [...S.finalPresetIds].map(i=>filtered[i]).join(', ')
+    : 'AI chooses best finishing lineup';
   const priorityNames = [...S.priorityPlayerIds].map(i=>filtered[i]).filter(Boolean);
-
   const playerSummary = buildPlayerRatingSummary(filtered);
-  const hasAnyRatings = filtered.some(name=>{
-    const team = T.teams.find(t=>t.id===T.activeTeamId);
-    const player = team && team.players.find(p=>playerDisplayName(p)===name);
-    return player && Object.keys(getPlayerRatings(T.activeTeamId, player.id)).length > 0;
+  const hasRatings = filtered.some(name=>{
+    const team=T.teams.find(t=>t.id===T.activeTeamId);
+    const player=team&&team.players.find(p=>playerDisplayName(p)===name);
+    return player&&Object.keys(getPlayerRatings(T.activeTeamId,player.id)).length>0;
   });
+  const p = S.aiParams;
 
-  const systemPrompt = [
-    '=== BASKETBALL ROTATION PLANNER — SYSTEM RULES ===',
+  const sharedContext = [
+    'GAME: ' + (S.h1Dur+S.h2Dur) + ' min total (' + S.h1Dur + '+' + S.h2Dur + '), '+filtered.length+' players, 5 on court',
+    'Fair share: ~' + fairFmt + '/player',
+    h2PresetNote, finalNote,
+    priorityNames.length ? 'Priority players (extra time ok): '+priorityNames.join(', ') : null,
+    finalsMode ? 'FINALS MODE: top-rated players may receive 15-20% more time' : null,
     '',
-    'You are an expert junior basketball coach devising substitution rotation plans.',
-    'Think deeply and systematically. This is a multi-constraint optimisation problem.',
+    'HARD CONSTRAINTS (must satisfy all):',
+    '  Players per sub: '+((p.minSubsPerWindow||0)===0?'any':p.minSubsPerWindow)+' – '+p.maxSubsPerWindow,
+    '  Gap between subs: '+fmtGap(p.minSubGap)+' – '+fmtGap(p.maxSubGap),
+    '  First sub: not before '+((p.firstSubDelay||0)===0?'kick-off':fmtGap(p.firstSubDelay)),
+    '  Min bench rest: '+((p.minBenchRest||0)===0?'none':fmtGap(p.minBenchRest)),
+    '  Max bench rest: '+((p.maxBenchRest||0)===0?'no limit':fmtGap(p.maxBenchRest)+' (player MUST return)'),
+    p.minGameTimeMins>0 ? '  Min guaranteed time: '+p.minGameTimeMins+' min per player' : null,
+    '  Play time: '+p.minPlayTimePct+'% – '+p.maxPlayTimePct+'% of fair share ('+fmtGap(Math.round(fairShare*p.minPlayTimePct/100))+' – '+fmtGap(Math.round(fairShare*p.maxPlayTimePct/100))+')',
     '',
-    'GAME RULES:',
-    '  Total game: ' + (S.h1Dur+S.h2Dur) + ' minutes (' + S.h1Dur + ' min H1 + ' + S.h2Dur + ' min H2)',
-    '  5 players on court at all times from a squad of ' + filtered.length,
-    '  Fair court time if equal: ~' + fairShareFmt + ' per player',
-    '  ' + h2PresetNote,
-    '  ' + finalNote,
+    hasRatings ? ('PLAYER DATA:\\n'+playerSummary) : 'PLAYER DATA: No ratings — use equal time distribution.',
     '',
-    '=== HARD CONSTRAINTS (you MUST satisfy all of these) ===',
-    '',
-    '  Subs per window: min ' + (S.aiParams.minSubsPerWindow===0?'no limit':S.aiParams.minSubsPerWindow) + ', max ' + S.aiParams.maxSubsPerWindow + ' players at a time',
-    '  Gap between subs: min ' + fmtGap(S.aiParams.minSubGap) + ', max ' + fmtGap(S.aiParams.maxSubGap),
-    '  First substitution: not before ' + (S.aiParams.firstSubDelay===0?'game start':fmtGap(S.aiParams.firstSubDelay) + ' into each half'),
-    '  Minimum bench rest: ' + (S.aiParams.minBenchRest===0?'none':fmtGap(S.aiParams.minBenchRest) + ' — player must sit at least this long before returning'),
-    '  Maximum bench rest: ' + (S.aiParams.maxBenchRest===0?'no limit':fmtGap(S.aiParams.maxBenchRest) + ' — player must return to court before this time elapses'),
-    S.aiParams.minGameTimeMins>0 ? ('  Minimum court time: every player must receive at least ' + S.aiParams.minGameTimeMins + ' minutes (' + fmtGap(S.aiParams.minGameTimeMins*60) + ')') : null,
-    '  Play time per player: between ' + S.aiParams.minPlayTimePct + '% and ' + S.aiParams.maxPlayTimePct + '% of fair share (' + fmtGap(Math.round(fairShare*S.aiParams.minPlayTimePct/100)) + ' – ' + fmtGap(Math.round(fairShare*S.aiParams.maxPlayTimePct/100)) + ')',
-    '',
-    '=== ROTATION GOALS (evaluate in this order) ===',
-    '',
-    '1. TEAM STRENGTH: Never put a weak lineup on court.',
-    '   - Evaluate each sub combination using player ratings',
-    '   - Avoid subbing out multiple high-rated players simultaneously',
-    '   - Ensure every lineup has at least one strong ball-handler (pos 1 or 2)',
-    '   - Ensure every lineup has at least one strong rebounder/interior player (pos 4 or 5)',
-    '',
-    '2. POSITION COVERAGE: Each lineup should cover as many of positions 1-5 as possible.',
-    '   - Use each player\'s PRIMARY position first, then alt1, then alt2',
-    '   - Never have a lineup missing both a point guard and a shooting guard',
-    '   - Try to have all 5 positions covered in key lineups',
-    '',
-    '3. PLAYING TIME:',
-    finalsMode
-      ? '   FINALS MODE ACTIVE: Higher-rated players may receive 15-20% more time than fair share.'
-      : '   STANDARD MODE: Aim for roughly equal time. Core players may have 10-15% more if it creates a significantly stronger net lineup.',
-    '   - No player should sit for more than 2 consecutive sub windows without returning',
-    '   - Priority players (if set) get extra time when minutes cannot split evenly',
-    priorityNames.length ? ('   Priority players: ' + priorityNames.join(', ')) : null,
-    '',
-    '4. SUBSTITUTION QUALITY:',
-    '   - Never return a player immediately in the next sub after they just came off',
-    '   - When subbing multiple players, stagger combinations to maintain lineup cohesion',
-    '   - Sub timing should be spread to give players proper rest periods',
-    '',
-    hasAnyRatings ? ('=== PLAYER DATA ===\n' + playerSummary) : 'PLAYER DATA: No ratings entered — base decisions on position and equal time.',
-    '',
-    '=== YOUR TASK ===',
-    '',
-    'Generate EXACTLY 3 rotation plans with DIFFERENT sub patterns:',
-    '  Plan A: "Balanced" — frequent smaller subs (1-2 players at a time), maximise flexibility',
-    '  Plan B: "Block" — larger subs (2-4 players at once) at key moments, keep cohesive units together longer',
-    '  Plan C: "Strength-first" — optimise entirely for strongest lineup on court, accept slightly less even time',
-    '',
-    'You are NOT restricted to fixed sub intervals. Choose timing freely.',
-    'For EACH plan also specify:',
-    '  - starting5: the best 5 players to start the game (ordered by position)',
-    '  - h2Starting5: the best 5 players to start the 2nd half',
-    '  - finishing5: the 5 players who should be on court at the final whistle',
-    '',
-    'Initial lineup suggestion (first ' + COURT_SIZE + ' in roster order): ' + filtered.slice(0,COURT_SIZE).join(', '),
-    'Bench: ' + (filtered.slice(COURT_SIZE).join(', ') || 'none'),
-    '',
-    'CRITICAL: Use EXACTLY these player name strings — copy them precisely:',
-    filtered.join(', '),
-    '',
-    'Return ONLY valid JSON:',
-    '{',
-    '  "plans": [',
-    '    {',
-    '      "id": "A", "label": "Balanced",',
-    '      "rationale": "2-3 sentences on this plan",',
-    '      "starting5": ["Player A","Player B","Player C","Player D","Player E"],',
-    '      "h2Starting5": ["Player A","Player B","Player C","Player D","Player F"],',
-    '      "finishing5": ["Player A","Player B","Player C","Player D","Player E"],',
-    '      "h1": [{"subNum":1,"atTime":"4:00","off":["Player A"],"on":["Player B"],"note":"reason"}],',
-    '      "h2": [{"subNum":1,"atTime":"5:00","off":["Player C"],"on":["Player D"],"note":"reason"}],',
-    '      "expectedTimes": {"Player A":"14:00","Player B":"12:00"}',
-    '    },',
-    '    { "id":"B","label":"Block","rationale":"...","starting5":[],"h2Starting5":[],"finishing5":[],"h1":[],"h2":[],"expectedTimes":{} },',
-    '    { "id":"C","label":"Strength-first","rationale":"...","starting5":[],"h2Starting5":[],"finishing5":[],"h1":[],"h2":[],"expectedTimes":{} }',
-    '  ]',
-    '}'
+    'Starting bench: '+(filtered.slice(COURT_SIZE).join(', ')||'none'),
+    'CRITICAL — use these EXACT player name strings: ' + filtered.join(', '),
   ].filter(l=>l!==null).join('\n');
 
-  let rawText;
-  try {
-    rawText = await callAI(systemPrompt, 12000);
-  } catch(err){
-    closeAIRotationModal();
-    alert(err.message==='TIMEOUT'
-      ? 'Request timed out. Gemini Deep Think can take 30-60s. Try again.'
-      : 'AI Error: '+err.message);
-    return;
+  // JSON schema for a single plan
+  const schema = '{"id":"X","label":"Name","rationale":"2 sentences","starting5":["..."],"h2Starting5":["..."],"finishing5":["..."],"h1":[{"subNum":1,"atTime":"4:00","off":["Player A"],"on":["Player B"],"note":"reason"}],"h2":[{"subNum":1,"atTime":"5:00","off":["Player C"],"on":["Player D"],"note":""}],"expectedTimes":{"Player A":"14:00"}}';
+
+  // ── 3 plan-specific prompts ──
+  const planDefs = [
+    { id:'A', label:'Balanced',
+      task:'BALANCED rotation. Prioritise even playing time while keeping lineup strength high. '+
+           'Use the Off/Def/Handle/Interior scores to avoid weak lineups. '+
+           'Every lineup MUST have at least one ball-handler (1-PG or 2-SG) and one interior player (4-PF or 5-C). '+
+           'Swap '+((p.minSubsPerWindow||1)===0?'1':p.minSubsPerWindow)+'-'+p.maxSubsPerWindow+' players at a time at regular intervals.' },
+    { id:'B', label:'Block',
+      task:'BLOCK rotation. Keep cohesive 5-player units together for longer stretches. '+
+           'Use the Off/Def scores to identify 2-3 strong unit combinations, then rotate those groups. '+
+           'Prefer swapping '+Math.max(2,p.maxSubsPerWindow||2)+' players at once. '+
+           'Every lineup must still have a ball-handler (1-PG/2-SG) and interior player (4-PF/5-C). '+
+           'Enforce the LINEUP RULES from the player data.' },
+    { id:'C', label:'Strength-first',
+      task:'STRENGTH-FIRST rotation. Maximise team strength on court at all times. '+
+           'Use the CORE/rotation/reserve tiers and overall ratings to give CORE players 10-15% more time. '+
+           'Build lineups from highest overall ratings down. '+
+           'Every lineup must have a ball-handler (1-PG/2-SG) and interior (4-PF/5-C). '+
+           'Strictly follow the LINEUP RULES. Playing time will be less even — this is intentional.' },
+  ];
+
+  async function fetchPlan(def, idx){
+    const prompt = sharedContext + '\n\n=== YOUR TASK: Generate ONE rotation plan ===\n' + def.task +
+      '\n\nReturn ONLY valid JSON for this single plan (no markdown):\n' + schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
+    const raw = await callAI(prompt, 3000);
+    const clean = extractJSON(raw);
+    if(!clean) throw new Error('No JSON found');
+    const parsed = JSON.parse(clean);
+    // Ensure id and label are set
+    parsed.id = def.id;
+    parsed.label = def.label;
+    return parsed;
   }
 
-  // Robust JSON extraction + repair — handles both complete and truncated responses
-  function extractJSON(str){
-    str = str.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
-    let start=str.indexOf('{"plans"');
-    if(start===-1) start=str.indexOf('{ "plans"');
-    if(start===-1) start=str.indexOf('{');
-    if(start===-1) return null;
+  // Run all 3 requests in parallel
+  const settled = await Promise.allSettled(planDefs.map((def,i) => fetchPlan(def,i)));
+  const plans = [];
+  const errors = [];
+  settled.forEach((r,i) => {
+    if(r.status==='fulfilled') plans.push(r.value);
+    else errors.push(planDefs[i].label + ': ' + r.reason?.message);
+  });
 
-    // Walk forward to find balanced closing brace
-    let depth=0,inStr=false,esc=false;
-    for(let i=start;i<str.length;i++){
-      const c=str[i];
-      if(esc){esc=false;continue;}
-      if(c==='\\'&&inStr){esc=true;continue;}
-      if(c==='"'&&!esc){inStr=!inStr;continue;}
-      if(inStr) continue;
-      if(c==='{')depth++;
-      else if(c==='}'){depth--;if(depth===0)return str.slice(start,i+1);}
-    }
-
-    // ── Truncated response repair ──
-    let partial=str.slice(start);
-    // Remove dangling incomplete tokens at the end
-    partial=partial
-      .replace(/,\s*$/,'')
-      .replace(/"[^"\n]*$/,'"')
-      .replace(/,\s*"[^"]*$/,'');
-
-    // Count unclosed structures
-    depth=0;let arr=0;inStr=false;esc=false;
-    for(let i=0;i<partial.length;i++){
-      const c=partial[i];
-      if(esc){esc=false;continue;}
-      if(c==='\\'&&inStr){esc=true;continue;}
-      if(c==='"'&&!esc){inStr=!inStr;continue;}
-      if(inStr)continue;
-      if(c==='{')depth++;
-      else if(c==='}')depth--;
-      else if(c==='[')arr++;
-      else if(c===']')arr--;
-    }
-
-    let repaired=partial;
-    while(arr-->0)repaired+=']';
-    while(depth-->0)repaired+='}';
-    try{JSON.parse(repaired);return repaired;}catch(_){}
-
-    // Try closing at the last complete plan block
-    const lastClose=partial.lastIndexOf('"}');
-    if(lastClose>0){
-      const attempt=partial.slice(0,lastClose+2)+']}';
-      try{JSON.parse(attempt);return attempt;}catch(_){}
-    }
-    return null;
-  }
-
-  const clean = extractJSON(rawText);
-
-  let result;
-  if(clean){
-    try{ result = JSON.parse(clean); } catch(e){ result = null; }
-  }
-
-  if(!result){
-    closeAIRotationModal();
-    const isLikeTruncated = rawText.length > 1000 && !rawText.trim().endsWith('}');
-    const hint = isLikeTruncated
-      ? 'The response was cut off mid-way (token limit). Try again — it usually works on a retry.'
-      : 'The AI returned an unexpected format.';
-    alert('Could not parse AI response.\n\n' + hint + '\n\nPreview:\n' + rawText.slice(0, 200));
-    return;
-  }
-
-  // Normalise: if no plans array, wrap single result
-  if(!result.plans && (result.h1||result.h2)){
-    result = { plans: [{ id:'A', label:'Plan', rationale:result.rationale||'', starting5:result.starting5||[], h2Starting5:result.h2Starting5||[], finishing5:result.finishing5||[], h1:result.h1||[], h2:result.h2||[], expectedTimes:result.expectedTimes||{} }] };
-  }
-
-  // ── Generate equal-time Plan D client-side (greedy rotation algorithm) ──
+  // ── Plan D: equal time (client-side, always succeeds) ──
   (()=>{
     const n = filtered.length;
-    const totalSecs = (S.h1Dur+S.h2Dur)*60;
     const fairSecs = Math.round(totalSecs*COURT_SIZE/n);
-
     if(n<=COURT_SIZE){
-      // Everyone plays full game — no subs needed
-      const times={};
-      filtered.forEach(nm=>{ times[nm]=Math.floor(totalSecs/60)+':'+String(totalSecs%60).padStart(2,'0'); });
-      result.plans.push({id:'D',label:'Equal Time',rationale:'All players play the full game.',
+      const t = Math.floor(totalSecs/60)+':'+String(totalSecs%60).padStart(2,'0');
+      const times={};filtered.forEach(nm=>{times[nm]=t;});
+      plans.push({id:'D',label:'Equal Time',rationale:'All players play the full game.',
         starting5:filtered.slice(0,COURT_SIZE),h2Starting5:filtered.slice(0,COURT_SIZE),
         finishing5:filtered.slice(0,COURT_SIZE),h1:[],h2:[],expectedTimes:times});
       return;
     }
-
-    // Greedy algorithm: at each sub window, sub out the player with MOST court time,
-    // sub in the bench player with LEAST court time.
-    // Number of subs: enough for 2 full rotations of bench players, capped at one every 90s
     function buildEqualHalf(halfSecs, startingIds){
-      const benchSize = n - COURT_SIZE;
-      if(benchSize===0) return {subs:[], playTime:new Array(n).fill(halfSecs), finalCourt:new Set(startingIds)};
-
-      // How many players to swap per sub window (respect minSubsPerWindow)
-      const swapSize = Math.max(1, S.aiParams.minSubsPerWindow||1);
-      // Number of sub windows: enough for everyone to rotate, capped at one per minSubGap
-      const minGap = Math.max(S.aiParams.minSubGap||60, 60); // at least 60s between
-      const maxByTime = Math.floor(halfSecs / minGap);
-      // With swapSize players per sub, we need Math.ceil(benchSize/swapSize)*2 windows for 2 rotations
-      const rotationsNeeded = Math.ceil(benchSize/swapSize)*2;
-      const numSubs = Math.min(rotationsNeeded, maxByTime);
-      if(numSubs===0) return {subs:[], playTime:new Array(n).fill(0), finalCourt:new Set(startingIds)};
-
-      const interval = Math.floor(halfSecs/(numSubs+1));
-      let onCourt = new Set(startingIds);
-      const playTime = new Array(n).fill(0);
-      const benchRestTime = new Array(n).fill(0); // track how long each player has been on bench
-      const subs = [];
-      let prevTime = 0;
-
-      for(let s=0; s<numSubs; s++){
-        const subSecs = (s+1)*interval;
-        const elapsed = subSecs - prevTime;
+      const swapSize=Math.max(1,p.minSubsPerWindow||1);
+      const benchSize=n-COURT_SIZE;
+      const minGap=Math.max(p.minSubGap||60,60);
+      const maxByTime=Math.floor(halfSecs/minGap);
+      const rotationsNeeded=Math.ceil(benchSize/swapSize)*2;
+      const numSubs=Math.min(rotationsNeeded,maxByTime);
+      if(numSubs===0) return {subs:[],playTime:new Array(n).fill(0).map((_,i)=>startingIds.includes(i)?halfSecs:0),finalCourt:new Set(startingIds)};
+      const interval=Math.floor(halfSecs/(numSubs+1));
+      let onCourt=new Set(startingIds);
+      const playTime=new Array(n).fill(0);
+      const benchRest=new Array(n).fill(0);
+      const subs=[];
+      let prev=0;
+      for(let s=0;s<numSubs;s++){
+        const t=(s+1)*interval,elapsed=t-prev;
         [...onCourt].forEach(id=>playTime[id]+=elapsed);
-        // Update bench rest time
-        filtered.forEach((_,id)=>{ if(!onCourt.has(id)) benchRestTime[id]+=elapsed; });
-        prevTime = subSecs;
-
-        // Sort court: most court time → first to come off
+        filtered.forEach((_,id)=>{if(!onCourt.has(id))benchRest[id]+=elapsed;});
+        prev=t;
         const courtArr=[...onCourt].sort((a,b)=>playTime[b]-playTime[a]);
-        // Sort bench: prioritise maxBenchRest violations, then least court time
-        const maxRest = S.aiParams.maxBenchRest||0;
+        const maxRest=p.maxBenchRest||0;
         const benchArr=filtered.map((_,id)=>id).filter(id=>!onCourt.has(id))
           .sort((a,b)=>{
-            const aMustReturn = maxRest>0 && benchRestTime[a]>=maxRest ? 1 : 0;
-            const bMustReturn = maxRest>0 && benchRestTime[b]>=maxRest ? 1 : 0;
-            if(aMustReturn!==bMustReturn) return bMustReturn-aMustReturn; // must-returns first
-            return playTime[a]-playTime[b]; // then least court time
+            const am=maxRest>0&&benchRest[a]>=maxRest?1:0,bm=maxRest>0&&benchRest[b]>=maxRest?1:0;
+            if(am!==bm)return bm-am;
+            return playTime[a]-playTime[b];
           });
-
-        const actualSwap = Math.min(swapSize, benchArr.length, courtArr.length);
-        if(actualSwap>0){
-          const outs=courtArr.slice(0,actualSwap);
-          const ins=benchArr.slice(0,actualSwap);
-          outs.forEach(id=>{onCourt.delete(id);benchRestTime[id]=0;});
-          ins.forEach(id=>{onCourt.add(id);benchRestTime[id]=0;});
-          const mm=Math.floor(subSecs/60), ss=String(subSecs%60).padStart(2,'0');
-          subs.push({subNum:s+1, atTime:mm+':'+ss,
-            off:outs.map(id=>filtered[id]), on:ins.map(id=>filtered[id]),
-            note:'equal rotation'});
+        const swap=Math.min(swapSize,benchArr.length,courtArr.length);
+        if(swap>0){
+          const outs=courtArr.slice(0,swap),ins=benchArr.slice(0,swap);
+          outs.forEach(id=>{onCourt.delete(id);benchRest[id]=0;});
+          ins.forEach(id=>{onCourt.add(id);benchRest[id]=0;});
+          const mm=Math.floor(t/60),ss=String(t%60).padStart(2,'0');
+          subs.push({subNum:s+1,atTime:mm+':'+ss,off:outs.map(id=>filtered[id]),on:ins.map(id=>filtered[id]),note:'equal rotation'});
         }
       }
-      [...onCourt].forEach(id=>playTime[id]+=(halfSecs-prevTime));
-      return {subs, playTime, finalCourt:onCourt};
+      [...onCourt].forEach(id=>playTime[id]+=(halfSecs-prev));
+      return{subs,playTime,finalCourt:onCourt};
     }
-
-    const h1Res = buildEqualHalf(S.h1Dur*60, filtered.slice(0,COURT_SIZE).map((_,i)=>i));
-
-    // H2 starts with the 5 players who played LEAST in H1 (balances the game)
-    const h2StartIds = filtered.map((_,i)=>({i,t:h1Res.playTime[i]}))
-      .sort((a,b)=>a.t-b.t).slice(0,COURT_SIZE).map(x=>x.i);
-
-    const h2Res = buildEqualHalf(S.h2Dur*60, h2StartIds);
-
-    // Combine play times
-    const totalPlay = h1Res.playTime.map((t,i)=>t+(h2Res.playTime[i]||0));
+    const h1Res=buildEqualHalf(S.h1Dur*60,filtered.slice(0,COURT_SIZE).map((_,i)=>i));
+    const h2StartIds=filtered.map((_,i)=>({i,t:h1Res.playTime[i]})).sort((a,b)=>a.t-b.t).slice(0,COURT_SIZE).map(x=>x.i);
+    const h2Res=buildEqualHalf(S.h2Dur*60,h2StartIds);
+    const totalPlay=h1Res.playTime.map((t,i)=>t+(h2Res.playTime[i]||0));
     const times={};
-    filtered.forEach((nm,i)=>{
-      const t=totalPlay[i];
-      times[nm]=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
-    });
-
-    const fairFmt=Math.floor(fairSecs/60)+':'+String(fairSecs%60).padStart(2,'0');
-    const finishing5=[...h2Res.finalCourt].map(i=>filtered[i]);
-    const h2Starting5=h2StartIds.map(i=>filtered[i]);
-
-    result.plans.push({
-      id:'D', label:'Equal Time',
-      rationale:'Greedy equal-time rotation for all '+n+' players (~'+fairFmt+' each). Always subs in the player with least court time, out the player with most. H2 starts with the 5 who played least in H1.',
-      starting5:filtered.slice(0,COURT_SIZE),
-      h2Starting5, finishing5,
-      h1:h1Res.subs, h2:h2Res.subs,
-      expectedTimes:times
-    });
+    filtered.forEach((nm,i)=>{const t=totalPlay[i];times[nm]=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');});
+    const fairFmt2=Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
+    plans.push({id:'D',label:'Equal Time',
+      rationale:'Greedy equal-time rotation (~'+fairFmt2+'/player). H2 starts with the 5 who played least in H1.',
+      starting5:filtered.slice(0,COURT_SIZE),h2Starting5:h2StartIds.map(i=>filtered[i]),
+      finishing5:[...h2Res.finalCourt].map(i=>filtered[i]),
+      h1:h1Res.subs,h2:h2Res.subs,expectedTimes:times});
   })();
 
-  showAIRotationModal(result, false, filtered);
+  if(plans.length===1 && errors.length>0){
+    closeAIRotationModal();
+    alert('All AI plans failed. Only Equal Time is available.\n\nErrors:\n'+errors.join('\n')+'\n\nCheck your API key in ⚙ Settings.');
+    return;
+  }
+
+  if(errors.length>0){
+    console.warn('Some AI plans failed:', errors);
+  }
+
+  // Sort plans by id to ensure consistent order A,B,C,D
+  plans.sort((a,b)=>a.id.localeCompare(b.id));
+  showAIRotationModal({plans}, false, filtered);
 }
+
 
 function applyAIRotation(plan, filtered){
   const nameToIdx = {};
@@ -2974,12 +2871,22 @@ function showAIRotationModal(result, loading, filtered){
   let footerHTML = '';
 
   if(loading){
-    const providerName = CFG.aiProvider==='gemini' ? 'Gemini 3.1 Pro (Deep Think)' : 'Claude Sonnet';
+    const providerName = CFG.aiProvider==='gemini' ? 'Gemini 3.1 Pro' : 'Claude Sonnet';
     bodyHTML = '<div class="ai-rot-spinner">' +
       '<div class="spin">⟳</div>' +
-      '<div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">Generating 3 rotation plans…</div>' +
-      '<div style="font-size:12px;color:var(--dim);margin-bottom:8px;">Using ' + providerName + '</div>' +
-      '<div style="font-size:11px;color:var(--dim);">Analysing player ratings, positions & game settings.<br>Deep reasoning can take 30–60 seconds.</div>' +
+      '<div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:6px;">Generating 3 rotation plans…</div>' +
+      '<div style="font-size:12px;color:var(--dim);margin-bottom:10px;">Using ' + providerName + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">' +
+        ['A: Balanced','B: Block','C: Strength-first'].map(function(lbl){
+          return '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);">' +
+            '<div style="width:10px;height:10px;border-radius:50%;background:var(--border);flex-shrink:0;"></div>' +
+            '<span>Plan ' + lbl + '</span></div>';
+        }).join('') +
+        '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--green);">' +
+          '<div style="width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0;"></div>' +
+          '<span>D: Equal Time (instant)</span></div>' +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--dim);line-height:1.5;">3 separate requests run in parallel.<br>Each plan is independent — partial results shown if any fail.</div>' +
       '</div>';
   } else {
     const plans = (result&&result.plans)||[];
