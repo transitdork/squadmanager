@@ -2955,7 +2955,7 @@ function showAIRotationModal(result, loading, filtered){
   let footerHTML = '';
 
   if(loading){
-    const providerName = CFG.aiProvider==='gemini' ? 'Gemini 3.1 Pro' : 'Claude Sonnet';
+    const providerName = CFG.aiProvider==='gemini' ? (CFG.geminiModel||'gemini-3.1-pro-preview') : 'Claude Sonnet';
     bodyHTML = '<div class="ai-rot-spinner">' +
       '<div class="spin">⟳</div>' +
       '<div class="ai-prog-lbl" style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:6px;">Starting…</div>' +
