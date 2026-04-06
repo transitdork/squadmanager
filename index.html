@@ -2198,20 +2198,20 @@ async function callAI(prompt, maxTokens){
 
   if(CFG.aiProvider === 'gemini'){
     if(!CFG.geminiKey){ throw new Error('No Gemini API key — add it in ⚙ Settings'); }
-    // gemini-3.1-pro-preview with thinkingLevel HIGH via direct REST (x-goog-api-key for browser CORS)
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent';
     const fetchP = fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': CFG.geminiKey   // required for browser CORS
+        'x-goog-api-key': CFG.geminiKey
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           maxOutputTokens: maxTokens,
           temperature: 0.4,
-          thinkingConfig: { thinkingLevel: 'HIGH' }  // Deep Think Mini — best for complex rotation logic
+          responseMimeType: 'application/json',  // forces clean JSON-only output
+          thinkingConfig: { thinkingLevel: 'MEDIUM' }  // MEDIUM avoids thought bleed-through, still deep reasoning
         }
       })
     });
@@ -2219,15 +2219,15 @@ async function callAI(prompt, maxTokens){
     if(!resp.ok){
       let msg = 'Gemini HTTP ' + resp.status;
       try{ const d=await resp.json(); msg += ': ' + (d.error?.message||JSON.stringify(d)); }catch(_){}
-      if(resp.status===400) msg = 'Gemini: Bad request. Ensure your key is enabled for Gemini 3.1 Pro at aistudio.google.com';
+      if(resp.status===400) msg = 'Gemini: Bad request. Check your key is enabled for Gemini 3.1 Pro at aistudio.google.com';
       if(resp.status===403) msg = 'Gemini API key invalid or not enabled for this model. Visit aistudio.google.com';
       if(resp.status===429) msg = 'Gemini rate limit. Wait a moment and try again.';
       throw new Error(msg);
     }
     const data = await resp.json();
-    // Extract text from response — filter out thought parts (type: "thought")
+    // Filter out thought parts (structured) and join only answer parts
     const parts = data.candidates?.[0]?.content?.parts || [];
-    const text = parts.filter(p=>!p.thought).map(p=>p.text||'').join('').trim();
+    const text = parts.filter(p => !p.thought && p.text).map(p => p.text).join('').trim();
     if(!text) throw new Error('Gemini returned empty response — try again');
     return text;
 
@@ -2381,22 +2381,38 @@ async function generateAIRotation(){
     return;
   }
 
-  let clean = rawText.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-  const oi = clean.indexOf('{'), ci = clean.lastIndexOf('}');
-  if(oi!==-1&&ci>oi) clean = clean.slice(oi,ci+1);
+  // Robust JSON extraction — strips markdown fences, finds the outermost valid JSON object
+  function extractJSON(str){
+    str = str.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
+    // Prefer to anchor on {"plans": if present
+    let start = str.indexOf('{"plans"');
+    if(start === -1) start = str.indexOf('{ "plans"');
+    if(start === -1) start = str.indexOf('{');
+    if(start === -1) return str;
+    // Walk to matching closing brace
+    let depth=0, inStr=false, esc=false;
+    for(let i=start; i<str.length; i++){
+      const c=str[i];
+      if(esc){esc=false;continue;}
+      if(c==='\\'&&inStr){esc=true;continue;}
+      if(c==='"'&&!esc){inStr=!inStr;continue;}
+      if(inStr) continue;
+      if(c==='{') depth++;
+      else if(c==='}'){depth--;if(depth===0) return str.slice(start,i+1);}
+    }
+    // Fallback: just slice from first to last brace
+    const ci=str.lastIndexOf('}');
+    return ci>start ? str.slice(start,ci+1) : str;
+  }
+
+  const clean = extractJSON(rawText);
 
   let result;
   try{ result = JSON.parse(clean); }
   catch(e){
-    // Try wrapping as single plan for backwards compat
-    try{
-      const single = JSON.parse(clean);
-      result = { plans: [{ id:'A', label:'Plan', rationale:single.rationale||'', h1:single.h1||[], h2:single.h2||[], expectedTimes:single.expectedTimes||{} }] };
-    } catch(_){
-      closeAIRotationModal();
-      alert('Could not parse AI response. Try again.\n\n'+rawText.slice(0,300));
-      return;
-    }
+    closeAIRotationModal();
+    alert('Could not parse AI response. Try again.\n\n'+rawText.slice(0,400));
+    return;
   }
 
   // Normalise: if no plans array, wrap single result
