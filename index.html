@@ -2325,7 +2325,7 @@ async function callAI(prompt, maxTokens){
     if(!CFG.geminiKey){ throw new Error('No Gemini API key — add it in ⚙ Settings'); }
     const model = CFG.geminiModel||'gemini-2.5-flash';
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent';
-    // 2.5 Flash uses thinkingBudget; 3.x Pro uses thinkingLevel
+    // Pro uses thinkingLevel: LOW; Flash uses default dynamic thinking
     const isProModel = model.includes('pro');
     const genConfig = {
       maxOutputTokens: maxTokens,
@@ -2334,27 +2334,30 @@ async function callAI(prompt, maxTokens){
     };
     if(isProModel){
       genConfig.thinkingConfig = { thinkingLevel: 'LOW' };
-    } else {
-      genConfig.thinkingConfig = { thinkingBudget: 512 };
     }
+    // Flash uses dynamic thinking by default — no thinkingConfig needed
     const body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: genConfig });
     const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.geminiKey };
 
-    // Attempt with one automatic retry on 429
-    async function attemptFetch(delayMs){
-      if(delayMs) await new Promise(r=>setTimeout(r,delayMs));
+    // Exponential backoff retry: 0s → 15s → 35s (3 attempts total)
+    async function attemptFetch(attempt){
+      if(attempt>0){
+        const waitMs = attempt===1 ? 15000 : 35000;
+        const progEl = document.querySelector('#ai-rot-modal .ai-prog-lbl');
+        if(progEl) progEl.textContent = 'Rate limited — waiting '+Math.round(waitMs/1000)+'s before retry '+(attempt)+'/2…';
+        await new Promise(r=>setTimeout(r,waitMs));
+      }
       const fetchP = fetch(url, { method:'POST', headers, body });
       const resp = await Promise.race([fetchP, timeout]);
       if(resp.status===429){
-        // Rate limited — retry once after 8 seconds
-        if(!delayMs) return attemptFetch(8000);
-        throw new Error('Gemini rate limit — please wait 30 seconds then try again');
+        if(attempt<2) return attemptFetch(attempt+1);
+        throw new Error('Gemini rate limit — quota exhausted');
       }
       if(!resp.ok){
         let msg='Gemini HTTP '+resp.status;
         try{ const d=await resp.json(); msg+=': '+(d.error?.message||JSON.stringify(d)); }catch(_){}
-        if(resp.status===400) msg='Gemini: Bad request. Check key is enabled for Gemini 3.1 Pro at aistudio.google.com';
-        if(resp.status===403) msg='Gemini API key invalid or not enabled. Visit aistudio.google.com';
+        if(resp.status===400) msg='Gemini: Bad request — check your key at aistudio.google.com';
+        if(resp.status===403) msg='Gemini API key invalid or not enabled — visit aistudio.google.com';
         throw new Error(msg);
       }
       const data = await resp.json();
@@ -2686,8 +2689,8 @@ async function generateAIRotation(){
         }
       }
     }
-    // Brief pause between requests to avoid rate limits
-    if(i < planDefs.length-1) await new Promise(r=>setTimeout(r,500));
+    // Pause between requests to respect rate limits
+    if(i < planDefs.length-1) await new Promise(r=>setTimeout(r,3000));
   }
 
   // ── Plan D: equal time (client-side, always succeeds) ──
