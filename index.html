@@ -701,16 +701,17 @@ const DEFAULTS = {
   apiKey: '',
   geminiKey: '',
   aiProvider: 'claude', // 'claude' | 'gemini'
+  geminiModel: 'gemini-3.1-pro-preview', // paid model with deep reasoning; switch to gemini-2.5-flash for free tier
 };
 const CFG = { theme: DEFAULTS.theme, colors: {...DEFAULTS.colors}, apiKey: '', geminiKey: '', aiProvider: 'claude' };
 
 function saveSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({theme:CFG.theme,colors:CFG.colors,apiKey:CFG.apiKey,geminiKey:CFG.geminiKey,aiProvider:CFG.aiProvider})); }catch(_){}
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({theme:CFG.theme,colors:CFG.colors,apiKey:CFG.apiKey,geminiKey:CFG.geminiKey,aiProvider:CFG.aiProvider,geminiModel:CFG.geminiModel})); }catch(_){}
 }
 function loadSettings(){
   try{
     const raw=localStorage.getItem(SETTINGS_KEY);
-    if(raw){ const d=JSON.parse(raw); CFG.theme=d.theme||'dark'; CFG.colors={...DEFAULTS.colors,...(d.colors||{})}; CFG.apiKey=d.apiKey||''; CFG.geminiKey=d.geminiKey||''; CFG.aiProvider=d.aiProvider||'claude'; }
+    if(raw){ const d=JSON.parse(raw); CFG.theme=d.theme||'dark'; CFG.colors={...DEFAULTS.colors,...(d.colors||{})}; CFG.apiKey=d.apiKey||''; CFG.geminiKey=d.geminiKey||''; CFG.aiProvider=d.aiProvider||'claude'; CFG.geminiModel=d.geminiModel||'gemini-2.5-flash'; }
   }catch(_){}
   applyTheme();
 }
@@ -2322,16 +2323,21 @@ async function callAI(prompt, maxTokens){
 
   if(CFG.aiProvider === 'gemini'){
     if(!CFG.geminiKey){ throw new Error('No Gemini API key — add it in ⚙ Settings'); }
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent';
-    const body = JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        maxOutputTokens: maxTokens,
-        temperature: 0.4,
-        responseMimeType: 'application/json',
-        thinkingConfig: { thinkingLevel: 'LOW' }
-      }
-    });
+    const model = CFG.geminiModel||'gemini-2.5-flash';
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent';
+    // 2.5 Flash uses thinkingBudget; 3.x Pro uses thinkingLevel
+    const isProModel = model.includes('pro');
+    const genConfig = {
+      maxOutputTokens: maxTokens,
+      temperature: 0.4,
+      responseMimeType: 'application/json'
+    };
+    if(isProModel){
+      genConfig.thinkingConfig = { thinkingLevel: 'LOW' };
+    } else {
+      genConfig.thinkingConfig = { thinkingBudget: 512 };
+    }
+    const body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: genConfig });
     const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.geminiKey };
 
     // Attempt with one automatic retry on 429
@@ -2699,14 +2705,10 @@ async function generateAIRotation(){
       h1:h1Res.subs,h2:h2Res.subs,expectedTimes:times});
   })();
 
-  if(plans.length===1 && errors.length>0){
-    closeAIRotationModal();
-    alert('All AI plans failed. Only Equal Time is available.\n\nErrors:\n'+errors.join('\n')+'\n\nCheck your API key in ⚙ Settings.');
-    return;
-  }
-
   if(errors.length>0){
     console.warn('Some AI plans failed:', errors);
+    // Tag the result so the modal can show the error note
+    if(plans.length>0) plans[0]._errorNote = errors.join(' · ');
   }
 
   // Sort plans by id to ensure consistent order A,B,C,D
@@ -2919,6 +2921,9 @@ function showAIRotationModal(result, loading, filtered){
       '</div>';
   } else {
     const plans = (result&&result.plans)||[];
+    const errorNote = plans.length>0 && plans[0]._errorNote
+      ? '<div style="background:rgba(255,85,85,.1);border:1.5px solid rgba(255,85,85,.3);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--red);line-height:1.5;">⚠ AI plans unavailable: '+plans[0]._errorNote+'</div>'
+      : '';
     if(plans.length > 1){
       // Render plan tabs
       tabsHTML = '<div style="display:flex;gap:6px;flex-shrink:0;margin-bottom:2px;">';
@@ -2927,9 +2932,9 @@ function showAIRotationModal(result, loading, filtered){
           (p.label||('PLAN '+(p.id||i+1))) + '</button>';
       });
       tabsHTML += '</div>';
-      bodyHTML = '<div id="ai-rot-body-inner">' + renderPlanBody(plans[0]) + '</div>';
+      bodyHTML = errorNote + '<div id="ai-rot-body-inner">' + renderPlanBody(plans[0]) + '</div>';
     } else if(plans.length===1){
-      bodyHTML = renderPlanBody(plans[0]);
+      bodyHTML = errorNote + renderPlanBody(plans[0]);
     }
 
     footerHTML = '<div style="display:flex;gap:8px;flex-shrink:0;">' +
@@ -3646,9 +3651,19 @@ function renderSettings(){
         <input class="apikey-input" type="password" value="${CFG.apiKey||''}" placeholder="sk-ant-..." oninput="CFG.apiKey=this.value" onchange="saveSettings()">
         ${CFG.apiKey?'<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ API key saved</div>':''}`:`
         <div class="s-lbl">Google Gemini API Key</div>
-        <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;">Get a free key at <span style="color:var(--blue)">aistudio.google.com</span>. Select Gemini 2.0 Flash. Stored on this device only.</div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;">Get a free key at <span style="color:var(--blue)">aistudio.google.com</span>. Stored on this device only.</div>
         <input class="apikey-input" type="password" value="${CFG.geminiKey||''}" placeholder="AIza..." oninput="CFG.geminiKey=this.value" onchange="saveSettings()">
-        ${CFG.geminiKey?'<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ Gemini key saved</div>':''}`}
+        ${CFG.geminiKey?'<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ Gemini key saved</div>':''}
+        <div class="s-lbl" style="margin-top:12px;">Gemini Model</div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;"><strong>2.5 Flash</strong> — free tier, fast, recommended for most users.<br><strong>3.1 Pro Preview</strong> — paid only ($2-12/1M tokens), stronger reasoning, frequent rate limits.</div>
+        <div class="theme-btns" style="grid-template-columns:1fr 1fr;">
+          <div class="theme-btn${(CFG.geminiModel||'gemini-2.5-flash')==='gemini-2.5-flash'?' active':''}" onclick="CFG.geminiModel='gemini-2.5-flash';saveSettings();renderSettings()">
+            <span class="theme-btn-icon">⚡</span><span class="theme-btn-lbl">2.5 Flash (free)</span>
+          </div>
+          <div class="theme-btn${CFG.geminiModel==='gemini-3.1-pro-preview'?' active':''}" onclick="CFG.geminiModel='gemini-3.1-pro-preview';saveSettings();renderSettings()">
+            <span class="theme-btn-icon">🧠</span><span class="theme-btn-lbl">3.1 Pro (paid)</span>
+          </div>
+        </div>`}
     </div>
     <div class="s-sec">
       <div class="s-hdr">APPEARANCE</div>
