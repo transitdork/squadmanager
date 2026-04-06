@@ -2608,6 +2608,8 @@ async function generateAIRotation(){
   // Run plans sequentially to avoid rate limits — show progress in loading modal
   const plans = [];
   const errors = [];
+  let offeredFlashFallback = false;
+
   for(let i=0; i<planDefs.length; i++){
     const def = planDefs[i];
     // Update loading spinner with current plan
@@ -2621,19 +2623,67 @@ async function generateAIRotation(){
     try {
       const plan = await fetchPlan(def, i);
       plans.push(plan);
-      // Mark as done in spinner
       const spinner2 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
       if(spinner2){
         const dots = spinner2.querySelectorAll('[data-plan]');
-        if(dots[i]) { dots[i].style.background='var(--green)'; }
+        if(dots[i]) dots[i].style.background='var(--green)';
       }
     } catch(err){
       errors.push(def.label+': '+err.message);
-      // Mark as failed in spinner
       const spinner3 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
       if(spinner3){
         const dots = spinner3.querySelectorAll('[data-plan]');
         if(dots[i]) dots[i].style.background='var(--red)';
+      }
+
+      // ── Offer flash fallback on first 429 from 3.1 Pro ──
+      const is429 = err.message.toLowerCase().includes('rate limit');
+      if(is429 && CFG.geminiModel==='gemini-3.1-pro-preview' && !offeredFlashFallback){
+        offeredFlashFallback = true;
+        // Show confirmation UI inside the loading modal
+        const accepted = await new Promise(resolve=>{
+          const spinner4 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
+          if(!spinner4){ resolve(false); return; }
+          spinner4.innerHTML =
+            '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;">⚠ Gemini 3.1 Pro rate limited</div>' +
+            '<div style="font-size:12px;color:var(--dim);margin-bottom:16px;line-height:1.6;">Your paid quota is currently exhausted.<br>Would you like to retry using <strong style="color:var(--accent)">Gemini 2.5 Flash</strong> instead?<br><span style="font-size:10px;">(It\'s free, fast, and works well for rotation planning)</span></div>' +
+            '<div style="display:flex;gap:10px;">' +
+              '<button onclick="document.getElementById(\'_flashChoice\').resolve(true)" style="flex:1;background:var(--accent);color:#111;border:none;border-radius:9px;padding:11px;font-family:Impact,sans-serif;font-size:15px;letter-spacing:1px;cursor:pointer;">⚡ USE 2.5 FLASH</button>' +
+              '<button onclick="document.getElementById(\'_flashChoice\').resolve(false)" style="flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:11px;font-family:Impact,sans-serif;font-size:14px;cursor:pointer;">Cancel</button>' +
+            '</div>';
+          // Attach resolve to a hidden element so inline onclick can reach it
+          const proxy = document.createElement('div');
+          proxy.id = '_flashChoice';
+          proxy.resolve = resolve;
+          proxy.style.display = 'none';
+          spinner4.appendChild(proxy);
+        });
+
+        if(accepted){
+          CFG.geminiModel = 'gemini-2.5-flash';
+          saveSettings();
+          // Reset and restart all plans with flash
+          plans.length = 0;
+          errors.length = 0;
+          // Restore spinner
+          const spinner5 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
+          if(spinner5){
+            spinner5.innerHTML =
+              '<div class="spin">⟳</div>' +
+              '<div class="ai-prog-lbl" style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:6px;">Retrying with Gemini 2.5 Flash…</div>' +
+              '<div style="font-size:12px;color:var(--dim);margin-bottom:10px;">Using Gemini 2.5 Flash</div>' +
+              ['A: Balanced','B: Block','C: Strength-first'].map(function(lbl,idx){
+                return '<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim);margin-bottom:6px;">' +
+                  '<div data-plan="'+idx+'" style="width:12px;height:12px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .3s;"></div>' +
+                  '<span>Plan '+lbl+'</span></div>';
+              }).join('');
+          }
+          i = -1; // restart loop (i++ will make it 0)
+          continue;
+        } else {
+          // User declined — stop trying AI plans, show what we have
+          break;
+        }
       }
     }
     // Brief pause between requests to avoid rate limits
