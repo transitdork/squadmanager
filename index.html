@@ -2241,7 +2241,7 @@ function buildPlayerRatingSummary(filtered){
 // ─── Universal AI call — routes to Claude or Gemini based on CFG.aiProvider ───
 async function callAI(prompt, maxTokens){
   maxTokens = maxTokens || 2000;
-  const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')), 90000));
+  const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')), 150000));
 
   if(CFG.aiProvider === 'gemini'){
     if(!CFG.geminiKey){ throw new Error('No Gemini API key — add it in ⚙ Settings'); }
@@ -2426,7 +2426,7 @@ async function generateAIRotation(){
 
   let rawText;
   try {
-    rawText = await callAI(systemPrompt, 6000);
+    rawText = await callAI(systemPrompt, 12000);
   } catch(err){
     closeAIRotationModal();
     alert(err.message==='TIMEOUT'
@@ -2435,37 +2435,76 @@ async function generateAIRotation(){
     return;
   }
 
-  // Robust JSON extraction — strips markdown fences, finds the outermost valid JSON object
+  // Robust JSON extraction + repair — handles both complete and truncated responses
   function extractJSON(str){
     str = str.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
-    // Prefer to anchor on {"plans": if present
-    let start = str.indexOf('{"plans"');
-    if(start === -1) start = str.indexOf('{ "plans"');
-    if(start === -1) start = str.indexOf('{');
-    if(start === -1) return str;
-    // Walk to matching closing brace
-    let depth=0, inStr=false, esc=false;
-    for(let i=start; i<str.length; i++){
+    let start=str.indexOf('{"plans"');
+    if(start===-1) start=str.indexOf('{ "plans"');
+    if(start===-1) start=str.indexOf('{');
+    if(start===-1) return null;
+
+    // Walk forward to find balanced closing brace
+    let depth=0,inStr=false,esc=false;
+    for(let i=start;i<str.length;i++){
       const c=str[i];
       if(esc){esc=false;continue;}
       if(c==='\\'&&inStr){esc=true;continue;}
       if(c==='"'&&!esc){inStr=!inStr;continue;}
       if(inStr) continue;
-      if(c==='{') depth++;
-      else if(c==='}'){depth--;if(depth===0) return str.slice(start,i+1);}
+      if(c==='{')depth++;
+      else if(c==='}'){depth--;if(depth===0)return str.slice(start,i+1);}
     }
-    // Fallback: just slice from first to last brace
-    const ci=str.lastIndexOf('}');
-    return ci>start ? str.slice(start,ci+1) : str;
+
+    // ── Truncated response repair ──
+    let partial=str.slice(start);
+    // Remove dangling incomplete tokens at the end
+    partial=partial
+      .replace(/,\s*$/,'')
+      .replace(/"[^"\n]*$/,'"')
+      .replace(/,\s*"[^"]*$/,'');
+
+    // Count unclosed structures
+    depth=0;let arr=0;inStr=false;esc=false;
+    for(let i=0;i<partial.length;i++){
+      const c=partial[i];
+      if(esc){esc=false;continue;}
+      if(c==='\\'&&inStr){esc=true;continue;}
+      if(c==='"'&&!esc){inStr=!inStr;continue;}
+      if(inStr)continue;
+      if(c==='{')depth++;
+      else if(c==='}')depth--;
+      else if(c==='[')arr++;
+      else if(c===']')arr--;
+    }
+
+    let repaired=partial;
+    while(arr-->0)repaired+=']';
+    while(depth-->0)repaired+='}';
+    try{JSON.parse(repaired);return repaired;}catch(_){}
+
+    // Try closing at the last complete plan block
+    const lastClose=partial.lastIndexOf('"}');
+    if(lastClose>0){
+      const attempt=partial.slice(0,lastClose+2)+']}';
+      try{JSON.parse(attempt);return attempt;}catch(_){}
+    }
+    return null;
   }
 
   const clean = extractJSON(rawText);
 
   let result;
-  try{ result = JSON.parse(clean); }
-  catch(e){
+  if(clean){
+    try{ result = JSON.parse(clean); } catch(e){ result = null; }
+  }
+
+  if(!result){
     closeAIRotationModal();
-    alert('Could not parse AI response. Try again.\n\n'+rawText.slice(0,400));
+    const isLikeTruncated = rawText.length > 1000 && !rawText.trim().endsWith('}');
+    const hint = isLikeTruncated
+      ? 'The response was cut off mid-way (token limit). Try again — it usually works on a retry.'
+      : 'The AI returned an unexpected format.';
+    alert('Could not parse AI response.\n\n' + hint + '\n\nPreview:\n' + rawText.slice(0, 200));
     return;
   }
 
