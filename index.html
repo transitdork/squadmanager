@@ -2679,14 +2679,22 @@ async function generateAIRotation(){
 
   async function fetchPlan(def, idx){
     const prompt = sharedContext + '\n\n=== YOUR TASK: Generate ONE rotation plan ===\n' + def.task +
-      '\n\nReturn ONLY valid JSON for this single plan (no markdown):\n' + schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
+      '\n\nReturn ONLY a single JSON plan object (no wrapping array, no markdown):\n' + schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
     const raw = await callAI(prompt, 3000);
     const clean = extractJSON(raw);
     if(!clean) throw new Error('No JSON found');
-    const parsed = JSON.parse(clean);
-    // Ensure id and label are set
+    let parsed = JSON.parse(clean);
+    // Normalise: if AI returned {plans:[{...}]} unwrap it
+    if(parsed.plans && Array.isArray(parsed.plans) && parsed.plans.length){
+      parsed = parsed.plans.find(p=>p.id===def.id) || parsed.plans[0];
+    }
+    // Ensure id and label are always set correctly
     parsed.id = def.id;
     parsed.label = def.label;
+    // Validate: must have at least some subs or expectedTimes
+    const hasSubs = (parsed.h1||[]).length>0 || (parsed.h2||[]).length>0;
+    const hasTimes = Object.keys(parsed.expectedTimes||{}).length>0;
+    if(!hasSubs && !hasTimes) throw new Error('Plan returned no sub data — try again');
     return parsed;
   }
 
@@ -2968,7 +2976,15 @@ function applyAIRotation(plan, filtered){
   if(filledSubs===0&&totalSubs>0){
     showToast('⚠ Plan loaded but names didn\'t match — check roster');
   } else {
-    showToast('Plan '+(plan.label||plan.id)+' loaded ✓ ('+filledSubs+'/'+totalSubs+' subs)');
+    showToast('Plan '+(plan.label||plan.id)+' loaded ✓ ('+filledSubs+'/'+totalSubs+' subs) — tap 🤖 AI Plan to switch');
+  }
+}
+
+function reOpenAIPlans(){
+  if(window._lastAIResult && window._lastAIFiltered){
+    showAIRotationModal(window._lastAIResult, false, window._lastAIFiltered);
+  } else {
+    generateAIRotation();
   }
 }
 
@@ -3075,9 +3091,9 @@ function showAIRotationModal(result, loading, filtered){
 
     footerHTML = '<div style="display:flex;gap:8px;flex-shrink:0;">' +
       '<button class="ai-rot-load-btn" onclick="applyAIRotation((window._aiRotResult.plans||[])[window._aiRotSelectedPlan||0], window._aiRotFiltered)">✓ USE THIS PLAN</button>' +
-      '<button class="ai-rot-cancel-btn" onclick="closeAIRotationModal()">CANCEL</button>' +
+      '<button class="ai-rot-cancel-btn" onclick="closeAIRotationModal()">✕</button>' +
       '</div>' +
-      '<div style="font-size:10px;color:var(--dim);text-align:center;">You can edit individual subs after loading</div>';
+      '<div style="font-size:10px;color:var(--dim);text-align:center;">Tap ✓ to load · tap <strong>🤖 AI Plan</strong> again to switch plans</div>';
   }
 
   const finalsBtn = !loading ? (
@@ -3102,6 +3118,9 @@ function showAIRotationModal(result, loading, filtered){
     window._aiRotResult = result;
     window._aiRotFiltered = filtered;
     window._aiRotSelectedPlan = 0;
+    // Also store as last result so user can re-open after loading a plan
+    window._lastAIResult = result;
+    window._lastAIFiltered = filtered;
   }
 
   document.body.appendChild(modal);
@@ -3306,7 +3325,7 @@ function renderSetup(restoreScroll){
         <button onclick="S.finalsMode=!S.finalsMode;renderSetup(true)" style="background:${S.finalsMode?'rgba(240,140,0,.2)':'none'};color:${S.finalsMode?'var(--accent)':'var(--dim)'};border:1.5px solid ${S.finalsMode?'var(--accent)':'var(--border)'};border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Finals mode: top players get extra court time">★ FINALS</button>
         <button onclick="S.aiAdheresToPresets=!S.aiAdheresToPresets;renderSetup(true)" style="background:${S.aiAdheresToPresets?'rgba(74,158,255,.15)':'none'};color:${S.aiAdheresToPresets?'var(--blue)':'var(--dim)'};border:1.5px solid ${S.aiAdheresToPresets?'var(--blue)':'var(--border)'};border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Lock: AI respects your Starting 5, H2 Starting 5, and Finishing 5 selections">${S.aiAdheresToPresets?'🔒':'🔓'} PRESETS</button>
         <button onclick="S.aiParamsOpen=!S.aiParamsOpen;renderSetup(true)" style="background:${S.aiParamsOpen?'rgba(192,132,252,.15)':'none'};color:${S.aiParamsOpen?'var(--purple)':'var(--dim)'};border:1.5px solid ${S.aiParamsOpen?'var(--purple)':'var(--border)'};border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">⚙ PARAMS</button>
-        <button onclick="generateAIRotation()" style="background:var(--purple);color:#fff;border:none;border-radius:7px;padding:4px 10px;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">🤖 AI Plan</button>
+        <button onclick="window._lastAIResult?reOpenAIPlans():generateAIRotation()" style="background:var(--purple);color:#fff;border:none;border-radius:7px;padding:4px 10px;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">${window._lastAIResult?'↩ Plans':'🤖 AI Plan'}</button>
       </div>
     </div>
     ${S.aiParamsOpen ? renderAIParams(filtered) : ''}
