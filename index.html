@@ -2349,16 +2349,17 @@ async function callAI(prompt, maxTokens){
       }
       const fetchP = fetch(url, { method:'POST', headers, body });
       const resp = await Promise.race([fetchP, timeout]);
-      if(resp.status===429){
-        if(attempt<2) return attemptFetch(attempt+1);
-        throw new Error('Gemini rate limit — quota exhausted');
-      }
       if(!resp.ok){
-        let msg='Gemini HTTP '+resp.status;
-        try{ const d=await resp.json(); msg+=': '+(d.error?.message||JSON.stringify(d)); }catch(_){}
-        if(resp.status===400) msg='Gemini: Bad request — check your key at aistudio.google.com';
-        if(resp.status===403) msg='Gemini API key invalid or not enabled — visit aistudio.google.com';
-        throw new Error(msg);
+        let errBody = {};
+        try{ errBody = await resp.json(); }catch(_){}
+        const apiMsg = errBody?.error?.message || errBody?.error?.status || JSON.stringify(errBody).slice(0,200);
+        if(resp.status===429){
+          if(attempt<2) return attemptFetch(attempt+1);
+          throw new Error('Gemini 429: ' + apiMsg);
+        }
+        if(resp.status===400) throw new Error('Gemini 400 (Bad request): ' + apiMsg);
+        if(resp.status===403) throw new Error('Gemini 403 (Key invalid or not enabled): ' + apiMsg);
+        throw new Error('Gemini HTTP '+resp.status+': '+apiMsg);
       }
       const data = await resp.json();
       const parts = data.candidates?.[0]?.content?.parts || [];
@@ -2514,6 +2515,46 @@ function renderAIParams(filtered){
   '</div>';
 }
 
+// ── Gemini connection test ──
+async function testGeminiKey(){
+  const btn = document.getElementById('gemini-test-btn');
+  const result = document.getElementById('gemini-test-result');
+  if(!btn||!result) return;
+  btn.textContent = '⏳ Testing…';
+  btn.disabled = true;
+  result.innerHTML = '';
+
+  const model = CFG.geminiModel || 'gemini-2.5-flash';
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent';
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.geminiKey },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: 'Reply with the single word: ready' }] }],
+        generationConfig: { maxOutputTokens: 10, temperature: 0 }
+      })
+    });
+    if(resp.status===429){
+      result.innerHTML = '<div style="color:var(--warn);font-size:11px;margin-top:6px;line-height:1.5;">⚠ <strong>Rate limited / quota exhausted.</strong><br>Your project\'s daily or per-minute limit is used up.<br>Check <a href="https://aistudio.google.com/usage" target="_blank" style="color:var(--blue)">aistudio.google.com/usage</a> to see remaining quota.<br>Quota resets at midnight US Pacific time.</div>';
+    } else if(resp.status===403){
+      result.innerHTML = '<div style="color:var(--red);font-size:11px;margin-top:6px;">✗ API key rejected. Check key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--blue)">aistudio.google.com</a></div>';
+    } else if(resp.status===400){
+      result.innerHTML = '<div style="color:var(--warn);font-size:11px;margin-top:6px;">⚠ Bad request — model <strong>'+model+'</strong> may require a paid account. Try switching to 2.5 Flash.</div>';
+    } else if(!resp.ok){
+      result.innerHTML = '<div style="color:var(--red);font-size:11px;margin-top:6px;">✗ Error: HTTP '+resp.status+'</div>';
+    } else {
+      const data = await resp.json();
+      const text = (data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').trim();
+      result.innerHTML = '<div style="color:var(--green);font-size:11px;margin-top:6px;">✓ Connected! <strong>'+model+'</strong> is working. Response: "'+text+'"</div>';
+    }
+  } catch(e) {
+    result.innerHTML = '<div style="color:var(--red);font-size:11px;margin-top:6px;">✗ Network error: '+e.message+'</div>';
+  }
+  btn.textContent = '🔌 Test Connection';
+  btn.disabled = false;
+}
+
 async function generateAIRotation(){
   const hasKey = CFG.aiProvider==='gemini' ? !!CFG.geminiKey : !!CFG.apiKey;
   if(!hasKey){
@@ -2640,7 +2681,7 @@ async function generateAIRotation(){
       }
 
       // ── Offer flash fallback on first 429 from 3.1 Pro ──
-      const is429 = err.message.toLowerCase().includes('rate limit');
+      const is429 = err.message.includes('429') || err.message.toLowerCase().includes('quota') || err.message.toLowerCase().includes('rate');
       if(is429 && CFG.geminiModel==='gemini-3.1-pro-preview' && !offeredFlashFallback){
         offeredFlashFallback = true;
         // Show confirmation UI inside the loading modal
@@ -2955,7 +2996,8 @@ function showAIRotationModal(result, loading, filtered){
   let footerHTML = '';
 
   if(loading){
-    const providerName = CFG.aiProvider==='gemini' ? (CFG.geminiModel||'gemini-3.1-pro-preview') : 'Claude Sonnet';
+    const modelDisplay = CFG.geminiModel==='gemini-2.5-flash' ? 'Gemini 2.5 Flash' : CFG.geminiModel==='gemini-3.1-pro-preview' ? 'Gemini 3.1 Pro' : (CFG.geminiModel||'Gemini');
+    const providerName = CFG.aiProvider==='gemini' ? modelDisplay : 'Claude Sonnet';
     bodyHTML = '<div class="ai-rot-spinner">' +
       '<div class="spin">⟳</div>' +
       '<div class="ai-prog-lbl" style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:6px;">Starting…</div>' +
@@ -3707,6 +3749,8 @@ function renderSettings(){
         <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;">Get a free key at <span style="color:var(--blue)">aistudio.google.com</span>. Stored on this device only.</div>
         <input class="apikey-input" type="password" value="${CFG.geminiKey||''}" placeholder="AIza..." oninput="CFG.geminiKey=this.value" onchange="saveSettings()">
         ${CFG.geminiKey?'<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ Gemini key saved</div>':''}
+        ${CFG.geminiKey?`<button onclick="testGeminiKey()" id="gemini-test-btn" style="margin-top:8px;background:var(--card);border:1.5px solid var(--border);color:var(--text);border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;width:100%;">🔌 Test Connection</button>`:''}
+        <div id="gemini-test-result"></div>
         <div class="s-lbl" style="margin-top:12px;">Gemini Model</div>
         <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;"><strong>2.5 Flash</strong> — free tier, fast, recommended for most users.<br><strong>3.1 Pro Preview</strong> — paid only ($2-12/1M tokens), stronger reasoning, frequent rate limits.</div>
         <div class="theme-btns" style="grid-template-columns:1fr 1fr;">
