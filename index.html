@@ -3749,8 +3749,8 @@ function renderSettings(){
         <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;">Get a free key at <span style="color:var(--blue)">aistudio.google.com</span>. Stored on this device only.</div>
         <input class="apikey-input" type="password" value="${CFG.geminiKey||''}" placeholder="AIza..." oninput="CFG.geminiKey=this.value" onchange="saveSettings()">
         ${CFG.geminiKey?'<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ Gemini key saved</div>':''}
-        ${CFG.geminiKey?`<button onclick="testGeminiKey()" id="gemini-test-btn" style="margin-top:8px;background:var(--card);border:1.5px solid var(--border);color:var(--text);border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;width:100%;">🔌 Test Connection</button>`:''}
-        <div id="gemini-test-result"></div>
+        ${CFG.geminiKey?`<button onclick="testGeminiKey()" id="gemini-test-btn" style="margin-top:8px;background:var(--card);border:1.5px solid var(--border);color:var(--text);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">🔌 Test Connection</button>
+        <div id="gemini-test-result"></div>`:'<div id="gemini-test-result"></div>'}
         <div class="s-lbl" style="margin-top:12px;">Gemini Model</div>
         <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;"><strong>2.5 Flash</strong> — free tier, fast, recommended for most users.<br><strong>3.1 Pro Preview</strong> — paid only ($2-12/1M tokens), stronger reasoning, frequent rate limits.</div>
         <div class="theme-btns" style="grid-template-columns:1fr 1fr;">
