@@ -2555,6 +2555,47 @@ async function testGeminiKey(){
   btn.disabled = false;
 }
 
+// ── JSON extraction + repair for potentially truncated API responses ──
+function extractJSON(str){
+  str = (str||'').replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
+  let start = str.indexOf('{"');
+  if(start===-1) start = str.indexOf('{');
+  if(start===-1) return null;
+  // Walk forward to find balanced closing brace
+  let depth=0, inStr=false, esc=false;
+  for(let i=start; i<str.length; i++){
+    const c=str[i];
+    if(esc){esc=false;continue;}
+    if(c==='\\'&&inStr){esc=true;continue;}
+    if(c==='"'&&!esc){inStr=!inStr;continue;}
+    if(inStr)continue;
+    if(c==='{')depth++;
+    else if(c==='}'){depth--;if(depth===0)return str.slice(start,i+1);}
+  }
+  // Truncated — attempt repair by closing open structures
+  let partial=str.slice(start)
+    .replace(/,\s*$/,'')
+    .replace(/"[^\n"]*$/,'"')
+    .replace(/,\s*"[^"]*$/,'');
+  let d=0,a=0; inStr=false; esc=false;
+  for(let i=0;i<partial.length;i++){
+    const c=partial[i];
+    if(esc){esc=false;continue;}
+    if(c==='\\'&&inStr){esc=true;continue;}
+    if(c==='"'&&!esc){inStr=!inStr;continue;}
+    if(inStr)continue;
+    if(c==='{')d++;else if(c==='}')d--;
+    else if(c==='[')a++;else if(c===']')a--;
+  }
+  let repaired=partial;
+  while(a-->0)repaired+=']';
+  while(d-->0)repaired+='}';
+  try{JSON.parse(repaired);return repaired;}catch(_){}
+  const lastClose=partial.lastIndexOf('"}');
+  if(lastClose>0){const attempt=partial.slice(0,lastClose+2)+']}';try{JSON.parse(attempt);return attempt;}catch(_){}}
+  return null;
+}
+
 async function generateAIRotation(){
   const hasKey = CFG.aiProvider==='gemini' ? !!CFG.geminiKey : !!CFG.apiKey;
   if(!hasKey){
