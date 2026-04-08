@@ -2679,22 +2679,32 @@ async function generateAIRotation(){
 
   async function fetchPlan(def, idx){
     const prompt = sharedContext + '\n\n=== YOUR TASK: Generate ONE rotation plan ===\n' + def.task +
-      '\n\nReturn ONLY a single JSON plan object (no wrapping array, no markdown):\n' + schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
-    const raw = await callAI(prompt, 3000);
-    const clean = extractJSON(raw);
-    if(!clean) throw new Error('No JSON found');
-    let parsed = JSON.parse(clean);
-    // Normalise: if AI returned {plans:[{...}]} unwrap it
-    if(parsed.plans && Array.isArray(parsed.plans) && parsed.plans.length){
-      parsed = parsed.plans.find(p=>p.id===def.id) || parsed.plans[0];
+      '\n\nReturn ONLY a single JSON object matching this exact structure (no markdown, no wrapper array):\n' + schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
+    let raw;
+    try { raw = await callAI(prompt, 4000); }
+    catch(e){ throw e; }
+
+    // Try parsing directly first (responseMimeType should give clean JSON)
+    let parsed;
+    try {
+      parsed = JSON.parse(raw.trim());
+    } catch(_) {
+      // Fallback: extract JSON substring
+      const clean = extractJSON(raw);
+      if(!clean) throw new Error('No valid JSON in response. Raw: ' + raw.slice(0,120));
+      try { parsed = JSON.parse(clean); }
+      catch(e){ throw new Error('JSON parse failed: ' + e.message + '. Raw: ' + raw.slice(0,120)); }
     }
-    // Ensure id and label are always set correctly
+
+    // Normalise: unwrap if AI returned {plans:[{...}]} despite instructions
+    if(parsed.plans && Array.isArray(parsed.plans) && parsed.plans.length){
+      parsed = parsed.plans.find(function(p){return p.id===def.id;}) || parsed.plans[0];
+    }
+
     parsed.id = def.id;
     parsed.label = def.label;
-    // Validate: must have at least some subs or expectedTimes
-    const hasSubs = (parsed.h1||[]).length>0 || (parsed.h2||[]).length>0;
-    const hasTimes = Object.keys(parsed.expectedTimes||{}).length>0;
-    if(!hasSubs && !hasTimes) throw new Error('Plan returned no sub data — try again');
+
+    // Accept the plan — don't reject even if subs are missing (show what we got)
     return parsed;
   }
 
