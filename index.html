@@ -2651,6 +2651,7 @@ async function generateAIRotation(){
     '',
     'Starting bench: '+(filtered.slice(COURT_SIZE).join(', ')||'none'),
     'CRITICAL — use these EXACT player name strings: ' + filtered.join(', '),
+  window._aiExtraPrompt && window._aiExtraPrompt.trim() ? ('COACH INSTRUCTION (apply to all plans): ' + window._aiExtraPrompt.trim()) : null,
   ].filter(l=>l!==null).join('\n');
 
   // JSON schema for a single plan
@@ -2998,6 +2999,12 @@ function reOpenAIPlans(){
   }
 }
 
+function regenerateAIPlans(){
+  // Keep the extra prompt the user typed, then regenerate
+  closeAIRotationModal();
+  generateAIRotation();
+}
+
 function renderPlanBody(plan){
   let html = '';
   // Rationale
@@ -3099,11 +3106,19 @@ function showAIRotationModal(result, loading, filtered){
       bodyHTML = errorNote + renderPlanBody(plans[0]);
     }
 
-    footerHTML = '<div style="display:flex;gap:8px;flex-shrink:0;">' +
-      '<button class="ai-rot-load-btn" onclick="applyAIRotation((window._aiRotResult.plans||[])[window._aiRotSelectedPlan||0], window._aiRotFiltered)">✓ USE THIS PLAN</button>' +
-      '<button class="ai-rot-cancel-btn" onclick="closeAIRotationModal()">✕</button>' +
+    footerHTML =
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:8px;flex-shrink:0;">' +
+        '<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:5px;">Extra instructions (optional)</div>' +
+        '<textarea id="ai-extra-prompt" placeholder="e.g. Give Harper more time, reduce Quinn less" ' +
+          'style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 9px;resize:none;height:52px;box-sizing:border-box;outline:none;font-family:-apple-system,sans-serif;" ' +
+          'oninput="window._aiExtraPrompt=this.value">' + (window._aiExtraPrompt||'') + '</textarea>' +
       '</div>' +
-      '<div style="font-size:10px;color:var(--dim);text-align:center;">Tap ✓ to load · tap <strong>🤖 AI Plan</strong> again to switch plans</div>';
+      '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+        '<button class="ai-rot-load-btn" onclick="applyAIRotation((window._aiRotResult.plans||[])[window._aiRotSelectedPlan||0], window._aiRotFiltered)">✓ USE THIS PLAN</button>' +
+        '<button onclick="regenerateAIPlans()" style="background:var(--card);border:1.5px solid var(--purple);color:var(--purple);font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;border-radius:10px;padding:13px 14px;cursor:pointer;flex-shrink:0;">🔄</button>' +
+        '<button class="ai-rot-cancel-btn" onclick="closeAIRotationModal()">✕</button>' +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--dim);text-align:center;">✓ load plan · 🔄 regenerate with optional instructions above</div>';
   }
 
   const finalsBtn = !loading ? (
