@@ -2334,8 +2334,10 @@ async function callAI(prompt, maxTokens){
     };
     if(isProModel){
       genConfig.thinkingConfig = { thinkingLevel: 'LOW' };
+    } else {
+      // Disable thinking for Flash — all tokens go to actual output, not internal reasoning
+      genConfig.thinkingConfig = { thinkingBudget: 0 };
     }
-    // Flash uses dynamic thinking by default — no thinkingConfig needed
     const body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: genConfig });
     const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.geminiKey };
 
@@ -2655,7 +2657,7 @@ async function generateAIRotation(){
   ].filter(l=>l!==null).join('\n');
 
   // JSON schema for a single plan
-  const schema = '{"id":"X","label":"Name","rationale":"2 sentences","starting5":["..."],"h2Starting5":["..."],"finishing5":["..."],"h1":[{"subNum":1,"atTime":"4:00","off":["Player A"],"on":["Player B"],"note":"reason"}],"h2":[{"subNum":1,"atTime":"5:00","off":["Player C"],"on":["Player D"],"note":""}],"expectedTimes":{"Player A":"14:00"}}';
+  const schema = '{"id":"X","label":"Name","rationale":"1 sentence","starting5":["..."],"h2Starting5":["..."],"finishing5":["..."],"h1":[{"subNum":1,"atTime":"4:00","off":["Player A"],"on":["Player B"],"note":"reason"}],"h2":[{"subNum":1,"atTime":"5:00","off":["Player C"],"on":["Player D"],"note":""}],"expectedTimes":{"Player A":"14:00"}}';
 
   // ── 3 plan-specific prompts ──
   const planDefs = [
@@ -2682,7 +2684,7 @@ async function generateAIRotation(){
     const prompt = sharedContext + '\n\n=== YOUR TASK: Generate ONE rotation plan ===\n' + def.task +
       '\n\nReturn ONLY a single JSON object matching this exact structure (no markdown, no wrapper array):\n' + schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
     let raw;
-    try { raw = await callAI(prompt, 4000); }
+    try { raw = await callAI(prompt, 6000); }
     catch(e){ throw e; }
 
     // Try parsing directly first (responseMimeType should give clean JSON)
