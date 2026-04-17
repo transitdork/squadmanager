@@ -1994,14 +1994,29 @@ function handleImportFile(input){
 }
 
 function renderTeamList(){
-  const items = T.teams.length ? T.teams.map(t=>{
+  // Sort: current teams first, completed at bottom
+  const sorted = [...T.teams].sort((a,b)=>{
+    const aComp = a.status==='completed' ? 1 : 0;
+    const bComp = b.status==='completed' ? 1 : 0;
+    return aComp - bComp;
+  });
+
+  const items = sorted.length ? sorted.map(t=>{
     const active = T.activeTeamId===t.id;
-    return `<div class="team-card" style="${active?'border-color:rgba(62,207,110,.4);':''}">
-      <div class="team-card-name">${t.club}</div>
+    const completed = t.status==='completed';
+    const statusBadge = completed
+      ? '<span style="font-size:9px;background:rgba(120,128,160,.2);color:var(--dim);padding:1px 7px;border-radius:4px;font-weight:600;letter-spacing:.5px;">✓ COMPLETED</span>'
+      : '<span style="font-size:9px;background:rgba(62,207,110,.15);color:var(--green);padding:1px 7px;border-radius:4px;font-weight:600;letter-spacing:.5px;">▶ CURRENT</span>';
+    return `<div class="team-card" style="${active?'border-color:rgba(62,207,110,.4);':''}${completed?'opacity:.55;':''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+        <div class="team-card-name" style="${completed?'color:var(--dim)':''}">${t.club}</div>
+        <button onclick="event.stopPropagation();toggleTeamStatus('${t.id}')" style="background:none;border:none;cursor:pointer;padding:0;">${statusBadge}</button>
+      </div>
       <div class="team-card-meta">${[t.ageBracket,t.league,t.season,t.year].filter(Boolean).join(' · ')}</div>
       <div class="team-card-row">
         <div class="team-card-players">👥 ${t.players.length} player${t.players.length!==1?'s':''}${active?' · <span style="color:#3ecf6e">Active</span>':''}</div>
         <div class="team-card-actions">
+          <button class="tc-edit" onclick="event.stopPropagation();copyTeam('${t.id}')" title="Copy this team">⎘</button>
           <button class="tc-edit" onclick="event.stopPropagation();exportSingleTeam('${t.id}')" title="Export this team">⬆</button>
           <button class="tc-edit" onclick="event.stopPropagation();openTeamEdit('${t.id}')">✏️</button>
           <button class="tc-del" onclick="event.stopPropagation();deleteTeam('${t.id}')">🗑</button>
@@ -2039,7 +2054,7 @@ function openTeamEdit(id){
     const t=T.teams.find(x=>x.id===id);
     T.editingTeam={...t, players:t.players.map(p=>({...p}))};
   } else {
-    T.editingTeam={id:uid(),club:'',league:'',season:'',ageBracket:'',year:new Date().getFullYear()+'',players:[]};
+    T.editingTeam={id:uid(),club:'',league:'',season:'',ageBracket:'',year:new Date().getFullYear()+'',status:'current',players:[]};
   }
   T.editingPlayerId=null;
   T.playerDraft={};
@@ -2050,6 +2065,50 @@ function deleteTeam(id){
   if(!confirm('Delete this team?')) return;
   T.teams=T.teams.filter(t=>t.id!==id);
   if(T.activeTeamId===id){ T.activeTeamId=null; S.names=['','','','','']; }
+  saveTeams();
+  renderTeamList();
+}
+
+function copyTeam(id){
+  const src = T.teams.find(t=>t.id===id);
+  if(!src) return;
+  // Deep copy team with new id
+  const newId = uid();
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = newId;
+  copy.club = src.club + ' (Copy)';
+  copy.season = '';
+  copy.year = new Date().getFullYear()+'';
+  copy.status = 'current'; // copies start as current
+  // Give each player a new id so ratings can be copied independently
+  const idMap = {};
+  copy.players = copy.players.map(p=>{
+    const newPid = uid();
+    idMap[p.id] = newPid;
+    return {...p, id: newPid};
+  });
+  T.teams.unshift(copy); // add at top
+  saveTeams();
+  // Copy ratings for all players
+  copy.players.forEach(p=>{
+    const origPlayerId = Object.keys(idMap).find(k=>idMap[k]===p.id);
+    if(origPlayerId){
+      const srcRatings = getPlayerRatings(id, origPlayerId);
+      if(Object.keys(srcRatings).length){
+        const key = newId + '_' + p.id;
+        ratingsStore[key] = {...srcRatings};
+      }
+    }
+  });
+  saveRatings();
+  renderTeamList();
+  showToast('Team copied ✓ — tap ✏️ to rename and update season details');
+}
+
+function toggleTeamStatus(id){
+  const t = T.teams.find(x=>x.id===id);
+  if(!t) return;
+  t.status = t.status==='completed' ? 'current' : 'completed';
   saveTeams();
   renderTeamList();
 }
