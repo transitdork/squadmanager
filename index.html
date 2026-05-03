@@ -647,6 +647,92 @@ function deletePlan(id){
   renderSetup(true);
 }
 
+// ── Sub Plan Export / Import ──
+function exportSubPlan(){
+  const filtered=S.names.filter(n=>n.trim());
+  if(!S.useSubPlan||(!(S.subPlan.h1||[]).length&&!(S.subPlan.h2||[]).length)){
+    alert('No sub plan to export. Build a plan first.');return;
+  }
+  function serHalf(half){
+    return (half||[]).map(s=>({off:[...s.off],on:[...s.on],atTime:s.atTime||null}));
+  }
+  const data={version:1,exportedAt:new Date().toISOString(),
+    playerNames:filtered,h1Dur:S.h1Dur,h2Dur:S.h2Dur,h1Int:S.h1Int,h2Int:S.h2Int,
+    h1Sps:S.h1Sps,h2Sps:S.h2Sps,
+    h1:serHalf(S.subPlan.h1),h2:serHalf(S.subPlan.h2),
+    priorityPlayerIds:[...S.priorityPlayerIds],
+    h2PresetIds:S.useH2Preset?[...S.h2PresetIds]:null,
+    finalPresetIds:S.useFinalPreset?[...S.finalPresetIds]:null};
+  const jsonStr=JSON.stringify(data,null,2);
+  const date=new Date().toLocaleDateString('en-AU').replace(/\//g,'-');
+  const filename='squad-plan-'+date+'.json';
+  if(navigator.share){
+    const blob=new Blob([jsonStr],{type:'application/json'});
+    const file=new File([blob],filename,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:'Squad Manager Sub Plan'}).catch(()=>{});return;
+    }
+  }
+  const url='data:application/json;charset=utf-8,'+encodeURIComponent(jsonStr);
+  const a=document.createElement('a');a.href=url;a.download=filename;a.click();
+  showToast('Sub plan exported ✓');
+}
+
+function importSubPlanFile(){
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='.json,application/json,text/plain';
+  inp.onchange=function(e){
+    const f=e.target.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=function(ev){
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!data.h1||!data.h2)throw new Error('Invalid plan file');
+        applyImportedSubPlan(data);
+      }catch(err){alert('Could not load plan: '+err.message);}
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+function applyImportedSubPlan(data){
+  const filtered=S.names.filter(n=>n.trim());
+  const nameToIdx={};filtered.forEach(function(n,i){nameToIdx[n]=i;});
+  function findIdx(name){
+    if(nameToIdx[name]!==undefined)return nameToIdx[name];
+    const lower=String(name).toLowerCase();
+    for(const[n,i]of Object.entries(nameToIdx)){
+      if(n.toLowerCase()===lower)return i;
+      if(n.toLowerCase().startsWith(lower)||lower.startsWith(n.split(' ')[0].toLowerCase()))return i;
+    }
+    return undefined;
+  }
+  function mapHalf(half){
+    return(half||[]).map(function(s){return{
+      off:new Set((s.off||[]).map(findIdx).filter(function(i){return i!==undefined;})),
+      on: new Set((s.on||[]).map(findIdx).filter(function(i){return i!==undefined;})),
+      atTime:s.atTime||null};});
+  }
+  if(data.h1Dur)S.h1Dur=data.h1Dur;if(data.h2Dur)S.h2Dur=data.h2Dur;
+  if(data.h1Int)S.h1Int=data.h1Int;if(data.h2Int)S.h2Int=data.h2Int;
+  S.subPlan={h1:mapHalf(data.h1),h2:mapHalf(data.h2)};
+  S.useSubPlan=true;
+  if(data.priorityPlayerIds&&data.priorityPlayerIds.length){
+    S.priorityPlayerIds=new Set(data.priorityPlayerIds.map(findIdx).filter(function(i){return i!==undefined;}));
+  }
+  if(data.h2PresetIds){
+    const ids=data.h2PresetIds.map(findIdx).filter(function(i){return i!==undefined;});
+    if(ids.length===COURT_SIZE){S.h2PresetIds=new Set(ids);S.useH2Preset=true;}
+  }
+  if(data.finalPresetIds){
+    const ids=data.finalPresetIds.map(findIdx).filter(function(i){return i!==undefined;});
+    if(ids.length===COURT_SIZE){S.finalPresetIds=new Set(ids);S.useFinalPreset=true;}
+  }
+  saveState();renderSetup(true);
+  showToast('Sub plan imported ✓');
+}
+
 function showSavePlanModal(onSave){
   const existing=$('save-plan-modal');
   if(existing) existing.remove();
@@ -767,12 +853,21 @@ function setActiveTeam(id){
   T.activeTeamId=id;
   T.showDropdown=false;
   try{ localStorage.setItem(TEAMS_KEY+'_active', id||''); }catch(_){}
-  // Pre-populate S.names from team players
   const team=T.teams.find(t=>t.id===id);
   if(team){
     S.names=team.players.map(p=>playerDisplayName(p));
-    // ensure at least 5 slots
     while(S.names.length<5) S.names.push('');
+    // Auto-configure game format based on league
+    const lg=(team.league||'').toUpperCase();
+    if(lg.includes('VJBL')||(lg.includes('EDL')&&!lg.includes('EDJBL'))){
+      // Quarter-based: 4 x 10 min
+      S.h1Dur=10; S.h2Dur=10; S.h1Int=180; S.h2Int=180;
+      showToast(lg.includes('VJBL')?'VJBL format: 4 x 10 min quarters':'EDL format: 4 x 10 min quarters');
+    } else if(lg.includes('EDJBL')||lg.includes('EDJA')||lg.includes('EDJB')){
+      // Half-based: 2 x 20 min
+      S.h1Dur=20; S.h2Dur=20; S.h1Int=180; S.h2Int=180;
+      showToast('EDJBL format: 2 x 20 min halves');
+    }
   }
   renderSetup(true);
 }
@@ -820,9 +915,11 @@ const S = {
   halfTime: 0,
   subCountdown: 0,
   alertState: null,
-  isRunning: false,
+  isRunning: false,       // player timers running
+  isClockRunning: false,  // game clock running (may differ from isRunning for EDJBL timeout)
   subLog: [],
   savedGame: null,
+  finalScore: {us:null, them:null}, // entered on game over screen
   selCourt: new Set(),
   selBench: new Set(),
   htOnCourt: new Set(),
@@ -920,6 +1017,29 @@ function flashScreen(type){
 let tickInterval=null;
 let prevAlert=null;
 
+// ── League format detection ──
+function getActiveLeague(){
+  const team = T.teams.find(t=>t.id===T.activeTeamId);
+  return ((team&&team.league)||'').toUpperCase().trim();
+}
+function isEDJBL(){ const l=getActiveLeague(); return l.includes('EDJBL')||l.includes('EDJ'); }
+function isVJBL(){  const l=getActiveLeague(); return l.includes('VJBL'); }
+function isEDL(){   const l=getActiveLeague(); return l.includes('EDL')&&!l.includes('EDJBL'); }
+function usesQuarters(){ return isVJBL()||isEDL(); }
+
+// During a timeout:
+// EDJBL: game clock keeps running; player clocks stop. EXCEPT last 2min of H2 → everything stops.
+// VJBL/EDL: everything stops.
+function isGameClockStoppedOnTimeout(){
+  if(usesQuarters()) return true;  // VJBL/EDL: clock always stops
+  // EDJBL: only stop in last 2min of 2nd half
+  if(S.phase==='h2'){
+    const halfRem = getHalfDur() - S.halfTime;
+    return halfRem <= 120;  // last 2 minutes
+  }
+  return false; // EDJBL: clock keeps going in H1 and most of H2
+}
+
 function getHalfDur(){ return (S.phase==='h2'?S.h2Dur:S.h1Dur)*60; }
 function getSubInt(){  return S.phase==='h2'?S.h2Int:S.h1Int; }  // already in seconds
 function getCurrSps(){ return S.phase==='h2'?S.h2Sps:S.h1Sps; }
@@ -943,22 +1063,30 @@ function stopTick(){
 }
 
 function doTick(){
-  if(!S.isRunning) return;
+  if(!S.isRunning && !S.isClockRunning) return;
   const isH2=S.phase==='h2';
-  S.gameTime++;
-  S.halfTime++;
 
-  S.players.forEach(p=>{
-    if(p.onCourt){
-      p.playTime++; p.benchStint=0;
-      if(!isH2) p.h1PlayTime++; else p.h2PlayTime++;
-    } else {
-      p.benchTime++; p.benchStint++;
-    }
-  });
+  // Game clock and sub countdown tick if isClockRunning
+  if(S.isClockRunning){
+    S.gameTime++;
+    S.halfTime++;
+    S.subCountdown--;
+  }
 
-  // Sub countdown
-  S.subCountdown--;
+  // Player timers only tick if isRunning (player clocks stop on EDJBL timeout)
+  if(S.isRunning){
+    S.players.forEach(p=>{
+      if(p.onCourt){
+        p.playTime++; p.benchStint=0;
+        if(!isH2) p.h1PlayTime++; else p.h2PlayTime++;
+      } else {
+        p.benchTime++; p.benchStint++;
+      }
+    });
+  }
+
+  // Sub countdown (only when clock is running)
+  if(!S.isClockRunning) { updateTimerDOM(); return; }
   if(S.subCountdown<=0){
     S.subCountdown=getSubInt();
     if(S.alertState!=='halfend') setAlert('sub-now');
@@ -1420,16 +1548,38 @@ function continueGame(){
 
 function togglePause(){
   unlockAudio();
-  S.isRunning=!S.isRunning;
-  if(S.isRunning) startTick(); else stopTick();
+  const wasRunning = S.isRunning;
+  S.isRunning = !wasRunning;
+
+  if(S.isRunning){
+    // Resuming: both clocks run
+    S.isClockRunning = true;
+    startTick();
+  } else {
+    // Timeout: check league rules
+    if(isGameClockStoppedOnTimeout()){
+      // VJBL/EDL always, or EDJBL in last 2min H2: stop everything
+      S.isClockRunning = false;
+      stopTick();
+    } else {
+      // EDJBL normal timeout: game clock keeps running, player clocks stop
+      S.isClockRunning = true;
+      startTick(); // keep ticking but isRunning=false means player timers won't increment
+    }
+  }
+
   const ovl=$('pause-ovl');
   if(ovl) ovl.style.display=S.isRunning?'none':'flex';
   const pbtn=$('pbtn');
   if(pbtn){ pbtn.textContent=S.isRunning?'⏸ TIMEOUT':'▶ RESUME'; pbtn.className='pbtn'+(S.isRunning?' live':''); }
+
+  // Show a small indicator when clock keeps running during EDJBL timeout
+  const clockNote=$('timeout-clock-note');
+  if(clockNote) clockNote.style.display=(!S.isRunning&&S.isClockRunning)?'block':'none';
 }
 
 function resumeFromOverlay(){
-  if(!S.isRunning){ S.isRunning=true; startTick(); }
+  if(!S.isRunning){ S.isRunning=true; S.isClockRunning=true; startTick(); }
   const ovl=$('pause-ovl');
   if(ovl) ovl.style.display='none';
   const pbtn=$('pbtn');
@@ -1521,7 +1671,7 @@ function toggleFoul(pid, dot){
 }
 
 function endHalf(){
-  stopTick(); S.isRunning=false;
+  stopTick(); S.isRunning=false; S.isClockRunning=false;
   const h2Court=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE
     ? new Set(S.h2PresetIds)
     : new Set(S.players.filter(p=>p.onCourt).map(p=>p.id));
@@ -1538,14 +1688,15 @@ function toggleHtPlayer(pid){
 
 function startSecondHalf(){
   S.players.forEach(p=>{ p.onCourt=S.htOnCourt.has(p.id); p.benchStint=0; });
-  S.halfTime=0; S.subCountdown=S.h2Int;  // already in seconds
+  S.halfTime=0; S.subCountdown=S.h2Int;
   S.alertState=null; prevAlert=null; S.planSubIdx=0;
   S.selCourt=new Set(); S.selBench=new Set();
-  S.phase='h2'; S.isRunning=false;
+  S.phase='h2'; S.isRunning=true; S.isClockRunning=true;  // start immediately
   render();
+  startTick();
 }
 
-function endGame(){ stopTick(); S.isRunning=false; S.phase='gameover'; render(); }
+function endGame(){ stopTick(); S.isRunning=false; S.isClockRunning=false; S.phase='gameover'; render(); }
 
 function exportReport(){
   const now=new Date();
@@ -1553,6 +1704,10 @@ function exportReport(){
   const line='─'.repeat(68);
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
   let txt=`SQUAD MANAGER — GAME REPORT\nGenerated: ${now.toLocaleString()}\n${line}\n\n`;
+  if(S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)){
+    const us=S.finalScore.us??'—', them=S.finalScore.them??'—';
+    txt+=`FINAL SCORE: ${us} — ${them}\n${line}\n\n`;
+  }
   txt+=`GAME SETTINGS\n`;
   txt+=`• 1st Half: ${S.h1Dur} min | Sub every: ${S.h1Int} min | Per sub: ${S.h1Sps}\n`;
   txt+=`• 2nd Half: ${S.h2Dur} min | Sub every: ${S.h2Int} min | Per sub: ${S.h2Sps}\n\n`;
@@ -2248,10 +2403,45 @@ function togglePriorityPlayer(i){
   renderSetup(true);
 }
 
-function autoModeTimeHTML(filtered){
-  if(filtered.length<COURT_SIZE) return '';
+function resetSetup(){
+  if(!confirm('Reset all game settings? This clears your roster, sub plan, presets and priority players. Your teams and ratings are NOT affected.')) return;
+  // Reset only setup/game state, keep teams and settings
+  S.names      = ['','','','',''];
+  S.subPlan    = {h1:[], h2:[]};
+  S.useSubPlan = false;
+  S.h2PresetIds= new Set();
+  S.useH2Preset= false;
+  S.finalPresetIds = new Set();
+  S.useFinalPreset = false;
+  S.priorityPlayerIds = new Set();
+  S.aiParamsOpen = false;
+  S.finalsMode = false;
+  S.aiAdheresToPresets = true;
+  S.phase = 'setup';
+  saveState();
+  renderSetup(false);
+  showToast('Settings reset ✓');
+}
+
+function priorityPlayersHTML(filtered){
+  if(!filtered.length) return '';
+  return `
+    <div class="s-sec">
+      <div class="s-hdr">PRIORITY PLAYERS</div>
+      <div class="s-lbl"><span>Tap players who should receive extra time when subs cannot be equal</span><span style="color:var(--accent)">${S.priorityPlayerIds.size} selected</span></div>
+      <div class="chips">
+        ${filtered.map((nm,i)=>{
+          const sel=S.priorityPlayerIds.has(i);
+          return '<div class="chip'+(sel?' on':'')+'" onclick="togglePriorityPlayer('+i+')">'+(sel?'★ ':'')+nm+'</div>';
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+function autoModeTimeHTML(filtered, hasSubPlan){
   const totalSecs=(S.h1Dur+S.h2Dur)*60;
   const n=filtered.length;
+  if(n<COURT_SIZE) return n>0 ? priorityPlayersHTML(filtered) : '';
   const base=Math.floor(totalSecs*COURT_SIZE/n);
   const extra=totalSecs*COURT_SIZE - base*n; // leftover seconds to distribute
   const priorityCount=S.priorityPlayerIds.size;
@@ -2261,17 +2451,7 @@ function autoModeTimeHTML(filtered){
     ?base+Math.floor(extra/Math.max(1,priorityCount))
     :base);
 
-  const prioritySection=`
-    <div class="s-sec">
-      <div class="s-hdr">AUTO-MODE: PRIORITY PLAYERS</div>
-      <div class="s-lbl"><span>Tap players who should receive extra time when subs can't be even</span><span style="color:var(--accent)">${S.priorityPlayerIds.size} selected</span></div>
-      <div class="chips">
-        ${filtered.map((nm,i)=>{
-          const sel=S.priorityPlayerIds.has(i);
-          return `<div class="chip${sel?' on':''}" onclick="togglePriorityPlayer(${i})">${sel?'★ ':''}${nm}</div>`;
-        }).join('')}
-      </div>
-    </div>`;
+  const prioritySection=priorityPlayersHTML(filtered);
 
   const summary=`
     <div class="s-sec">
@@ -2886,12 +3066,20 @@ async function generateAIRotation(){
         [...onCourt].forEach(id=>playTime[id]+=elapsed);
         filtered.forEach((_,id)=>{if(!onCourt.has(id))benchRest[id]+=elapsed;});
         prev=t;
-        const courtArr=[...onCourt].sort((a,b)=>playTime[b]-playTime[a]);
+        const courtArr=[...onCourt].sort((a,b)=>{
+          const aPri=S.priorityPlayerIds&&S.priorityPlayerIds.has(a)?1:0;
+          const bPri=S.priorityPlayerIds&&S.priorityPlayerIds.has(b)?1:0;
+          if(aPri!==bPri) return bPri-aPri; // priority players come off last
+          return playTime[b]-playTime[a];
+        });
         const maxRest=p.maxBenchRest||0;
         const benchArr=filtered.map((_,id)=>id).filter(id=>!onCourt.has(id))
           .sort((a,b)=>{
             const am=maxRest>0&&benchRest[a]>=maxRest?1:0,bm=maxRest>0&&benchRest[b]>=maxRest?1:0;
             if(am!==bm)return bm-am;
+            const aPri=S.priorityPlayerIds&&S.priorityPlayerIds.has(a)?1:0;
+            const bPri=S.priorityPlayerIds&&S.priorityPlayerIds.has(b)?1:0;
+            if(aPri!==bPri) return bPri-aPri; // priority players return first
             return playTime[a]-playTime[b];
           });
         const swap=Math.min(swapSize,benchArr.length,courtArr.length);
@@ -2913,8 +3101,11 @@ async function generateAIRotation(){
     const times={};
     filtered.forEach((nm,i)=>{const t=totalPlay[i];times[nm]=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');});
     const fairFmt2=Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
+    // Apply priority player boost to equal time plan
+    const priorityNamesD = [...S.priorityPlayerIds].map(i=>filtered[i]).filter(Boolean);
+    const priorityNote = priorityNamesD.length ? ' Priority: '+priorityNamesD.join(', ')+' receive slight extra time.' : '';
     plans.push({id:'D',label:'Equal Time',
-      rationale:'Greedy equal-time rotation (~'+fairFmt2+'/player). H2 starts with the 5 who played least in H1.',
+      rationale:'Greedy equal-time rotation (~'+fairFmt2+'/player). H2 starts with the 5 who played least in H1.'+priorityNote,
       starting5:filtered.slice(0,COURT_SIZE),h2Starting5:h2StartIds.map(i=>filtered[i]),
       finishing5:[...h2Res.finalCourt].map(i=>filtered[i]),
       h1:h1Res.subs,h2:h2Res.subs,expectedTimes:times});
@@ -3360,7 +3551,7 @@ function renderSetup(restoreScroll){
 
   <div class="s-sec">
     <div class="s-hdr">ROSTER <span id="roster-count" style="color:#3ecf6e;font-size:12px">${filtered.length} players</span></div>
-    ${activeTeam?`<div class="squad-footer"><div class="s-lbl" style="margin:0">Tap to select players for this game</div><button class="squad-clear" onclick="clearAllPlayers()">Clear</button></div><div class="squad-chips">${chipRows}</div>`:''}
+    ${activeTeam?`<div class="squad-footer"><div class="s-lbl" style="margin:0">Tap to select players for this game</div><div style="display:flex;gap:6px;"><button class="squad-clear" onclick="clearAllPlayers()">Clear</button><button class="squad-clear" style="background:rgba(255,85,85,.12);color:var(--red);border-color:rgba(255,85,85,.3);" onclick="resetAll()">⟳ Reset All</button></div></div><div class="squad-chips">${chipRows}</div>`:''}
     <div class="s-lbl" style="margin-top:${activeTeam?6:0}px;flex-wrap:wrap;gap:4px;">
       <span>Order (first ${COURT_SIZE} start on court)</span>
       ${rosterMissingHTML}
@@ -3370,8 +3561,19 @@ function renderSetup(restoreScroll){
     </div>
   </div>
 
+
+  ${(()=>{
+    const lg = getActiveLeague();
+    const isQ = usesQuarters();
+    if(lg) return '<div style="background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.2);border-radius:8px;padding:7px 12px;margin-bottom:2px;font-size:11px;color:var(--blue);">' +
+      (isQ ? '🏀 Quarter format detected ('+lg+') — 4 × '+S.h1Dur+' min. Timeout stops all clocks.' :
+             '🏀 Half format detected ('+lg+') — 2 × '+S.h1Dur+' min. Timeout: game clock keeps running (stops in last 2 min of 2nd half).') +
+      '</div>';
+    return '';
+  })()}
+
   <div class="s-sec">
-    <div class="s-hdr">1ST HALF</div>
+    <div class="s-hdr">${usesQuarters()?'Q1 / Q2':'1ST HALF'}</div>
     <div class="h-grid">
       <div class="ni-wrap"><div class="s-lbl">Time (min)</div><input class="ni" type="number" min="1" max="60" value="${S.h1Dur}" onchange="S.h1Dur=Math.max(1,Math.min(60,parseInt(this.value)||20));renderSetup(true)"></div>
       ${stepperHTML('h1Int','Sub every')}
@@ -3379,7 +3581,7 @@ function renderSetup(restoreScroll){
     </div>
   </div>
   <div class="s-sec">
-    <div class="s-hdr">2ND HALF</div>
+    <div class="s-hdr">${usesQuarters()?'Q3 / Q4':'2ND HALF'}</div>
     <div class="h-grid">
       <div class="ni-wrap"><div class="s-lbl">Time (min)</div><input class="ni" type="number" min="1" max="60" value="${S.h2Dur}" onchange="S.h2Dur=Math.max(1,Math.min(60,parseInt(this.value)||20));renderSetup(true)"></div>
       ${stepperHTML('h2Int','Sub every')}
@@ -3411,6 +3613,8 @@ function renderSetup(restoreScroll){
         <button onclick="S.finalsMode=!S.finalsMode;renderSetup(true)" style="background:${S.finalsMode?'rgba(240,140,0,.2)':'none'};color:${S.finalsMode?'var(--accent)':'var(--dim)'};border:1.5px solid ${S.finalsMode?'var(--accent)':'var(--border)'};border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Finals mode: top players get extra court time">★ FINALS</button>
         <button onclick="S.aiAdheresToPresets=!S.aiAdheresToPresets;renderSetup(true)" style="background:${S.aiAdheresToPresets?'rgba(74,158,255,.15)':'none'};color:${S.aiAdheresToPresets?'var(--blue)':'var(--dim)'};border:1.5px solid ${S.aiAdheresToPresets?'var(--blue)':'var(--border)'};border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Lock: AI respects your Starting 5, H2 Starting 5, and Finishing 5 selections">${S.aiAdheresToPresets?'🔒':'🔓'} PRESETS</button>
         <button onclick="S.aiParamsOpen=!S.aiParamsOpen;renderSetup(true)" style="background:${S.aiParamsOpen?'rgba(192,132,252,.15)':'none'};color:${S.aiParamsOpen?'var(--purple)':'var(--dim)'};border:1.5px solid ${S.aiParamsOpen?'var(--purple)':'var(--border)'};border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">⚙ PARAMS</button>
+        <button onclick="exportSubPlan()" style="background:none;color:var(--dim);border:1.5px solid var(--border);border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Export sub plan to file">⬆</button>
+        <button onclick="importSubPlan()" style="background:none;color:var(--dim);border:1.5px solid var(--border);border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Import sub plan from file">⬇</button>
         <button onclick="window._lastAIResult?reOpenAIPlans():generateAIRotation()" style="background:var(--purple);color:#fff;border:none;border-radius:7px;padding:4px 10px;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">${window._lastAIResult?'↩ Plans':'🤖 AI Plan'}</button>
       </div>
     </div>
@@ -3440,11 +3644,15 @@ function renderSetup(restoreScroll){
       </div>`:S.useSubPlan?'':''}
   </div>
 
-  ${!S.useSubPlan ? autoModeTimeHTML(filtered) : ''}
+  ${autoModeTimeHTML(filtered, S.useSubPlan)}
 
   <button class="startbtn" id="start-btn" onclick="startGame()" ${valid&&h2Ok&&finalOk?'':'disabled'}>
     ${!valid?`NEED ${COURT_SIZE}+ PLAYERS`:!h2Ok?'SELECT 5 FOR H2':!finalOk?'SELECT FINAL 5':'START NEW GAME'}
   </button>
+  <div style="display:flex;gap:8px;margin-top:8px;">
+    <button onclick="resetSetup()" style="flex:1;background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:10px;padding:11px;font-size:12px;cursor:pointer;" title="Clear roster, sub plan and presets — keeps teams and ratings">↺ Reset Settings</button>
+    <button onclick="resetAll()" style="flex:1;background:rgba(255,85,85,.08);border:1.5px solid rgba(255,85,85,.25);color:var(--red);border-radius:10px;padding:11px;font-size:12px;cursor:pointer;" title="Full reset — clears everything including in-progress game">⟳ Reset App</button>
+  </div>
 </div>`;
   // Restore scroll position to the .setup div after re-render
   if(savedScroll){ const el=$('app').querySelector('.setup'); if(el) el.scrollTop=savedScroll; }
@@ -3529,6 +3737,7 @@ function renderGame(){
     </div>
     <div class="hbtns">
       <button id="pbtn" class="pbtn${S.isRunning?' live':''}" onclick="togglePause()">${pbtnLabel}</button>
+      <div id="timeout-clock-note" style="display:${!S.isRunning&&S.isClockRunning?'block':'none'};font-size:9px;color:var(--warn);text-align:center;letter-spacing:.5px;margin-top:1px;">⏱ CLOCK RUNNING</div>
       <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
         <button class="${endCls}" onclick="${endAction}">${endLabel}</button>
         <button class="sgear" onclick="S._prevPhase='${S.phase}';S.phase='settings';render()" title="Settings">⚙</button>
@@ -3642,6 +3851,21 @@ ${S.subLog.map(e=>`<div class="log-entry"><span class="log-time">${fmt(e.gameTim
   <div class="go-hdr">
     <div class="go-title">FULL TIME</div>
     <div class="go-sub">${sorted.length} players · Game complete</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Us</div>
+        <input id="score-us" type="number" min="0" max="999" value="${S.finalScore.us??''}" placeholder="—"
+          style="width:60px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--green);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"
+          oninput="S.finalScore.us=this.value===''?null:+this.value;saveState()">
+      </div>
+      <div style="font-family:Impact,sans-serif;font-size:24px;color:var(--dim);margin-top:12px;">:</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Them</div>
+        <input id="score-them" type="number" min="0" max="999" value="${S.finalScore.them??''}" placeholder="—"
+          style="width:60px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--red);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"
+          oninput="S.finalScore.them=this.value===''?null:+this.value;saveState()">
+      </div>
+    </div>
   </div>
   <div class="go-body">
     <table class="stats-tbl">
@@ -4010,7 +4234,100 @@ function toggleH2Preset(i){
   renderSetup(true);
 }
 
+function exportSubPlan(){
+  if(!S.useSubPlan||(S.subPlan.h1.length===0&&S.subPlan.h2.length===0)){
+    alert('No pre-planned subs to export. Build a sub plan first.');
+    return;
+  }
+  // Serialise: convert Sets to arrays
+  const toArr = half => (half||[]).map(sub=>({
+    off:[...sub.off], on:[...sub.on], atTime:sub.atTime||null
+  }));
+  const data = {
+    version:1,
+    exported: new Date().toISOString(),
+    names: S.names.filter(n=>n.trim()),
+    h1Dur:S.h1Dur, h2Dur:S.h2Dur, h1Int:S.h1Int, h2Int:S.h2Int,
+    h1Sps:S.h1Sps, h2Sps:S.h2Sps,
+    h1:toArr(S.subPlan.h1), h2:toArr(S.subPlan.h2),
+    h2PresetIds: S.useH2Preset ? [...S.h2PresetIds] : null,
+    finalPresetIds: S.useFinalPreset ? [...S.finalPresetIds] : null,
+    priorityPlayerIds: [...S.priorityPlayerIds]
+  };
+  const json = JSON.stringify(data, null, 2);
+  const date = new Date().toISOString().slice(0,10);
+  const fname = 'squad-sub-plan-'+date+'.json';
+  if(navigator.share && navigator.canShare({files:[new File([json],'x.json',{type:'application/json'})]})){
+    const file = new File([json],fname,{type:'application/json'});
+    navigator.share({files:[file],title:'Sub Plan'}).catch(()=>{});
+  } else {
+    const a = document.createElement('a');
+    a.href = 'data:application/json;charset=utf-8,'+encodeURIComponent(json);
+    a.download = fname;
+    a.click();
+  }
+}
+
+function importSubPlan(){
+  const inp = document.createElement('input');
+  inp.type='file'; inp.accept='.json,.txt';
+  inp.onchange = e=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      try {
+        const data = JSON.parse(ev.target.result);
+        if(!data.h1||!data.h2) throw new Error('Not a valid sub plan file');
+        const fromArr = half => half.map(sub=>({
+          off:new Set(sub.off||[]), on:new Set(sub.on||[]), atTime:sub.atTime||null
+        }));
+        S.subPlan = { h1:fromArr(data.h1), h2:fromArr(data.h2) };
+        S.useSubPlan = true;
+        if(data.h1Int) S.h1Int=data.h1Int;
+        if(data.h2Int) S.h2Int=data.h2Int;
+        if(data.h2PresetIds){ S.h2PresetIds=new Set(data.h2PresetIds); S.useH2Preset=true; }
+        if(data.finalPresetIds){ S.finalPresetIds=new Set(data.finalPresetIds); S.useFinalPreset=true; }
+        if(data.priorityPlayerIds) S.priorityPlayerIds=new Set(data.priorityPlayerIds);
+        saveState();
+        renderSetup(true);
+        showToast('Sub plan imported ✓');
+      } catch(err){ alert('Could not load sub plan: '+err.message); }
+    };
+    reader.readAsText(file);
+  };
+  inp.click();
+}
+
 function newGame(){ S.savedGame=null; S.phase='setup'; render(); }
+
+function resetAll(){
+  if(!confirm('Reset everything? This clears the current game, roster and all pre-planned subs. Teams and ratings are kept.')) return;
+  // Preserve non-game state
+  const keepPhase = 'setup';
+  const defaultS = {
+    phase: keepPhase, names:['','','','',''],
+    h1Dur:20, h2Dur:20, h1Int:180, h2Int:180, h1Sps:2, h2Sps:2,
+    isRunning:false, gameTime:0, halfTime:0, players:[],
+    subPlan:{h1:[],h2:[]}, useSubPlan:false,
+    useH2Preset:false, h2PresetIds:new Set(),
+    useFinalPreset:false, finalPresetIds:new Set(),
+    subLog:[], alertState:null, savedGame:null,
+    priorityPlayerIds:new Set(), useAutoMode:false,
+    finalsMode:false, aiAdheresToPresets:true, aiParamsOpen:false,
+    finalScore:{us:null,them:null},
+    aiParams:{
+      minSubsPerWindow:1,maxSubsPerWindow:2,
+      minSubGap:180,maxSubGap:360,
+      firstSubDelay:180,minBenchRest:180,maxBenchRest:0,
+      minGameTimeMins:0,minPlayTimePct:85,maxPlayTimePct:115
+    }
+  };
+  Object.assign(S, defaultS);
+  saveState();
+  render();
+  showToast('App reset ✓ — teams and ratings are preserved');
+}
 
 // ═══════════════════════════════════════════
 // PERSISTENCE — save/restore game state
@@ -4034,6 +4351,7 @@ function stateToJSON(){
     showRecommended: S.showRecommended,
     showPlanned: S.showPlanned,
     priorityPlayerIds: [...S.priorityPlayerIds],
+    finalScore: S.finalScore||{us:null,them:null},
     subPlan: {
       h1: (S.subPlan.h1||[]).map(s=>s?{off:[...s.off],on:[...s.on]}:null),
       h2: (S.subPlan.h2||[]).map(s=>s?{off:[...s.off],on:[...s.on]}:null),
@@ -4075,6 +4393,7 @@ function loadState(){
     S.showRecommended=d.showRecommended!==false;
     S.showPlanned=d.showPlanned!==false;
     S.priorityPlayerIds=new Set(d.priorityPlayerIds||[]);
+    S.finalScore=d.finalScore||{us:null,them:null};
     S.planSubIdx=d.planSubIdx||0;
     S.subPlan={
       h1: (d.subPlan&&d.subPlan.h1||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on)}:null),
