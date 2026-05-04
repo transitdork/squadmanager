@@ -582,8 +582,8 @@ function savePlans(){
     const out=P.plans.map(p=>({
       ...p,
       subPlan:{
-        h1:(p.subPlan.h1||[]).map(s=>s?{off:[...s.off],on:[...s.on]}:null),
-        h2:(p.subPlan.h2||[]).map(s=>s?{off:[...s.off],on:[...s.on]}:null),
+        h1:(p.subPlan.h1||[]).map(s=>s?{off:[...s.off],on:[...s.on],atTime:s.atTime||null}:null),
+        h2:(p.subPlan.h2||[]).map(s=>s?{off:[...s.off],on:[...s.on],atTime:s.atTime||null}:null),
       }
     }));
     localStorage.setItem(PLANS_KEY, JSON.stringify(out));
@@ -616,8 +616,8 @@ function saveCurrentPlan(name){
     h1Int:S.h1Int, h2Int:S.h2Int,
     h1Sps:S.h1Sps, h2Sps:S.h2Sps,
     subPlan:{
-      h1:(S.subPlan.h1||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on)}:null),
-      h2:(S.subPlan.h2||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on)}:null),
+      h1:(S.subPlan.h1||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on),atTime:s.atTime||null}:null),
+      h2:(S.subPlan.h2||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on),atTime:s.atTime||null}:null),
     }
   };
   P.plans.unshift(plan); // newest first
@@ -629,8 +629,8 @@ function loadPlan(id){
   const plan=P.plans.find(p=>p.id===id);
   if(!plan) return;
   S.subPlan={
-    h1:(plan.subPlan.h1||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on)}:null),
-    h2:(plan.subPlan.h2||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on)}:null),
+    h1:(plan.subPlan.h1||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on),atTime:s.atTime||null}:null),
+    h2:(plan.subPlan.h2||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on),atTime:s.atTime||null}:null),
   };
   S.h1Dur=plan.h1Dur; S.h2Dur=plan.h2Dur;
   S.h1Int=plan.h1Int; S.h2Int=plan.h2Int;
@@ -712,7 +712,7 @@ function applyImportedSubPlan(data){
     return(half||[]).map(function(s){return{
       off:new Set((s.off||[]).map(findIdx).filter(function(i){return i!==undefined;})),
       on: new Set((s.on||[]).map(findIdx).filter(function(i){return i!==undefined;})),
-      atTime:s.atTime||null};});
+      atTime:s.atTime||null};});  // atTime already handled;
   }
   if(data.h1Dur)S.h1Dur=data.h1Dur;if(data.h2Dur)S.h2Dur=data.h2Dur;
   if(data.h1Int)S.h1Int=data.h1Int;if(data.h2Int)S.h2Int=data.h2Int;
@@ -1228,13 +1228,10 @@ function calcPlanPlayTimes(){
   // Returns {name, secs}[] estimating each player's total court time across both halves
   const filtered=S.names.filter(n=>n.trim());
   if(filtered.length<COURT_SIZE) return [];
-  const totalSecs=(S.h1Dur+S.h2Dur)*60;
 
-  // Simulate who is on court second-by-second using the plan
   const playSecs=filtered.map(()=>0);
 
   const simHalf=(halfKey,dur,intv)=>{
-    // Starting court for this half
     let courtIds;
     if(halfKey==='h2'&&S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE)
       courtIds=new Set(S.h2PresetIds);
@@ -1243,20 +1240,42 @@ function calcPlanPlayTimes(){
 
     const plan=S.subPlan[halfKey]||[];
     const halfSecs=dur*60;
-    // Real subs: exclude the one at exact end of half
-    const numSubs=Math.max(0, Math.ceil(halfSecs/intv)-1);
-    let prevTime=0;
 
-    for(let i=0;i<=numSubs;i++){
-      const subTime=i<numSubs?(i+1)*intv:halfSecs;
-      const stint=subTime-prevTime;
-      courtIds.forEach(id=>{ if(id<playSecs.length) playSecs[id]+=stint; });
-      if(i<numSubs){
-        const sub=plan[i];
-        if(sub){ sub.off.forEach(id=>courtIds.delete(id)); sub.on.forEach(id=>courtIds.add(id)); }
-      }
-      prevTime=subTime;
+    // Build sub timeline: use atTime from sub object if present, otherwise use interval
+    function parseAtTime(t){
+      if(!t) return null;
+      const parts=String(t).split(':');
+      const secs=parseInt(parts[0])*60+(parseInt(parts[1])||0);
+      return isNaN(secs)?null:secs;
     }
+
+    // Build list of sub events with their actual times
+    const events=[];
+    const numSubs=Math.max(0, Math.ceil(halfSecs/intv)-1);
+    for(let i=0;i<numSubs;i++){
+      const sub=plan[i];
+      if(!sub) continue;
+      // Use AI atTime if available and valid, else fall back to interval
+      const atTimeSecs = sub.atTime ? parseAtTime(sub.atTime) : null;
+      const fallback = (i+1)*intv;
+      const t = (atTimeSecs && atTimeSecs>0 && atTimeSecs<halfSecs) ? atTimeSecs : fallback;
+      events.push({t, sub});
+    }
+    // Sort by time in case AI returned out-of-order
+    events.sort((a,b)=>a.t-b.t);
+
+    // Simulate stints
+    let prevTime=0;
+    for(const ev of events){
+      const stint=ev.t-prevTime;
+      if(stint>0) courtIds.forEach(id=>{ if(id<playSecs.length) playSecs[id]+=stint; });
+      ev.sub.off.forEach(id=>courtIds.delete(id));
+      ev.sub.on.forEach(id=>courtIds.add(id));
+      prevTime=ev.t;
+    }
+    // Final stint to end of half
+    const finalStint=halfSecs-prevTime;
+    if(finalStint>0) courtIds.forEach(id=>{ if(id<playSecs.length) playSecs[id]+=finalStint; });
   };
 
   simHalf('h1',S.h1Dur,S.h1Int);
