@@ -4282,7 +4282,7 @@ function renderSettings(){
 
     <div class="s-sec" style="text-align:center;padding-bottom:16px;">
       <div style="font-size:11px;color:var(--dim);margin-bottom:8px;">Squad Manager <span style="color:var(--accent);font-family:Impact,sans-serif;letter-spacing:1px;">v${APP_VERSION}</span></div>
-      <button onclick="applyUpdate();location.reload(true)" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:9px 18px;font-size:12px;cursor:pointer;" title="Force reload from server, clearing cache">⟳ Force Refresh / Check for Updates</button>
+      <button onclick="location.reload(true)" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:9px 18px;font-size:12px;cursor:pointer;" title="Force reload from server, clearing cache">⟳ Force Refresh / Check for Updates</button>
       <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.5;">If the app feels stale, tap above to force-reload<br>the latest version from the server.</div>
     </div>
   </div>
@@ -4469,6 +4469,7 @@ function resetAll(){
 // PERSISTENCE — save/restore game state
 // ═══════════════════════════════════════════
 const SAVE_KEY = 'squadmgr_v1';
+const AUTOSAVE_KEY = 'squadmgr_autosave_v1'; // mid-game crash recovery snapshot
 
 function stateToJSON(){
   // Sets aren't JSON-serialisable, convert to arrays
@@ -4506,11 +4507,10 @@ function saveState(){
   try { localStorage.setItem(SAVE_KEY, stateToJSON()); } catch(_){}
 }
 
-function loadState(){
+function loadStateFromData(d){
+  if(!d||!d.players) return;
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if(!raw) return;
-    const d = JSON.parse(raw);
+
     if(!d||!d.players) return;
 
     S.phase = d.phase||'setup';
@@ -4561,13 +4561,131 @@ function loadState(){
   } catch(_){}
 }
 
-// Auto-save every 5 seconds during a game and after every action
-let autoSaveTimer=null;
-function startAutoSave(){
-  if(autoSaveTimer) return; // already running
-  autoSaveTimer=setInterval(saveState,5000);
+function loadState(){
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    loadStateFromData(d);
+  } catch(_){}
 }
-function stopAutoSave(){ clearInterval(autoSaveTimer); autoSaveTimer=null; }
+
+// ── Auto-save: every 5s for normal state, every 30s for crash-recovery snapshot ──
+let autoSaveTimer = null;
+let autosaveSnapTimer = null;
+
+function startAutoSave(){
+  if(autoSaveTimer) return;
+  autoSaveTimer = setInterval(saveState, 5000);
+  // Also write a crash-recovery snapshot every 30 seconds during live game
+  autosaveSnapTimer = setInterval(writeCrashSnapshot, 30000);
+}
+
+function stopAutoSave(){
+  clearInterval(autoSaveTimer); autoSaveTimer = null;
+  clearInterval(autosaveSnapTimer); autosaveSnapTimer = null;
+}
+
+function writeCrashSnapshot(){
+  // Only snapshot during an active game (not setup/gameover)
+  if(S.phase !== 'h1' && S.phase !== 'h2') return;
+  try{
+    const snap = {
+      savedAt: Date.now(),
+      gameTime: S.gameTime,
+      halfTime: S.halfTime,
+      phase: S.phase,
+      state: stateToJSON()  // full state JSON
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snap));
+  }catch(_){}
+}
+
+function clearCrashSnapshot(){
+  try{ localStorage.removeItem(AUTOSAVE_KEY); }catch(_){}
+}
+
+function checkCrashSnapshot(){
+  // Called on startup — look for an unfinished game from a previous session
+  try{
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if(!raw) return;
+    const snap = JSON.parse(raw);
+    if(!snap || !snap.savedAt || !snap.state) return;
+
+    // Only offer restore if snapshot is less than 12 hours old
+    const ageHours = (Date.now() - snap.savedAt) / 3600000;
+    if(ageHours > 12){ clearCrashSnapshot(); return; }
+
+    // Only offer if the snapshot was mid-game (not setup/gameover)
+    const snapPhase = snap.phase;
+    if(snapPhase !== 'h1' && snapPhase !== 'h2'){ clearCrashSnapshot(); return; }
+
+    // Don't offer if we're already mid-game (user intentionally resumed)
+    if(S.phase === 'h1' || S.phase === 'h2') return;
+
+    // Format the time for the prompt
+    const savedDate = new Date(snap.savedAt);
+    const timeStr = savedDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    const elapsed = Math.floor(snap.gameTime / 60) + ':' + String(snap.gameTime % 60).padStart(2,'0');
+    const halfLabel = snapPhase === 'h2' ? '2nd half' : '1st half';
+
+    showRestorePrompt(snap, timeStr, elapsed, halfLabel);
+  }catch(_){ clearCrashSnapshot(); }
+}
+
+function showRestorePrompt(snap, timeStr, elapsed, halfLabel){
+  // Create a non-blocking prompt overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'restore-prompt';
+  overlay.style.cssText = [
+    'position:fixed','inset:0','background:rgba(0,0,0,.85)',
+    'z-index:10000','display:flex','align-items:center','justify-content:center',
+    'padding:24px','font-family:-apple-system,sans-serif'
+  ].join(';');
+
+  overlay.innerHTML =
+    '<div style="background:#1a1e2a;border:1.5px solid #f08c00;border-radius:18px;padding:28px 24px;max-width:340px;width:100%;text-align:center;">' +
+      '<div style="font-size:36px;margin-bottom:12px;">🏀</div>' +
+      '<div style="font-family:Impact,sans-serif;font-size:22px;letter-spacing:2px;color:#f08c00;margin-bottom:8px;">GAME IN PROGRESS</div>' +
+      '<div style="font-size:13px;color:#eef0f8;margin-bottom:6px;">An unfinished game was found from <strong>' + timeStr + '</strong></div>' +
+      '<div style="font-size:12px;color:#7a80a0;margin-bottom:24px;">Game clock was at <strong style="color:#eef0f8">' + elapsed + '</strong> in the <strong style="color:#eef0f8">' + halfLabel + '</strong></div>' +
+      '<div style="display:flex;flex-direction:column;gap:10px;">' +
+        '<button onclick="restoreGame()" style="background:#f08c00;color:#111;border:none;border-radius:12px;padding:15px;font-family:Impact,sans-serif;font-size:18px;letter-spacing:1px;cursor:pointer;">▶ RESTORE GAME</button>' +
+        '<button onclick="discardSnapshot()" style="background:none;border:1.5px solid #2e3350;color:#7a80a0;border-radius:12px;padding:13px;font-size:14px;cursor:pointer;">✕ Start Fresh</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  window._pendingSnap = snap;
+}
+
+function restoreGame(){
+  const overlay = document.getElementById('restore-prompt');
+  if(overlay) overlay.remove();
+  if(!window._pendingSnap) return;
+  try{
+    const d = JSON.parse(window._pendingSnap.state);
+    // Restore full state using existing loadState logic
+    loadStateFromData(d);
+    S.isRunning = false;  // always start paused after restore
+    S.isClockRunning = false;
+    render();
+    showToast('Game restored — tap ▶ RESUME to continue');
+    startAutoSave(); // resume autosave
+  }catch(e){
+    showToast('Could not restore game — starting fresh');
+    discardSnapshot();
+  }
+  window._pendingSnap = null;
+}
+
+function discardSnapshot(){
+  const overlay = document.getElementById('restore-prompt');
+  if(overlay) overlay.remove();
+  clearCrashSnapshot();
+  window._pendingSnap = null;
+}
 
 // Patch key actions to auto-save
 const _startGame=startGame;
@@ -4577,13 +4695,13 @@ window.endHalf=function(){ _endHalf(); saveState(); stopAutoSave(); };
 const _startSecondHalf=startSecondHalf;
 window.startSecondHalf=function(){ _startSecondHalf(); saveState(); startAutoSave(); };
 const _endGame=endGame;
-window.endGame=function(){ _endGame(); saveState(); stopAutoSave(); };
+window.endGame=function(){ _endGame(); saveState(); stopAutoSave(); clearCrashSnapshot(); };
 const _commitSub=commitSub;
 window.commitSub=function(){ _commitSub(); saveState(); };
 const _toggleFoul=toggleFoul;
 window.toggleFoul=function(pid,dot){ _toggleFoul(pid,dot); saveState(); };
 const _newGame=newGame;
-window.newGame=function(){ _newGame(); saveState(); stopAutoSave(); };
+window.newGame=function(){ _newGame(); saveState(); stopAutoSave(); clearCrashSnapshot(); };
 
 // ═══════════════════════════════════════════
 // INSTALL BANNER
@@ -4631,29 +4749,28 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Fetch: network-first. If network succeeds → cache it + serve it.
-//         If network fails → serve from cache. If no cache → show offline page.
+// Fetch: stale-while-revalidate.
+// Serve from cache immediately (fast, works offline), then update cache in background.
 self.addEventListener('fetch', e => {
   if(e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request)
-      .then(networkResp => {
-        // Fresh from network — update cache
-        if(networkResp && networkResp.status === 200){
-          const toCache = networkResp.clone();
-          caches.open(CACHE_NAME).then(c => c.put(e.request, toCache));
-        }
-        return networkResp;
-      })
-      .catch(() => {
-        // Network failed — try cache
-        return caches.match(e.request).then(cached => {
-          if(cached) return cached;
-          // Nothing in cache — return a minimal offline notice
-          return new Response('<html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>Squad Manager</h2><p>You are offline and this page has not been cached yet.<br>Please connect to the internet and reload.</p></body></html>',
-            {headers:{'Content-Type':'text/html'}});
-        });
-      })
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.match(e.request).then(cached => {
+        // Fetch fresh copy in background to update cache
+        const fetchPromise = fetch(e.request).then(networkResp => {
+          if(networkResp && networkResp.status === 200){
+            cache.put(e.request, networkResp.clone());
+          }
+          return networkResp;
+        }).catch(() => null);
+
+        // Serve cached version immediately if we have it, otherwise wait for network
+        return cached || fetchPromise || new Response(
+          '<html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>Squad Manager</h2><p>Offline and not yet cached. Connect to internet and reload.</p></body></html>',
+          {headers:{'Content-Type':'text/html'}}
+        );
+      });
+    })
   );
 });
 
@@ -4665,44 +4782,57 @@ self.addEventListener('message', e => {
   try{
     const blob = new Blob([swCode], {type:'application/javascript'});
     const url = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(url).then(reg => {
-      // Check for updates whenever the page becomes visible
-      document.addEventListener('visibilitychange', () => {
-        if(document.visibilityState === 'visible') reg.update();
-      });
-      // If a new SW is waiting, notify the user
-      reg.addEventListener('updatefound', () => {
-        const newSW = reg.installing;
-        newSW.addEventListener('statechange', () => {
-          if(newSW.state === 'installed' && navigator.serviceWorker.controller){
-            showUpdateBanner();
-          }
-        });
-      });
-    }).catch(()=>{});
+    navigator.serviceWorker.register(url).catch(()=>{});
   }catch(_){}
 }
 
-function showUpdateBanner(){
-  // Show a non-intrusive banner: "Update available — tap to reload"
-  const existing = document.getElementById('sw-update-banner');
-  if(existing) return;
+// ── Version check against GitHub ──
+// Fetches version.txt from the hosting URL and compares to APP_VERSION.
+// Shows a banner if a newer version is available.
+const VERSION_URL = 'https://transitdork.github.io/squadmanager/version.txt';
+
+async function checkForUpdate(){
+  if(!navigator.onLine) return; // skip if offline
+  try{
+    const resp = await fetch(VERSION_URL + '?t=' + Date.now(), {cache:'no-store'});
+    if(!resp.ok) return;
+    const remote = (await resp.text()).trim();
+    if(remote && remote !== APP_VERSION){
+      showUpdateBanner(remote);
+    }
+  }catch(_){} // silently fail — no network, wrong URL, etc.
+}
+
+function showUpdateBanner(remoteVersion){
+  if(document.getElementById('sw-update-banner')) return;
   const banner = document.createElement('div');
   banner.id = 'sw-update-banner';
-  banner.style.cssText = 'position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+8px);left:12px;right:12px;background:#1a1e2a;border:1.5px solid #f08c00;border-radius:12px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.5);';
-  banner.innerHTML = '<span style="font-size:13px;color:#eef0f8;">🆕 New version available</span>' +
-    '<button onclick="applyUpdate()" style="background:#f08c00;color:#111;border:none;border-radius:8px;padding:7px 14px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">UPDATE NOW</button>';
+  banner.style.cssText = [
+    'position:fixed',
+    'bottom:calc(env(safe-area-inset-bottom,0px) + 10px)',
+    'left:12px','right:12px',
+    'background:#1a1e2a',
+    'border:1.5px solid #f08c00',
+    'border-radius:14px',
+    'padding:12px 14px',
+    'display:flex','align-items:center','justify-content:space-between','gap:10px',
+    'z-index:9999',
+    'box-shadow:0 4px 24px rgba(0,0,0,.6)',
+  ].join(';');
+  banner.innerHTML =
+    '<div>' +
+      '<div style="font-size:13px;font-weight:700;color:#eef0f8;margin-bottom:2px;">🆕 Update available</div>' +
+      '<div style="font-size:10px;color:#7a80a0;">Running v' + APP_VERSION + ' · New: v' + (remoteVersion||'?') + '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;">' +
+      '<button onclick="location.reload(true)" style="background:#f08c00;color:#111;border:none;border-radius:9px;padding:9px 14px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">UPDATE</button>' +
+      '<button onclick="this.parentElement.parentElement.remove()" style="background:none;border:1.5px solid #2e3350;color:#7a80a0;border-radius:9px;padding:9px 12px;font-size:13px;cursor:pointer;">✕</button>' +
+    '</div>';
   document.body.appendChild(banner);
 }
 
 function applyUpdate(){
-  // Tell waiting SW to take over, then reload
-  if(navigator.serviceWorker && navigator.serviceWorker.controller){
-    navigator.serviceWorker.controller.postMessage('skipWaiting');
-  }
-  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
-  // Fallback: hard reload after 1s if controllerchange doesn't fire
-  setTimeout(() => location.reload(true), 1000);
+  location.reload(true);
 }
 
 // ═══════════════════════════════════════════
@@ -4779,8 +4909,15 @@ loadRatings();
 loadState();
 startWatchdog(); // start before render so it can detect failures
 render();
+checkCrashSnapshot(); // offer to restore mid-game crash after render
 maybeShowBanner();
 registerSW();
+// Check for updates 3 seconds after startup (gives UI time to render first)
+setTimeout(checkForUpdate, 3000);
+// Also check when app becomes visible again (e.g. switching back from another app)
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible') setTimeout(checkForUpdate, 1000);
+});
 </script>
 </body>
 </html>
