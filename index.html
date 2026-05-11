@@ -567,6 +567,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
+const APP_VERSION = '2026.05.11';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -2909,7 +2910,15 @@ async function generateAIRotation(){
     '',
     hasRatings ? ('PLAYER DATA:\\n'+playerSummary) : 'PLAYER DATA: No ratings — use equal time distribution.',
     '',
-    'Starting bench: '+(filtered.slice(COURT_SIZE).join(', ')||'none'),
+    'Starting 5 ON COURT: ' + filtered.slice(0,COURT_SIZE).join(', '),
+    'Starting on BENCH: '+(filtered.slice(COURT_SIZE).join(', ')||'none'),
+    '',
+    'IMPORTANT RULES FOR YOUR SUBS:',
+    '  - "off" must be players currently ON COURT at that moment',
+    '  - "on" must be players currently ON BENCH at that moment',
+    '  - off and on lists must ALWAYS be the same length to keep exactly 5 on court',
+    '  - Track court state carefully through every sub — do not sub off someone already on bench',
+    '  - expectedTimes must be calculated from your actual h1/h2 sub schedule, not estimated separately',
     'CRITICAL — use these EXACT player name strings: ' + filtered.join(', '),
   window._aiExtraPrompt && window._aiExtraPrompt.trim() ? ('COACH INSTRUCTION (apply to all plans): ' + window._aiExtraPrompt.trim()) : null,
   ].filter(l=>l!==null).join('\n');
@@ -2965,7 +2974,109 @@ async function generateAIRotation(){
     parsed.id = def.id;
     parsed.label = def.label;
 
-    // Accept the plan — don't reject even if subs are missing (show what we got)
+    // ── Validate and fix the plan ──
+    // Simulate the sub sequence and detect/fix logical errors
+    // (AI sometimes subs off players not on court, causing cascading errors)
+    const nameList = filtered; // original filtered order
+    const nIdx = {};
+    filtered.forEach((n,i)=>{ nIdx[n]=i; });
+
+    function validateAndFixHalf(subs, halfSecs, startCourt){
+      const court = new Set(startCourt);
+      const fixed = [];
+      for(const sub of (subs||[])){
+        const off = (sub.off||[]);
+        const on  = (sub.on||[]);
+        // Filter: only sub off players actually on court
+        const validOff = off.filter(name=>{
+          // find matching court player
+          let idx = nIdx[name];
+          if(idx===undefined){
+            // fuzzy: first word match
+            const lower = (name||'').toLowerCase();
+            for(const [n,i] of Object.entries(nIdx)){
+              if(n.toLowerCase().startsWith(lower)||lower.startsWith(n.toLowerCase().split(' ')[0])){idx=i;break;}
+            }
+          }
+          return idx!==undefined && court.has(idx);
+        });
+        const validOn = on.filter(name=>{
+          let idx = nIdx[name];
+          if(idx===undefined){
+            const lower = (name||'').toLowerCase();
+            for(const [n,i] of Object.entries(nIdx)){
+              if(n.toLowerCase().startsWith(lower)||lower.startsWith(n.toLowerCase().split(' ')[0])){idx=i;break;}
+            }
+          }
+          return idx!==undefined && !court.has(idx);
+        });
+        // Trim to match lengths
+        const count = Math.min(validOff.length, validOn.length);
+        if(count===0) continue; // skip invalid sub entirely
+        const finalOff = validOff.slice(0,count);
+        const finalOn  = validOn.slice(0,count);
+        // Apply to court
+        finalOff.forEach(name=>{ const i=nIdx[name]; if(i!==undefined) court.delete(i); });
+        finalOn.forEach(name=>{ const i=nIdx[name]; if(i!==undefined) court.add(i); });
+        fixed.push({...sub, off:finalOff, on:finalOn});
+      }
+      return {fixed, finalCourt:new Set(court)};
+    }
+
+    const h1StartCourt = filtered.slice(0,COURT_SIZE).map((_,i)=>i);
+    // If AI specified starting5, use those indices for validation
+    if(parsed.starting5 && parsed.starting5.length===COURT_SIZE){
+      // (validation uses original name list so just keep h1StartCourt as-is for now)
+    }
+    const h1Val = validateAndFixHalf(parsed.h1, S.h1Dur*60, h1StartCourt);
+    parsed.h1 = h1Val.fixed;
+
+    // H2 start: use AI's h2Starting5 if valid, else carry over from h1 final
+    let h2StartCourt;
+    if(parsed.h2Starting5 && parsed.h2Starting5.length===COURT_SIZE){
+      h2StartCourt = parsed.h2Starting5.map(name=>{
+        let idx=nIdx[name];
+        if(idx===undefined){
+          const lower=(name||'').toLowerCase();
+          for(const [n,i] of Object.entries(nIdx)){
+            if(n.toLowerCase().startsWith(lower)){idx=i;break;}
+          }
+        }
+        return idx;
+      }).filter(i=>i!==undefined);
+      if(h2StartCourt.length!==COURT_SIZE) h2StartCourt=[...h1Val.finalCourt];
+    } else {
+      h2StartCourt=[...h1Val.finalCourt];
+    }
+    const h2Val = validateAndFixHalf(parsed.h2, S.h2Dur*60, h2StartCourt);
+    parsed.h2 = h2Val.fixed;
+
+    // ── Recalculate expectedTimes from the validated subs ──
+    // This ensures the summary matches what will actually be loaded
+    const playSecs = new Array(filtered.length).fill(0);
+    function simHalf(validatedSubs, halfSecs, startIds){
+      const court = new Set(startIds);
+      let prev=0;
+      for(const sub of validatedSubs){
+        const t = (() => {
+          if(sub.atTime){ const pts=String(sub.atTime).split(':'); const s=parseInt(pts[0])*60+(parseInt(pts[1])||0); if(s>0&&s<halfSecs) return s; }
+          return prev + Math.floor(halfSecs/(validatedSubs.length+1));
+        })();
+        const stint=t-prev;
+        if(stint>0) court.forEach(id=>{ if(id<playSecs.length) playSecs[id]+=stint; });
+        sub.off.forEach(name=>{ const i=nIdx[name];if(i!==undefined)court.delete(i); });
+        sub.on.forEach(name=>{  const i=nIdx[name];if(i!==undefined)court.add(i); });
+        prev=t;
+      }
+      const finalStint=halfSecs-prev;
+      if(finalStint>0) court.forEach(id=>{ if(id<playSecs.length) playSecs[id]+=finalStint; });
+    }
+    simHalf(parsed.h1, S.h1Dur*60, h1StartCourt);
+    simHalf(parsed.h2, S.h2Dur*60, h2StartCourt);
+    const recalcTimes = {};
+    filtered.forEach((nm,i)=>{ const t=playSecs[i]; recalcTimes[nm]=Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); });
+    parsed.expectedTimes = recalcTimes; // replace AI's self-reported times with ground truth
+
     return parsed;
   }
 
@@ -4168,6 +4279,12 @@ function renderSettings(){
       <div class="color-grid">${colorRowsHTML}</div>
       <button class="settings-reset" onclick="Object.assign(CFG.colors,{...DEFAULTS.colors});applyTheme();saveSettings();renderSettings()">↺ Reset colours to default</button>
     </div>
+
+    <div class="s-sec" style="text-align:center;padding-bottom:16px;">
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px;">Squad Manager <span style="color:var(--accent);font-family:Impact,sans-serif;letter-spacing:1px;">v${APP_VERSION}</span></div>
+      <button onclick="applyUpdate();location.reload(true)" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:9px 18px;font-size:12px;cursor:pointer;" title="Force reload from server, clearing cache">⟳ Force Refresh / Check for Updates</button>
+      <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.5;">If the app feels stale, tap above to force-reload<br>the latest version from the server.</div>
+    </div>
   </div>
 </div>`;
 }
@@ -4489,30 +4606,167 @@ function maybeShowBanner(){
 }
 
 // ═══════════════════════════════════════════
-// SERVICE WORKER (works when served over http/https, skipped on file://)
+// SERVICE WORKER — Network-first with version-based cache busting
 // ═══════════════════════════════════════════
 function registerSW(){
   if(!('serviceWorker' in navigator)) return;
-  if(location.protocol === 'file:') return; // can't register on file://
+  if(location.protocol === 'file:') return;
+
+  // Network-first strategy: always try to fetch fresh, fall back to cache.
+  // When a new version is detected (CACHE name changes), old cache is deleted.
   const swCode = `
-const CACHE='squadmgr-v1';
-const FILES=['/'];
-self.addEventListener('install',e=>e.waitUntil(
-  caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())
-));
-self.addEventListener('activate',e=>e.waitUntil(
-  caches.keys().then(keys=>Promise.all(
-    keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))
-  )).then(()=>self.clients.claim())
-));
-self.addEventListener('fetch',e=>e.respondWith(
-  caches.match(e.request).then(r=>r||fetch(e.request))
-));`;
+const CACHE_NAME = 'squadmgr-${version}';
+
+// Install: open new versioned cache (don't pre-cache — let fetch handler fill it)
+self.addEventListener('install', e => {
+  self.skipWaiting(); // activate immediately without waiting for old SW to die
+});
+
+// Activate: delete ALL old caches from previous versions
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys => Promise.all(
+      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+    )).then(() => self.clients.claim()) // take control of all open tabs immediately
+  );
+});
+
+// Fetch: network-first. If network succeeds → cache it + serve it.
+//         If network fails → serve from cache. If no cache → show offline page.
+self.addEventListener('fetch', e => {
+  if(e.request.method !== 'GET') return;
+  e.respondWith(
+    fetch(e.request)
+      .then(networkResp => {
+        // Fresh from network — update cache
+        if(networkResp && networkResp.status === 200){
+          const toCache = networkResp.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, toCache));
+        }
+        return networkResp;
+      })
+      .catch(() => {
+        // Network failed — try cache
+        return caches.match(e.request).then(cached => {
+          if(cached) return cached;
+          // Nothing in cache — return a minimal offline notice
+          return new Response('<html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>Squad Manager</h2><p>You are offline and this page has not been cached yet.<br>Please connect to the internet and reload.</p></body></html>',
+            {headers:{'Content-Type':'text/html'}});
+        });
+      })
+  );
+});
+
+// Listen for skip-waiting message from the page (used when user taps "Update now")
+self.addEventListener('message', e => {
+  if(e.data === 'skipWaiting') self.skipWaiting();
+});
+`;
   try{
-    const blob=new Blob([swCode],{type:'application/javascript'});
-    const url=URL.createObjectURL(blob);
-    navigator.serviceWorker.register(url).catch(()=>{});
+    const blob = new Blob([swCode], {type:'application/javascript'});
+    const url = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(url).then(reg => {
+      // Check for updates whenever the page becomes visible
+      document.addEventListener('visibilitychange', () => {
+        if(document.visibilityState === 'visible') reg.update();
+      });
+      // If a new SW is waiting, notify the user
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        newSW.addEventListener('statechange', () => {
+          if(newSW.state === 'installed' && navigator.serviceWorker.controller){
+            showUpdateBanner();
+          }
+        });
+      });
+    }).catch(()=>{});
   }catch(_){}
+}
+
+function showUpdateBanner(){
+  // Show a non-intrusive banner: "Update available — tap to reload"
+  const existing = document.getElementById('sw-update-banner');
+  if(existing) return;
+  const banner = document.createElement('div');
+  banner.id = 'sw-update-banner';
+  banner.style.cssText = 'position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+8px);left:12px;right:12px;background:#1a1e2a;border:1.5px solid #f08c00;border-radius:12px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.5);';
+  banner.innerHTML = '<span style="font-size:13px;color:#eef0f8;">🆕 New version available</span>' +
+    '<button onclick="applyUpdate()" style="background:#f08c00;color:#111;border:none;border-radius:8px;padding:7px 14px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">UPDATE NOW</button>';
+  document.body.appendChild(banner);
+}
+
+function applyUpdate(){
+  // Tell waiting SW to take over, then reload
+  if(navigator.serviceWorker && navigator.serviceWorker.controller){
+    navigator.serviceWorker.controller.postMessage('skipWaiting');
+  }
+  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+  // Fallback: hard reload after 1s if controllerchange doesn't fire
+  setTimeout(() => location.reload(true), 1000);
+}
+
+// ═══════════════════════════════════════════
+// WHITE SCREEN WATCHDOG
+// ═══════════════════════════════════════════
+// If the app hasn't rendered visible content within 4 seconds, show recovery UI
+function startWatchdog(){
+  const TIMEOUT = 4000;
+  const timer = setTimeout(() => {
+    const app = document.getElementById('app');
+    const hasContent = app && app.innerHTML.trim().length > 50;
+    if(!hasContent) showRecoveryScreen();
+  }, TIMEOUT);
+  // Cancel watchdog once app renders successfully
+  const obs = new MutationObserver((muts) => {
+    const app = document.getElementById('app');
+    if(app && app.innerHTML.trim().length > 50){
+      clearTimeout(timer);
+      obs.disconnect();
+    }
+  });
+  obs.observe(document.getElementById('app') || document.body, {childList:true, subtree:true});
+}
+
+function showRecoveryScreen(){
+  document.body.style.background = '#0f1117';
+  document.getElementById('app').innerHTML = `
+    <div style="min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;font-family:-apple-system,sans-serif;">
+      <div style="font-size:48px;margin-bottom:16px;">🏀</div>
+      <div style="font-family:Impact,sans-serif;font-size:28px;letter-spacing:3px;color:#f08c00;margin-bottom:8px;">SQUAD MANAGER</div>
+      <div style="font-size:14px;color:#7a80a0;margin-bottom:32px;">Something went wrong on startup</div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px;">
+        <button onclick="recoverClearState()" style="background:#f08c00;color:#111;border:none;border-radius:12px;padding:16px;font-family:Impact,sans-serif;font-size:18px;letter-spacing:1px;cursor:pointer;">
+          ↺ RESET GAME STATE
+        </button>
+        <div style="font-size:11px;color:#7a80a0;margin:-4px 0 8px;">Clears current game only. Keeps your teams, ratings and saved plans.</div>
+
+        <button onclick="recoverClearAll()" style="background:rgba(255,85,85,.15);color:#ff5555;border:1.5px solid rgba(255,85,85,.3);border-radius:12px;padding:14px;font-family:Impact,sans-serif;font-size:16px;letter-spacing:1px;cursor:pointer;">
+          ⟳ FULL RESET
+        </button>
+        <div style="font-size:11px;color:#7a80a0;margin:-4px 0 8px;">Clears everything including teams. Use only if Reset Game State didn't work.</div>
+
+        <button onclick="location.reload(true)" style="background:none;color:#4a9eff;border:1.5px solid rgba(74,158,255,.3);border-radius:12px;padding:14px;font-size:14px;cursor:pointer;">
+          ⟳ Reload without resetting
+        </button>
+      </div>
+
+      <div style="margin-top:32px;font-size:10px;color:#4a4e5a;">v${APP_VERSION}</div>
+    </div>`;
+}
+
+function recoverClearState(){
+  // Clear only game/setup state, keep teams, ratings, settings, plans
+  try{
+    localStorage.removeItem('squadmgr_v1');
+  }catch(_){}
+  location.reload(true);
+}
+
+function recoverClearAll(){
+  if(!confirm('This will delete ALL data including teams and ratings. Are you sure?')) return;
+  try{ localStorage.clear(); }catch(_){}
+  location.reload(true);
 }
 
 // ═══════════════════════════════════════════
@@ -4523,6 +4777,7 @@ loadTeams();
 loadPlans();
 loadRatings();
 loadState();
+startWatchdog(); // start before render so it can detect failures
 render();
 maybeShowBanner();
 registerSW();
