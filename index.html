@@ -2008,6 +2008,54 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
 </div>`;
 }
 
+function postSubPositionBoard(stayOn, nextOff, nextOn){
+  // Show what positions the court will look like after the sub is made
+  // stayOn = players staying, nextOn = players coming on
+  const newCourt = [...stayOn, ...nextOn];
+  if(!newCourt.length) return '';
+
+  // Find any missing positions
+  const coveredAfter = new Set();
+  newCourt.forEach(p=>{ const pos=getGamePos(p.id); if(pos) coveredAfter.add(pos); });
+  const missing = ['1','2','3','4','5'].filter(n=>!coveredAfter.has(n));
+  const anyRatings = newCourt.some(p=>allPositionsForPlayer(p.id).length>0);
+
+  const tiles = newCourt.map(p=>{
+    const pos = getGamePos(p.id);
+    const allPos = allPositionsForPlayer(p.id);
+    const isComingOn = nextOn.some(q=>q.id===p.id);
+    const posClass = pos ? 'pos-'+pos : '';
+    const borderStyle = isComingOn ? 'border-width:2.5px;' : '';
+    const label = isComingOn ? '▲ '+p.name.split(' ')[0] : p.name.split(' ')[0];
+
+    if(allPos.length){
+      return `<button onclick="event.stopPropagation();openPosPicker(${p.id},'court')"
+        style="flex:1;min-width:0;border-radius:9px;padding:8px 4px;border:2px solid;cursor:pointer;${borderStyle}background:${isComingOn?'rgba(0,207,180,.12)':'rgba(255,255,255,.05)'};"
+        class="${posClass}">
+        <div style="font-family:Impact,sans-serif;font-size:${pos?'22px':'14px'};line-height:1;">${pos||'?'}</div>
+        <div style="font-size:9px;margin-top:3px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${label}</div>
+      </button>`;
+    } else {
+      return `<div style="flex:1;min-width:0;border-radius:9px;padding:8px 4px;border:1.5px solid var(--border);background:rgba(255,255,255,.03);text-align:center;">
+        <div style="font-size:14px;color:var(--dim);">—</div>
+        <div style="font-size:9px;margin-top:3px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+      </div>`;
+    }
+  }).join('');
+
+  const missingNote = anyRatings && missing.length
+    ? `<div style="font-size:11px;color:var(--red);margin-top:6px;text-align:center;">Missing position${missing.length>1?'s':''}: <strong>${missing.join(' · ')}</strong></div>`
+    : anyRatings
+    ? `<div style="font-size:11px;color:var(--green);margin-top:6px;text-align:center;">✓ All positions covered</div>`
+    : '';
+
+  return `<div onclick="event.stopPropagation()" style="padding:8px 10px 6px;border-top:1px solid rgba(255,255,255,.08);flex-shrink:0;background:rgba(0,0,0,.3);">
+    <div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:6px;">COURT AFTER SUB — tap position to change</div>
+    <div style="display:flex;gap:5px;">${tiles}</div>
+    ${missingNote}
+  </div>`;
+}
+
 function pauseOverlayHTML(){
   const cp=courtPlayers();
   const bp=benchPlayers();
@@ -2029,6 +2077,10 @@ function pauseOverlayHTML(){
   const nextOff=cp.filter(p=>nextOffIds.has(p.id));
   const nextOn=bp.filter(p=>nextOnIds.has(p.id));
   const otherBench=bp.filter(p=>!nextOnIds.has(p.id));
+
+  // Show position board when there's a sub happening
+  const showPosBoard = gameStarted && (nextOff.length>0||nextOn.length>0);
+  const posBoard = showPosBoard ? postSubPositionBoard(stayOn, nextOff, nextOn) : '';
 
   const offColor=isFinalHL?'var(--gold)':'rgba(255,140,0,.85)';
   const onColor=isFinalHL?'var(--gold)':'rgba(0,207,180,.85)';
@@ -2052,7 +2104,6 @@ function pauseOverlayHTML(){
   let leftHTML='', rightHTML='';
 
   if(gameStarted){
-    // Left: staying on + sub off
     if(stayOn.length){
       leftHTML+=`<div class="po-chdr court">STAYING ON</div>`;
       stayOn.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)'); });
@@ -2064,7 +2115,6 @@ function pauseOverlayHTML(){
     }
     if(!cp.length) leftHTML+=`<div style="text-align:center;color:var(--dim);font-size:11px;padding:10px">Empty court</div>`;
 
-    // Right: sub on + rest of bench
     if(nextOn.length){
       const lbl=isFinalHL?'★ FINAL ON':isPlanned?'PLANNED ON':'SUB ON';
       rightHTML+=`<div class="po-chdr" style="background:${onBg};border:1px solid ${onBorder};color:${onColor};border-radius:5px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:3px;margin-bottom:2px;">${lbl}</div>`;
@@ -2099,10 +2149,11 @@ function pauseOverlayHTML(){
   return `
 <div id="pause-ovl" class="povl" style="display:${S.isRunning?'none':'flex'}" onclick="resumeFromOverlay()">
   <div class="po-top">${topHTML}</div>
-  <div class="po-roster">
+  <div class="po-roster" style="flex:1;min-height:0;">
     <div class="po-col" style="border-right:1px solid rgba(255,255,255,.08)">${leftHTML}</div>
     <div class="po-col">${rightHTML}</div>
   </div>
+  ${posBoard}
 </div>`;
 }
 
