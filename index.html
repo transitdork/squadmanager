@@ -1367,13 +1367,13 @@ function getGamePos(pid){
 // Set active game position
 function setGamePos(pid, pos){
   S.gamePositions[pid] = pos;
+  if(!S.manualPositions) S.manualPositions = {};
+  S.manualPositions[pid] = true;  // mark as manually set
   // Update just the position badge in the DOM without full re-render
   const badge = document.getElementById('pos-badge-'+pid);
   if(badge){
-    badge.textContent = pos;
     badge.className = 'pos-badge ' + (POS_COLOURS[+pos]||'');
-    badge.style.fontSize = '9px';
-    badge.style.padding  = '2px 6px';
+    badge.innerHTML = posBadgeContent(pid, pos);
   }
   updateCoverageRow();
 }
@@ -1390,17 +1390,7 @@ function courtCoverage(){
 }
 
 // Update coverage row in header without full re-render
-function updateCoverageRow(){
-  const row = document.getElementById('pos-coverage-row');
-  if(!row) return;
-  const covered = courtCoverage();
-  [1,2,3,4,5].forEach(n=>{
-    const pip = row.querySelector('[data-pos="'+n+'"]');
-    if(!pip) return;
-    if(covered[n]){ pip.className='pos-pip filled-'+n; pip.textContent=n; }
-    else { pip.className='pos-pip empty'; pip.textContent=n; }
-  });
-}
+
 
 // Open position picker for a player
 function openPosPicker(pid, role){
@@ -1448,50 +1438,176 @@ function openPosPicker(pid, role){
   document.body.appendChild(modal);
 }
 
-// Coverage row HTML
+// Who on court can fill a missing position?
+function whoCanFillGap(posStr){
+  if(!S.players) return null;
+  const onCourt = S.players.filter(p=>p.onCourt);
+  const fillers = onCourt.filter(p=>{
+    const pos = getGamePos(p.id);
+    if(pos === posStr) return false; // already assigned there
+    const allPos = allPositionsForPlayer(p.id);
+    return allPos.includes(posStr);
+  });
+  return fillers.length ? fillers[0] : null; // return best candidate
+}
+
+// Coverage row HTML — gaps show who could move there
 function coverageRowHTML(){
   const covered = courtCoverage();
   const pips = [1,2,3,4,5].map(n=>{
-    const cls = covered[n] ? 'filled-'+n : 'empty';
-    return `<div class="pos-pip ${cls}" data-pos="${n}">${n}</div>`;
+    const ns = String(n);
+    if(covered[ns]){
+      return `<div class="pos-pip filled-${n}" data-pos="${n}">${n}</div>`;
+    }
+    // Gap — find who on court can fill it
+    const filler = whoCanFillGap(ns);
+    const hint = filler ? '<span style="font-size:7px;display:block;line-height:1;margin-top:1px;color:inherit;opacity:.8;">'+(S.names[filler.id]||'').split(' ')[0].slice(0,4)+'→</span>' : '';
+    const clickFn = filler ? 'event.stopPropagation();openPosPicker('+filler.id+',\'court\')' : 'event.stopPropagation()';
+    return '<div class="pos-pip empty" data-pos="'+n+'" style="width:'+(filler?'40px':'28px')+';height:'+(filler?'40px':'28px')+';cursor:'+(filler?'pointer':'default')+';" onclick="'+clickFn+'">'+n+hint+'</div>';
   }).join('');
   return `<div class="pos-coverage" id="pos-coverage-row">${pips}</div>`;
 }
 
+function updateCoverageRow(){
+  const row = document.getElementById('pos-coverage-row');
+  if(!row) return;
+  const covered = courtCoverage();
+  let html = '';
+  [1,2,3,4,5].forEach(function(n){
+    const ns = String(n);
+    if(covered[ns]){
+      html += '<div class="pos-pip filled-'+n+'" data-pos="'+n+'">'+n+'</div>';
+    } else {
+      const filler = whoCanFillGap(ns);
+      const name4 = filler ? (S.names[filler.id]||'').split(' ')[0].slice(0,4) : '';
+      const hint = filler ? '<span style="font-size:7px;display:block;line-height:1;margin-top:1px;opacity:.8;">'+name4+'→</span>' : '';
+      const w = filler ? '40px' : '28px';
+      const cursor = filler ? 'pointer' : 'default';
+      const onclick = filler ? 'event.stopPropagation();openPosPicker('+filler.id+',\'court\')' : 'event.stopPropagation()';
+      html += '<div class="pos-pip empty" data-pos="'+n+'" style="width:'+w+';height:'+w+';cursor:'+cursor+';" onclick="'+onclick+'">'+n+hint+'</div>';
+    }
+  });
+  row.innerHTML = html;
+}
+
 // Build position badge HTML for a card (tappable)
 function posBadgeForCard(pid, role, isPlannedOn){
-  const pos = getGamePos(pid);
-  const allPos = allPositionsForPlayer(pid);
-  if(!allPos.length) return '';  // no ratings set
+  var pos = getGamePos(pid);
+  var allPos = allPositionsForPlayer(pid);
+  if(!allPos.length) return '';
 
   if(role === 'court'){
-    const cls = pos ? (POS_COLOURS[+pos]||'') : 'pos-2';
-    const label = pos || '?';
-    return `<span id="pos-badge-${pid}" class="pos-badge ${cls}"
-      style="font-size:9px;padding:2px 6px;margin-left:4px;"
-      onclick="openPosPicker(${pid},'${role}')">${label}</span>`;
-  }
-
-  if(role === 'bench' && isPlannedOn){
-    // Show recommended positions for sub coming on
-    const covered = courtCoverage();
-    const gaps = [1,2,3,4,5].filter(n=>!covered[n]).map(String);
-    const fills = allPos.filter(p=>gaps.includes(p));
-    if(fills.length){
-      return fills.map(p=>{
-        const cls = POS_COLOURS[+p]||'';
-        return `<span class="pos-badge ${cls}" style="font-size:9px;padding:2px 5px;margin-left:2px;" title="fills gap at ${POS_NAMES[+p]||p}">${p}↑</span>`;
-      }).join('');
+    var cls = pos ? (POS_COLOURS[+pos]||'') : '';
+    var covered = courtCoverage();
+    var gaps = ['1','2','3','4','5'].filter(function(n){ return !covered[n]; });
+    var canFill = gaps.filter(function(g){ return allPos.includes(g) && g!==pos; });
+    var recBadge = '';
+    if(canFill.length){
+      var rc = canFill[0];
+      recBadge = ' <span class="pos-badge '+(POS_COLOURS[+rc]||'')+'" style="font-size:8px;padding:1px 4px;margin-left:1px;opacity:.8;cursor:pointer;" onclick="event.stopPropagation();setGamePos('+pid+',\''+rc+'\');renderGame();">→'+rc+'</span>';
     }
-    // No gaps to fill — show primary in dim
-    return pos ? `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:2px 5px;margin-left:2px;opacity:.6;">${pos}</span>` : '';
+    return '<span id="pos-badge-'+pid+'" class="pos-badge '+cls+'" style="font-size:10px;padding:2px 7px;margin-left:3px;cursor:pointer;" onclick="openPosPicker('+pid+',\'court\')">'+(pos||'?')+'</span>'+recBadge;
   }
 
-  if(role === 'bench' && pos){
-    return `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:2px 5px;margin-left:2px;opacity:.5;">${pos}</span>`;
+  if(role === 'bench'){
+    var covered2 = courtCoverage();
+    var gaps2 = ['1','2','3','4','5'].filter(function(n){ return !covered2[n]; });
+    return allPos.map(function(p){
+      var isGap = gaps2.includes(p);
+      var cls2 = POS_COLOURS[+p]||'';
+      return '<span class="pos-badge '+cls2+'" style="font-size:'+(isGap?'11':'9')+'px;padding:'+(isGap?'2px 6px':'1px 4px')+';margin-left:2px;'+(isGap?'':'opacity:.45;')+'">'+p+(isGap?'↑':'')+'</span>';
+    }).join('');
   }
 
   return '';
+}
+
+// ── Optimal Position Assignment ──
+// Greedy bipartite matching: given a list of playerIds, assign positions 1-5
+// such that as many positions as possible are covered, preferring primary over alts.
+function computeOptimalPositions(playerIds){
+  const assignment = {};  // pid → assigned position string
+  const taken = {};       // position → pid
+
+  // Build preference lists: primary first, then alts
+  const prefs = {};
+  playerIds.forEach(pid=>{
+    const all = allPositionsForPlayer(pid);
+    const primary = posLabelForPlayer(pid);
+    const alts = all.filter(p=>p!==primary);
+    prefs[pid] = primary ? [primary, ...alts] : alts;
+  });
+
+  // Pass 1: assign primary positions (no conflicts)
+  playerIds.forEach(pid=>{
+    const primary = prefs[pid][0];
+    if(primary && !taken[primary]){
+      assignment[pid] = primary;
+      taken[primary] = pid;
+    }
+  });
+
+  // Pass 2: assign players who didn't get their primary
+  // try each of their alts, displacing lower-priority assignments if needed
+  playerIds.forEach(pid=>{
+    if(assignment[pid]) return;
+    const myPrefs = prefs[pid];
+    for(const pos of myPrefs){
+      if(!taken[pos]){
+        assignment[pid] = pos;
+        taken[pos] = pid;
+        break;
+      }
+    }
+  });
+
+  // Pass 3: players still unassigned — try displacing someone whose primary is available elsewhere
+  playerIds.forEach(pid=>{
+    if(assignment[pid]) return;
+    const myPrefs = prefs[pid];
+    for(const pos of myPrefs){
+      const incumbent = taken[pos];
+      if(!incumbent) continue;
+      // Can the incumbent move to another position?
+      const incumbentPrefs = prefs[incumbent].filter(p=>p!==pos && !taken[p]);
+      if(incumbentPrefs.length > 0){
+        // Move incumbent
+        delete assignment[incumbent];
+        taken[incumbentPrefs[0]] = incumbent;
+        assignment[incumbent] = incumbentPrefs[0];
+        // Give pos to pid
+        assignment[pid] = pos;
+        taken[pos] = pid;
+        break;
+      }
+    }
+  });
+
+  return assignment;  // pid → position, may not cover all 5 if not enough range
+}
+
+// Apply optimal position assignment to S.gamePositions for current court players
+function recomputeCourtPositions(){
+  const courtIds = S.players.filter(p=>p.onCourt).map(p=>p.id);
+  if(!courtIds.length) return;
+  const optimal = computeOptimalPositions(courtIds);
+  // Merge into gamePositions — only override if player hasn't been manually set
+  // We track manual overrides separately
+  if(!S.manualPositions) S.manualPositions = {};
+  courtIds.forEach(pid=>{
+    if(!S.manualPositions[pid]){
+      if(optimal[pid]) S.gamePositions[pid] = optimal[pid];
+    }
+  });
+}
+
+// Get recommended position for a player (optimal assignment, may differ from current)
+// Returns null if no recommendation (no ratings)
+function getRecommendedPos(pid, courtPlayerIds){
+  const all = allPositionsForPlayer(pid);
+  if(!all.length) return null;
+  const optimal = computeOptimalPositions(courtPlayerIds);
+  return optimal[pid] || null;
 }
 
 function posLabelForPlayer(pid){
@@ -1705,12 +1821,13 @@ function buildSubPlanHTML(){
 function startGame(){
   unlockAudio();
   const filtered=S.names.filter(n=>n.trim());
-  // Initialise game positions from each player's rated primary position
+  // Initialise game positions and manual overrides
   S.gamePositions = {};
-  filtered.forEach((name, i) => {
-    const pos = posLabelForName(name);
-    if(pos) S.gamePositions[i] = pos;
-  });
+  S.manualPositions = {};
+  // Assign optimal positions to starting 5
+  const startIds = filtered.slice(0, COURT_SIZE).map((_, i) => i);
+  const optimal = computeOptimalPositions(startIds);
+  startIds.forEach(pid => { if(optimal[pid]) S.gamePositions[pid] = optimal[pid]; });
   S.players=filtered.map((name,i)=>({
     id:i, name, onCourt:i<COURT_SIZE,
     playTime:0, h1PlayTime:0, h2PlayTime:0,
@@ -1844,6 +1961,8 @@ function commitSub(){
   }
 
   vibrate([80,40,80]);
+  // Recompute optimal positions for new court lineup
+  recomputeCourtPositions();
   renderGame();
 }
 
@@ -2009,49 +2128,42 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
 }
 
 function postSubPositionBoard(stayOn, nextOff, nextOn){
-  // Show what positions the court will look like after the sub is made
-  // stayOn = players staying, nextOn = players coming on
   const newCourt = [...stayOn, ...nextOn];
   if(!newCourt.length) return '';
 
-  // Find any missing positions
-  const coveredAfter = new Set();
-  newCourt.forEach(p=>{ const pos=getGamePos(p.id); if(pos) coveredAfter.add(pos); });
-  const missing = ['1','2','3','4','5'].filter(n=>!coveredAfter.has(n));
+  const newCourtIds = newCourt.map(p=>p.id);
+  // Compute optimal positions for the new lineup
+  const optimal = computeOptimalPositions(newCourtIds);
+  const covered = new Set(Object.values(optimal));
+  const missing = ['1','2','3','4','5'].filter(n=>!covered.has(n));
   const anyRatings = newCourt.some(p=>allPositionsForPlayer(p.id).length>0);
 
   const tiles = newCourt.map(p=>{
-    const pos = getGamePos(p.id);
-    const allPos = allPositionsForPlayer(p.id);
+    const currentPos = getGamePos(p.id);
+    const recommendedPos = optimal[p.id];
+    const displayPos = recommendedPos || currentPos;
+    const posClass = displayPos ? 'pos-'+displayPos : '';
     const isComingOn = nextOn.some(q=>q.id===p.id);
-    const posClass = pos ? 'pos-'+pos : '';
-    const borderStyle = isComingOn ? 'border-width:2.5px;' : '';
-    const label = isComingOn ? '▲ '+p.name.split(' ')[0] : p.name.split(' ')[0];
+    const showChange = recommendedPos && currentPos && recommendedPos !== currentPos;
 
-    if(allPos.length){
-      return `<button onclick="event.stopPropagation();openPosPicker(${p.id},'court')"
-        style="flex:1;min-width:0;border-radius:9px;padding:8px 4px;border:2px solid;cursor:pointer;${borderStyle}background:${isComingOn?'rgba(0,207,180,.12)':'rgba(255,255,255,.05)'};"
-        class="${posClass}">
-        <div style="font-family:Impact,sans-serif;font-size:${pos?'22px':'14px'};line-height:1;">${pos||'?'}</div>
-        <div style="font-size:9px;margin-top:3px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${label}</div>
-      </button>`;
-    } else {
-      return `<div style="flex:1;min-width:0;border-radius:9px;padding:8px 4px;border:1.5px solid var(--border);background:rgba(255,255,255,.03);text-align:center;">
-        <div style="font-size:14px;color:var(--dim);">—</div>
-        <div style="font-size:9px;margin-top:3px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
-      </div>`;
-    }
+    return `<button onclick="event.stopPropagation();openPosPicker(${p.id},'court')"
+      style="flex:1;min-width:0;border-radius:10px;padding:10px 4px 8px;border:2px solid;cursor:pointer;background:${isComingOn?'rgba(0,207,180,.12)':'rgba(255,255,255,.05)'};"
+      class="${posClass}">
+      <div style="font-family:Impact,sans-serif;font-size:26px;line-height:1;">${displayPos||'—'}</div>
+      ${showChange?`<div style="font-size:8px;opacity:.6;line-height:1.2;">was ${currentPos}</div>`:''}
+      <div style="font-size:9px;margin-top:4px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${isComingOn?'▲ ':''}${p.name.split(' ')[0]}</div>
+    </button>`;
   }).join('');
 
   const missingNote = anyRatings && missing.length
-    ? `<div style="font-size:11px;color:var(--red);margin-top:6px;text-align:center;">Missing position${missing.length>1?'s':''}: <strong>${missing.join(' · ')}</strong></div>`
+    ? `<div style="font-size:12px;color:var(--red);margin-top:7px;text-align:center;font-weight:700;">⚠ No ${missing.join(' or ')} on court after this sub</div>`
     : anyRatings
     ? `<div style="font-size:11px;color:var(--green);margin-top:6px;text-align:center;">✓ All positions covered</div>`
     : '';
 
-  return `<div onclick="event.stopPropagation()" style="padding:8px 10px 6px;border-top:1px solid rgba(255,255,255,.08);flex-shrink:0;background:rgba(0,0,0,.3);">
-    <div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:6px;">COURT AFTER SUB — tap position to change</div>
-    <div style="display:flex;gap:5px;">${tiles}</div>
+  return `<div onclick="event.stopPropagation()" style="padding:10px 12px 8px;border-top:1px solid rgba(255,255,255,.1);flex-shrink:0;background:rgba(0,0,0,.35);">
+    <div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">COURT AFTER SUB — tap number to reassign</div>
+    <div style="display:flex;gap:6px;">${tiles}</div>
     ${missingNote}
   </div>`;
 }
@@ -2089,36 +2201,56 @@ function pauseOverlayHTML(){
   const offBorder=isFinalHL?'rgba(250,204,21,.4)':'rgba(255,140,0,.4)';
   const onBorder=isFinalHL?'rgba(250,204,21,.4)':'rgba(0,207,180,.4)';
 
-  const pillLarge=(name, time, timeColor, bg, border)=>
-    `<div style="border-radius:9px;padding:7px 11px;border:1.5px solid ${border};background:${bg};display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
-      <span style="font-weight:700;font-size:15px;color:#eef0f8;">${name}</span>
-      <span style="font-family:Impact,sans-serif;font-size:14px;color:${timeColor}">${time}</span>
-    </div>`;
+  const pillLarge=(name, time, timeColor, bg, border, pid, isComingOn)=>{
+    const allPos = (pid!==undefined) ? allPositionsForPlayer(pid) : [];
+    const covered = courtCoverage();
+    const gaps = ['1','2','3','4','5'].filter(n=>!covered[n]);
+    let posBit = '';
+    if(allPos.length){
+      if(isComingOn){
+        // For coming-on: show positions that fill gaps prominently
+        posBit = allPos.map(function(p){
+          const isGap=gaps.includes(p);
+          return '<span class="pos-badge '+(POS_COLOURS[+p]||'')+'" style="font-size:'+(isGap?'13':'10')+'px;padding:'+(isGap?'2px 7px':'1px 5px')+';margin-left:3px;'+(isGap?'':'opacity:.5;')+'">'+p+(isGap?'↑':'')+'</span>';
+        }).join('');
+      } else {
+        const pos = getGamePos(pid);
+        if(pos) posBit='<span class="pos-badge '+(POS_COLOURS[+pos]||'')+'" style="font-size:12px;padding:2px 7px;margin-left:4px;">'+pos+'</span>';
+      }
+    }
+    return '<div style="border-radius:9px;padding:7px 11px;border:1.5px solid '+border+';background:'+bg+';display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">'+
+      '<span style="display:flex;align-items:center;font-weight:700;font-size:15px;color:#eef0f8;">'+name+posBit+'</span>'+
+      '<span style="font-family:Impact,sans-serif;font-size:14px;color:'+timeColor+'">'+time+'</span>'+
+      '</div>';
+  };
 
-  const pillSmall=(name, time, timeColor)=>
-    `<div style="border-radius:7px;padding:5px 9px;border:1px solid var(--border);background:rgba(30,34,50,.65);display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px;">
-      <span style="font-weight:600;font-size:12px;color:#eef0f8;">${name}</span>
-      <span style="font-family:Impact,sans-serif;font-size:11px;color:${timeColor}">${time}</span>
-    </div>`;
+  const pillSmall=(name, time, timeColor, pid)=>{
+    const pos = (pid!==undefined) ? getGamePos(pid) : null;
+    var posBit = pos ? '<span class="pos-badge '+(POS_COLOURS[+pos]||'')+'" style="font-size:10px;padding:2px 6px;margin-left:4px;cursor:pointer;" onclick="event.stopPropagation();openPosPicker('+pid+',\'court\')">'+pos+'</span>' : '';
+    return '<div style="border-radius:7px;padding:5px 9px;border:1px solid var(--border);background:rgba(30,34,50,.65);display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px;">'+
+      '<span style="display:flex;align-items:center;font-weight:600;font-size:12px;color:#eef0f8;">'+name+posBit+'</span>'+
+      '<span style="font-family:Impact,sans-serif;font-size:11px;color:'+timeColor+'">'+time+'</span>'+
+      '</div>';
+  };
 
   let leftHTML='', rightHTML='';
 
   if(gameStarted){
     if(stayOn.length){
       leftHTML+=`<div class="po-chdr court">STAYING ON</div>`;
-      stayOn.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)'); });
+      stayOn.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)', p.id); });
     }
     if(nextOff.length){
       const lbl=isFinalHL?'★ FINAL OFF':isPlanned?'PLANNED OFF':'SUB OFF';
       leftHTML+=`<div class="po-chdr sub-out" style="margin-top:${stayOn.length?7:0}px;background:${offBg};border:1px solid ${offBorder};color:${offColor};">${lbl}</div>`;
-      nextOff.forEach(p=>{ leftHTML+=pillLarge(p.name, fmt(p.playTime), offColor, offBg, offBorder); });
+      nextOff.forEach(p=>{ leftHTML+=pillLarge(p.name, fmt(p.playTime), offColor, offBg, offBorder, p.id, false); });
     }
     if(!cp.length) leftHTML+=`<div style="text-align:center;color:var(--dim);font-size:11px;padding:10px">Empty court</div>`;
 
     if(nextOn.length){
       const lbl=isFinalHL?'★ FINAL ON':isPlanned?'PLANNED ON':'SUB ON';
       rightHTML+=`<div class="po-chdr" style="background:${onBg};border:1px solid ${onBorder};color:${onColor};border-radius:5px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:3px;margin-bottom:2px;">${lbl}</div>`;
-      nextOn.forEach(p=>{ rightHTML+=pillLarge(p.name, fmt(p.benchTime), onColor, onBg, onBorder); });
+      nextOn.forEach(p=>{ rightHTML+=pillLarge(p.name, fmt(p.benchTime), onColor, onBg, onBorder, p.id, true); });
     }
     if(otherBench.length){
       rightHTML+=`<div class="po-chdr bench" style="margin-top:${nextOn.length?7:0}px">BENCH</div>`;
@@ -2127,7 +2259,7 @@ function pauseOverlayHTML(){
     if(!bp.length) rightHTML+=`<div style="text-align:center;color:var(--dim);font-size:11px;padding:10px">Empty bench</div>`;
   } else {
     leftHTML+=`<div class="po-chdr court">STARTING COURT</div>`;
-    cp.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)'); });
+    cp.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)', p.id); });
     rightHTML+=`<div class="po-chdr bench">BENCH</div>`;
     bp.forEach(p=>{ rightHTML+=pillSmall(p.name, fmt(p.benchTime), 'var(--blue)'); });
   }
@@ -4147,9 +4279,14 @@ function renderHalftime(){
 
   const cCards=sortedCourt.map(p=>{
     const heavy=p.playTime>=h1Secs*0.7;
+    const pos=getGamePos(p.id);
+    const cls=pos?(POS_COLOURS[+pos]||''):'';
     return `<div class="ht-card court" onclick="toggleHtPlayer(${p.id})">
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <div class="ht-name">${p.name}</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${pos?`<span class="pos-badge ${cls}" style="font-size:16px;padding:4px 10px;min-width:36px;text-align:center;cursor:pointer;" onclick="event.stopPropagation();openPosPicker(${p.id},'court')">${pos}</span>`:''}
+          <div class="ht-name">${p.name}</div>
+        </div>
         ${heavy?`<span style="font-size:9px;background:rgba(255,140,0,.2);color:var(--amber);padding:1px 6px;border-radius:4px;font-family:Impact,sans-serif;letter-spacing:1px">HEAVY</span>`:''}
       </div>
       <div class="ht-stat">Played <span>${fmt(p.playTime)}</span> · ${p.fouls} foul${p.fouls!==1?'s':''}</div>
@@ -4158,9 +4295,18 @@ function renderHalftime(){
 
   const bCards=sortedBench.map(p=>{
     const light=p.playTime<h1Secs*0.3;
+    const pos=getGamePos(p.id);
+    const allPos=allPositionsForPlayer(p.id);
+    const courtIds=sortedCourt.map(q=>q.id);
+    const covered=new Set(courtIds.map(id=>getGamePos(id)).filter(Boolean));
+    const fills=allPos.filter(pp=>!covered.has(pp));
+    const cls=pos?(POS_COLOURS[+pos]||''):'';
     return `<div class="ht-card bench" onclick="toggleHtPlayer(${p.id})">
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <div class="ht-name">${p.name}</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${pos?`<span class="pos-badge ${fills.length?(POS_COLOURS[+fills[0]]||cls):cls}" style="font-size:16px;padding:4px 10px;min-width:36px;text-align:center;${fills.length?'':'opacity:.5;'}">${fills.length?fills[0]:pos}${fills.length?'↑':''}</span>`:''}
+          <div class="ht-name">${p.name}</div>
+        </div>
         ${light?`<span style="font-size:9px;background:rgba(62,207,110,.2);color:var(--green);padding:1px 6px;border-radius:4px;font-family:Impact,sans-serif;letter-spacing:1px">NEEDS TIME</span>`:''}
       </div>
       <div class="ht-stat">Played <span>${fmt(p.playTime)}</span> · ${p.fouls} foul${p.fouls!==1?'s':''}</div>
@@ -4173,7 +4319,15 @@ function renderHalftime(){
     <div class="ht-title">HALF TIME</div>
     <div class="ht-sub">H2: ${S.h2Dur}min · sub every ${fmtInterval(S.h2Int)} · ${S.h2Sps} per sub</div>
     <div class="ht-count"><span class="${ready?'ok':'bad'}">${court.length}/5</span> on court for 2nd half${!ready?` · <span style="color:var(--warn)">pick ${need} more</span>`:''}</div>
-    <div style="font-size:10px;color:var(--dim);margin-top:4px">Sorted by play time · <span style="color:var(--amber)">HEAVY</span> = lots of H1 time · <span style="color:var(--green)">NEEDS TIME</span> = little H1 time</div>
+    ${(()=>{
+      const covIds = sortedCourt.map(p=>p.id);
+      const covSet = new Set(covIds.map(id=>getGamePos(id)).filter(Boolean));
+      const miss = ['1','2','3','4','5'].filter(n=>!covSet.has(n));
+      const anyR = sortedCourt.some(p=>allPositionsForPlayer(p.id).length>0);
+      if(!anyR) return '';
+      return `<div style="margin-top:4px;display:flex;gap:4px;align-items:center;justify-content:center;">${[1,2,3,4,5].map(n=>`<div class="pos-pip ${covSet.has(String(n))?'filled-'+n:'empty'}" style="width:24px;height:24px;font-size:12px;">${n}</div>`).join('')}${miss.length?`<span style="font-size:11px;color:var(--red);margin-left:6px;">missing ${miss.join(', ')}</span>`:''}</div>`;
+    })()}
+    <div style="font-size:10px;color:var(--dim);margin-top:4px">Sorted by play time · tap position number to reassign · <span style="color:var(--amber)">HEAVY</span> lots of H1 time</div>
   </div>
   <div class="ht-cols">
     <div class="ht-col" style="border-right:1px solid var(--border)">
