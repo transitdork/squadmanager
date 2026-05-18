@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Squad Manager">
 <meta name="mobile-web-app-capable" content="yes">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="theme-color" content="#0f1117">
 <meta name="description" content="Basketball substitution and game time manager">
 <title>Squad Manager</title>
@@ -544,6 +547,41 @@ body{
 .ai-pslider::-moz-range-thumb{width:28px;height:28px;
   border-radius:50%;background:var(--accent);cursor:pointer;
   border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4);}
+
+/* ── POSITION COLOURS ──  1=teal 2=blue 3=purple 4=amber 5=green */
+.pos-badge{display:inline-flex;align-items:center;justify-content:center;
+  font-family:Impact,sans-serif;font-weight:700;letter-spacing:.5px;
+  border-radius:5px;cursor:pointer;flex-shrink:0;transition:opacity .15s;}
+.pos-1{background:rgba(0,207,180,.25);color:#00cfb4;border:1px solid rgba(0,207,180,.4);}
+.pos-2{background:rgba(74,158,255,.25);color:#7ab8ff;border:1px solid rgba(74,158,255,.4);}
+.pos-3{background:rgba(167,139,250,.25);color:#a78bfa;border:1px solid rgba(167,139,250,.4);}
+.pos-4{background:rgba(240,140,0,.25);color:#f08c00;border:1px solid rgba(240,140,0,.4);}
+.pos-5{background:rgba(62,207,110,.25);color:#3ecf6e;border:1px solid rgba(62,207,110,.4);}
+.pos-gap{background:rgba(255,85,85,.18);color:#ff5555;border:1px solid rgba(255,85,85,.35);}
+/* Coverage row in game header */
+.pos-coverage{display:flex;align-items:center;gap:5px;justify-content:center;padding:3px 0;}
+.pos-pip{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;
+  justify-content:center;font-family:Impact,sans-serif;font-size:13px;font-weight:700;
+  transition:all .25s;}
+.pos-pip.filled-1{background:rgba(0,207,180,.25);color:#00cfb4;border:1px solid rgba(0,207,180,.5);}
+.pos-pip.filled-2{background:rgba(74,158,255,.25);color:#7ab8ff;border:1px solid rgba(74,158,255,.5);}
+.pos-pip.filled-3{background:rgba(167,139,250,.25);color:#a78bfa;border:1px solid rgba(167,139,250,.5);}
+.pos-pip.filled-4{background:rgba(240,140,0,.25);color:#f08c00;border:1px solid rgba(240,140,0,.5);}
+.pos-pip.filled-5{background:rgba(62,207,110,.25);color:#3ecf6e;border:1px solid rgba(62,207,110,.5);}
+.pos-pip.empty{background:rgba(255,85,85,.1);color:#ff5555;border:1px solid rgba(255,85,85,.3);}
+/* Position picker bottom sheet */
+.pos-picker-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:5000;
+  display:flex;align-items:flex-end;backdrop-filter:blur(2px);}
+.pos-picker-box{background:var(--surface);border-top:1px solid var(--border);
+  border-radius:18px 18px 0 0;padding:20px 16px calc(env(safe-area-inset-bottom,0px)+20px);
+  width:100%;display:flex;flex-direction:column;gap:12px;}
+.pos-picker-title{font-family:Impact,sans-serif;font-size:16px;letter-spacing:2px;color:var(--accent);}
+.pos-picker-options{display:flex;gap:8px;flex-wrap:wrap;}
+.pos-picker-btn{flex:1;min-width:50px;padding:14px 8px;border-radius:10px;border:2px solid;
+  font-family:Impact,sans-serif;font-size:22px;cursor:pointer;text-align:center;
+  transition:transform .1s;}
+.pos-picker-btn:active{transform:scale(.95);}
+.pos-picker-recommend{font-size:11px;color:var(--green);margin-top:-6px;}
 </style>
 </head>
 <body>
@@ -567,7 +605,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.11';
+const APP_VERSION = '2026.05.18';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -917,6 +955,7 @@ const S = {
   subCountdown: 0,
   alertState: null,
   isRunning: false,       // player timers running
+  gamePositions: {},      // playerId→activePosition ('1'-'5') for current game only
   isClockRunning: false,  // game clock running (may differ from isRunning for EDJBL timeout)
   subLog: [],
   savedGame: null,
@@ -1315,6 +1354,146 @@ function allPositionsForName(name){
 }
 
 // Get positions for a game player (by player id = index into S.names)
+// ── Game-time position helpers ──
+const POS_COLOURS = {1:'pos-1',2:'pos-2',3:'pos-3',4:'pos-4',5:'pos-5'};
+const POS_NAMES   = {1:'Point Guard',2:'Shooting Guard',3:'Small Forward',4:'Power Forward',5:'Centre'};
+
+// Get active game position for a player (assigned this game, or fall back to rated primary)
+function getGamePos(pid){
+  if(S.gamePositions[pid]) return S.gamePositions[pid];
+  return posLabelForPlayer(pid) || null;
+}
+
+// Set active game position
+function setGamePos(pid, pos){
+  S.gamePositions[pid] = pos;
+  // Update just the position badge in the DOM without full re-render
+  const badge = document.getElementById('pos-badge-'+pid);
+  if(badge){
+    badge.textContent = pos;
+    badge.className = 'pos-badge ' + (POS_COLOURS[+pos]||'');
+    badge.style.fontSize = '9px';
+    badge.style.padding  = '2px 6px';
+  }
+  updateCoverageRow();
+}
+
+// Get positions covered by current court players
+function courtCoverage(){
+  const covered = {};  // pos → playerId
+  if(!S.players) return covered;
+  S.players.filter(p=>p.onCourt).forEach(p=>{
+    const pos = getGamePos(p.id);
+    if(pos && !covered[pos]) covered[pos] = p.id;
+  });
+  return covered;
+}
+
+// Update coverage row in header without full re-render
+function updateCoverageRow(){
+  const row = document.getElementById('pos-coverage-row');
+  if(!row) return;
+  const covered = courtCoverage();
+  [1,2,3,4,5].forEach(n=>{
+    const pip = row.querySelector('[data-pos="'+n+'"]');
+    if(!pip) return;
+    if(covered[n]){ pip.className='pos-pip filled-'+n; pip.textContent=n; }
+    else { pip.className='pos-pip empty'; pip.textContent=n; }
+  });
+}
+
+// Open position picker for a player
+function openPosPicker(pid, role){
+  event.stopPropagation();
+  const allPos = allPositionsForPlayer(pid);
+  if(!allPos.length) return; // no ratings — nothing to pick
+  const covered = courtCoverage();
+  const currentPos = getGamePos(pid);
+
+  // Recommend: positions this player can fill that are currently gaps
+  const gaps = [1,2,3,4,5].filter(n=>!covered[n]||covered[n]===pid).map(String);
+  const recommendations = allPos.filter(p=>gaps.includes(p));
+
+  const existing = document.getElementById('pos-picker-modal');
+  if(existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'pos-picker-modal';
+  modal.className = 'pos-picker-backdrop';
+  modal.onclick = e=>{ if(e.target===modal) modal.remove(); };
+
+  const playerName = S.names[pid] || 'Player';
+  const recNote = recommendations.length && recommendations.length < allPos.length
+    ? '<div class="pos-picker-recommend">★ Highlighted positions fill a gap on court</div>' : '';
+
+  const btnHTML = allPos.map(pos=>{
+    const isGap = gaps.includes(pos);
+    const isCurrent = pos === currentPos;
+    const cls = POS_COLOURS[+pos] || '';
+    return `<button class="pos-picker-btn ${cls}"
+      style="${isCurrent?'border-width:3px;':''}"
+      onclick="event.stopPropagation();setGamePos(${pid},'${pos}');document.getElementById('pos-picker-modal').remove()">
+      ${pos}${isGap?'<br><span style="font-size:8px;">gap</span>':''}
+    </button>`;
+  }).join('');
+
+  modal.innerHTML = `<div class="pos-picker-box">
+    <div class="pos-picker-title">POSITION — ${playerName.split(' ')[0]}</div>
+    <div style="font-size:11px;color:var(--dim);">Select position for this game only (won't change ratings)</div>
+    ${recNote}
+    <div class="pos-picker-options">${btnHTML}</div>
+    <button onclick="document.getElementById('pos-picker-modal').remove()" style="background:var(--card);border:1.5px solid var(--border);color:var(--dim);border-radius:10px;padding:12px;font-size:14px;cursor:pointer;">Cancel</button>
+  </div>`;
+
+  document.body.appendChild(modal);
+}
+
+// Coverage row HTML
+function coverageRowHTML(){
+  const covered = courtCoverage();
+  const pips = [1,2,3,4,5].map(n=>{
+    const cls = covered[n] ? 'filled-'+n : 'empty';
+    return `<div class="pos-pip ${cls}" data-pos="${n}">${n}</div>`;
+  }).join('');
+  return `<div class="pos-coverage" id="pos-coverage-row">${pips}</div>`;
+}
+
+// Build position badge HTML for a card (tappable)
+function posBadgeForCard(pid, role, isPlannedOn){
+  const pos = getGamePos(pid);
+  const allPos = allPositionsForPlayer(pid);
+  if(!allPos.length) return '';  // no ratings set
+
+  if(role === 'court'){
+    const cls = pos ? (POS_COLOURS[+pos]||'') : 'pos-2';
+    const label = pos || '?';
+    return `<span id="pos-badge-${pid}" class="pos-badge ${cls}"
+      style="font-size:9px;padding:2px 6px;margin-left:4px;"
+      onclick="openPosPicker(${pid},'${role}')">${label}</span>`;
+  }
+
+  if(role === 'bench' && isPlannedOn){
+    // Show recommended positions for sub coming on
+    const covered = courtCoverage();
+    const gaps = [1,2,3,4,5].filter(n=>!covered[n]).map(String);
+    const fills = allPos.filter(p=>gaps.includes(p));
+    if(fills.length){
+      return fills.map(p=>{
+        const cls = POS_COLOURS[+p]||'';
+        return `<span class="pos-badge ${cls}" style="font-size:9px;padding:2px 5px;margin-left:2px;" title="fills gap at ${POS_NAMES[+p]||p}">${p}↑</span>`;
+      }).join('');
+    }
+    // No gaps to fill — show primary in dim
+    return pos ? `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:2px 5px;margin-left:2px;opacity:.6;">${pos}</span>` : '';
+  }
+
+  if(role === 'bench' && pos){
+    return `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:2px 5px;margin-left:2px;opacity:.5;">${pos}</span>`;
+  }
+
+  return '';
+}
+
 function posLabelForPlayer(pid){
   const name = S.names[pid];
   return name ? posLabelForName(name) : null;
@@ -1526,6 +1705,12 @@ function buildSubPlanHTML(){
 function startGame(){
   unlockAudio();
   const filtered=S.names.filter(n=>n.trim());
+  // Initialise game positions from each player's rated primary position
+  S.gamePositions = {};
+  filtered.forEach((name, i) => {
+    const pos = posLabelForName(name);
+    if(pos) S.gamePositions[i] = pos;
+  });
   S.players=filtered.map((name,i)=>({
     id:i, name, onCourt:i<COURT_SIZE,
     playTime:0, h1PlayTime:0, h2PlayTime:0,
@@ -1791,17 +1976,8 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
     ?`onclick="event.stopPropagation()"`
     :`onclick="event.stopPropagation();togglePlayerSel(${p.id},'${role}')"`;
 
-  // Position display
-  const primaryPos = posLabelForPlayer(p.id);
-  const allPos     = allPositionsForPlayer(p.id);
-  // Court: show primary position. Bench planned-on: show all positions they cover.
-  const posDisplay = role==='court' && primaryPos
-    ? `<span style="font-size:8px;font-weight:700;font-family:Impact,sans-serif;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(74,158,255,.15);color:#7ab8ff;margin-left:3px;">${primaryPos}</span>`
-    : role==='bench' && isPlannedOn && allPos.length
-    ? `<span style="font-size:8px;font-weight:700;font-family:Impact,sans-serif;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(167,139,250,.2);color:#a78bfa;margin-left:3px;">${allPos.join('/')}</span>`
-    : role==='bench' && isHigh && primaryPos
-    ? `<span style="font-size:8px;font-weight:700;font-family:Impact,sans-serif;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(74,158,255,.15);color:#7ab8ff;margin-left:3px;">${primaryPos}</span>`
-    : '';
+  // Position badge — tappable on court cards, recommendation indicator on bench
+  const posDisplay = posBadgeForCard(p.id, role, isPlannedOn);
 
   let badge='';
   if(fouledOut)         badge=`<span class="cbadge bred">FOULED OUT</span>`;
@@ -3864,6 +4040,7 @@ function renderGame(){
         <div class="glbl">Sub in</div>
         <div id="scdown" class="stimer bb" style="color:${subC}">${fmt(S.subCountdown)}</div>
       </div>
+      ${coverageRowHTML()}
     </div>
     <div class="hbtns">
       <button id="pbtn" class="pbtn${S.isRunning?' live':''}" onclick="togglePause()">${pbtnLabel}</button>
@@ -4282,7 +4459,7 @@ function renderSettings(){
 
     <div class="s-sec" style="text-align:center;padding-bottom:16px;">
       <div style="font-size:11px;color:var(--dim);margin-bottom:8px;">Squad Manager <span style="color:var(--accent);font-family:Impact,sans-serif;letter-spacing:1px;">v${APP_VERSION}</span></div>
-      <button onclick="location.reload(true)" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:9px 18px;font-size:12px;cursor:pointer;" title="Force reload from server, clearing cache">⟳ Force Refresh / Check for Updates</button>
+      <button onclick="applyUpdate()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:9px 18px;font-size:12px;cursor:pointer;" title="Force reload from server, clearing cache">⟳ Force Refresh / Check for Updates</button>
       <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.5;">If the app feels stale, tap above to force-reload<br>the latest version from the server.</div>
     </div>
   </div>
@@ -4825,14 +5002,17 @@ function showUpdateBanner(remoteVersion){
       '<div style="font-size:10px;color:#7a80a0;">Running v' + APP_VERSION + ' · New: v' + (remoteVersion||'?') + '</div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;">' +
-      '<button onclick="location.reload(true)" style="background:#f08c00;color:#111;border:none;border-radius:9px;padding:9px 14px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">UPDATE</button>' +
+      '<button onclick="applyUpdate()" style="background:#f08c00;color:#111;border:none;border-radius:9px;padding:9px 14px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">UPDATE</button>' +
       '<button onclick="this.parentElement.parentElement.remove()" style="background:none;border:1.5px solid #2e3350;color:#7a80a0;border-radius:9px;padding:9px 12px;font-size:13px;cursor:pointer;">✕</button>' +
     '</div>';
   document.body.appendChild(banner);
 }
 
 function applyUpdate(){
-  location.reload(true);
+  // Safari ignores location.reload(true) for PWA cache.
+  // Redirect to the same URL with a version query string to force a fresh fetch.
+  const url = location.href.split('?')[0].split('#')[0];
+  location.replace(url + '?v=' + APP_VERSION + '&t=' + Date.now());
 }
 
 // ═══════════════════════════════════════════
@@ -4886,17 +5066,16 @@ function showRecoveryScreen(){
 }
 
 function recoverClearState(){
-  // Clear only game/setup state, keep teams, ratings, settings, plans
-  try{
-    localStorage.removeItem('squadmgr_v1');
-  }catch(_){}
-  location.reload(true);
+  try{ localStorage.removeItem('squadmgr_v1'); }catch(_){}
+  const url = location.href.split('?')[0].split('#')[0];
+  location.replace(url + '?v=' + APP_VERSION + '&t=' + Date.now());
 }
 
 function recoverClearAll(){
   if(!confirm('This will delete ALL data including teams and ratings. Are you sure?')) return;
   try{ localStorage.clear(); }catch(_){}
-  location.reload(true);
+  const url = location.href.split('?')[0].split('#')[0];
+  location.replace(url + '?v=' + APP_VERSION + '&t=' + Date.now());
 }
 
 // ═══════════════════════════════════════════
