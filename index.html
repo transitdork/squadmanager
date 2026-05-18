@@ -294,8 +294,8 @@ body{
 .chdr{font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:2px;border-radius:5px;flex-shrink:0;}
 .chdr.court{background:rgba(62,207,110,.12);color:var(--green);}
 .chdr.bench{background:rgba(74,158,255,.1);color:var(--blue);}
-.pc{border-radius:10px;padding:7px 9px;border:1.5px solid;user-select:none;position:relative;flex-shrink:0;}
-.pc.court-card{flex:1;display:flex;flex-direction:column;justify-content:space-between;min-height:0;}
+.pc{border-radius:10px;padding:7px 9px;border:1.5px solid;user-select:none;position:relative;flex-shrink:0;flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-between;}
+.pc.court-card{/* flex behaviour already in .pc */}
 .pc.court-card .cname{font-size:clamp(10px,1.8vh,16px);}
 .pc.court-card .sv{font-size:clamp(11px,1.9vh,16px);}
 .pc.court-card .sk{font-size:clamp(6px,1.1vh,9px);}
@@ -311,20 +311,20 @@ body{
 .pc.sel{box-shadow:0 0 0 2.5px var(--blue) !important;border-color:var(--blue) !important;}
 .pc.fo{border-color:rgba(255,85,85,.55) !important;opacity:.75;}
 .ctop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px;}
-.cname{font-weight:700;font-size:clamp(11px,2.8vw,16px);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.cbadge{font-family:Impact,sans-serif;font-size:9px;letter-spacing:1px;padding:1px 5px;border-radius:4px;margin-left:3px;flex-shrink:0;}
+.cname{font-weight:700;font-size:clamp(10px,1.7vh,16px);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cbadge{font-family:Impact,sans-serif;font-size:clamp(7px,1vh,10px);letter-spacing:1px;padding:1px 5px;border-radius:4px;margin-left:3px;flex-shrink:0;}
 .bo{background:rgba(255,140,0,.2);color:var(--amber);}
 .bi{background:rgba(0,207,180,.2);color:var(--teal);}
 .bsel{background:rgba(74,158,255,.2);color:var(--blue);}
 .bred{background:rgba(255,85,85,.2);color:var(--red);}
 .cstats{display:flex;gap:6px;margin-bottom:3px;flex-wrap:nowrap;overflow:hidden;}
 .stat{display:flex;flex-direction:column;}
-.sv{font-family:Impact,sans-serif;font-size:clamp(11px,2.6vw,15px);letter-spacing:.03em;}
-.svg{color:var(--green);} .svb{color:var(--blue);} .svt{color:var(--teal);font-size:clamp(10px,2.2vw,13px);}
-.sk{font-size:clamp(7px,1.6vw,9px);text-transform:uppercase;letter-spacing:1px;color:var(--dim);}
+.sv{font-family:Impact,sans-serif;font-size:clamp(11px,1.7vh,15px);letter-spacing:.03em;}
+.svg{color:var(--green);} .svb{color:var(--blue);} .svt{color:var(--teal);font-size:clamp(10px,1.4vh,13px);}
+.sk{font-size:clamp(6px,1vh,9px);text-transform:uppercase;letter-spacing:1px;color:var(--dim);}
 .fr{display:flex;align-items:center;gap:4px;}
 .fl{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-right:1px;}
-.fd{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);background:transparent;cursor:pointer;flex-shrink:0;padding:0;}
+.fd{width:clamp(18px,2.6vh,26px);height:clamp(18px,2.6vh,26px);border-radius:50%;border:2px solid var(--border);background:transparent;cursor:pointer;flex-shrink:0;padding:0;}
 .fd.on{background:var(--red);border-color:var(--red);}
 .fotag{font-size:9px;font-weight:700;color:var(--red);margin-left:3px;letter-spacing:1px;}
 .instr{background:var(--surface);border-top:1px solid var(--border);padding:4px calc(env(safe-area-inset-right, 0px) + 10px) calc(env(safe-area-inset-bottom, 0px) + 4px) calc(env(safe-area-inset-left, 0px) + 10px);text-align:center;font-size:10px;color:var(--dim);flex-shrink:0;}
@@ -492,18 +492,14 @@ body{
   /* Column headers */
   .chdr { font-size: 14px; padding: 5px; letter-spacing: 2.5px; }
 
-  /* Court cards — larger fonts and spacing on iPad */
-  .pc.court-card .cname { font-size: clamp(14px, 2.4vh, 26px); }
-  .pc.court-card .sv    { font-size: clamp(16px, 2.6vh, 28px); }
-  .pc.court-card .sk    { font-size: clamp(9px,  1.3vh, 13px); }
-  .pc.court-card .fd    { width: clamp(26px, 4vh, 36px); height: clamp(26px, 4vh, 36px); }
-  .pc.court-card .ctop  { margin-bottom: clamp(4px, 1vh, 8px); }
-  .pc.court-card .cstats{ gap: clamp(8px, 1.6vh, 16px); margin-bottom: clamp(4px, 1vh, 8px); }
+  /* All player cards scale up on iPad */
   .pc { border-radius: 14px; padding: 12px 16px; }
-  .cname { font-size: clamp(14px, 2.4vw, 22px); }
-  .sv    { font-size: clamp(16px, 2.4vw, 22px); }
-  .sk    { font-size: clamp(9px,  1.4vw, 12px); }
-  .fd    { width: 30px; height: 30px; }
+  .cname { font-size: clamp(13px, 2.2vh, 24px); }
+  .sv    { font-size: clamp(14px, 2.3vh, 26px); }
+  .sk    { font-size: clamp(8px,  1.2vh, 12px); }
+  .fd    { width: clamp(24px, 3.6vh, 34px); height: clamp(24px, 3.6vh, 34px); }
+  .ctop  { margin-bottom: clamp(3px, 0.8vh, 7px); }
+  .cstats{ gap: clamp(6px, 1.4vh, 14px); margin-bottom: clamp(3px, 0.8vh, 7px); }
   .col   { gap: 6px; padding: 7px 8px; }
 
   /* Instruction bar */
@@ -516,8 +512,8 @@ body{
   .hrem   { font-size: 54px; }
   .stimer { font-size: 24px; }
   .pbtn   { font-size: 24px; padding: 14px 24px; min-width: 160px; }
-  .pc.court-card .cname { font-size: clamp(18px, 2.6vh, 32px); }
-  .pc.court-card .sv    { font-size: clamp(20px, 2.8vh, 32px); }
+  .cname { font-size: clamp(16px, 2.6vh, 30px); }
+  .sv    { font-size: clamp(18px, 2.8vh, 30px); }
 }
 
 /* ── AI PLAN PARAMETERS ── */
@@ -2130,42 +2126,44 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
 function postSubPositionBoard(stayOn, nextOff, nextOn){
   const newCourt = [...stayOn, ...nextOn];
   if(!newCourt.length) return '';
-
-  const newCourtIds = newCourt.map(p=>p.id);
-  // Compute optimal positions for the new lineup
-  const optimal = computeOptimalPositions(newCourtIds);
-  const covered = new Set(Object.values(optimal));
-  const missing = ['1','2','3','4','5'].filter(n=>!covered.has(n));
   const anyRatings = newCourt.some(p=>allPositionsForPlayer(p.id).length>0);
+  if(!anyRatings) return '';
+
+  const coveredAfter = new Set();
+  newCourt.forEach(p=>{ const pos=getGamePos(p.id); if(pos) coveredAfter.add(pos); });
+  const missing = ['1','2','3','4','5'].filter(n=>!coveredAfter.has(n));
 
   const tiles = newCourt.map(p=>{
-    const currentPos = getGamePos(p.id);
-    const recommendedPos = optimal[p.id];
-    const displayPos = recommendedPos || currentPos;
-    const posClass = displayPos ? 'pos-'+displayPos : '';
+    const pos = getGamePos(p.id);
+    const allPos = allPositionsForPlayer(p.id);
     const isComingOn = nextOn.some(q=>q.id===p.id);
-    const showChange = recommendedPos && currentPos && recommendedPos !== currentPos;
-
-    return `<button onclick="event.stopPropagation();openPosPicker(${p.id},'court')"
-      style="flex:1;min-width:0;border-radius:10px;padding:10px 4px 8px;border:2px solid;cursor:pointer;background:${isComingOn?'rgba(0,207,180,.12)':'rgba(255,255,255,.05)'};"
-      class="${posClass}">
-      <div style="font-family:Impact,sans-serif;font-size:26px;line-height:1;">${displayPos||'—'}</div>
-      ${showChange?`<div style="font-size:8px;opacity:.6;line-height:1.2;">was ${currentPos}</div>`:''}
-      <div style="font-size:9px;margin-top:4px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${isComingOn?'▲ ':''}${p.name.split(' ')[0]}</div>
-    </button>`;
+    const posClass = pos ? 'pos-'+pos : '';
+    const firstName = (S.names[p.id]||p.name||'').split(' ')[0];
+    // Recommend a move if player can fill a missing position
+    const canFill = allPos.filter(ap=>missing.includes(ap) && ap!==pos);
+    const recBit = canFill.length
+      ? '<div style="font-size:10px;margin-top:3px;color:var(--accent);font-weight:700;">→'+canFill[0]+'</div>'
+      : '';
+    return '<button onclick="event.stopPropagation();openPosPicker('+p.id+',\'court\')" '+
+      'style="flex:1;min-width:0;border-radius:11px;padding:10px 4px 8px;border:'+(isComingOn?'2.5px':'1.5px')+' solid;cursor:pointer;'+
+      'background:'+(isComingOn?'rgba(0,207,180,.18)':'rgba(255,255,255,.06)')+';'+
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;" '+
+      'class="'+posClass+'">'+
+      '<div style="font-family:Impact,sans-serif;font-size:28px;line-height:1;">'+(pos||'?')+'</div>'+
+      '<div style="font-size:10px;margin-top:4px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 4px;">'+(isComingOn?'▲ ':'')+firstName+'</div>'+
+      recBit+
+      '</button>';
   }).join('');
 
-  const missingNote = anyRatings && missing.length
-    ? `<div style="font-size:12px;color:var(--red);margin-top:7px;text-align:center;font-weight:700;">⚠ No ${missing.join(' or ')} on court after this sub</div>`
-    : anyRatings
-    ? `<div style="font-size:11px;color:var(--green);margin-top:6px;text-align:center;">✓ All positions covered</div>`
-    : '';
+  const missingNote = missing.length
+    ? '<div style="text-align:center;font-size:12px;color:var(--red);margin-top:7px;font-weight:600;">⚠ Missing: '+missing.join(' · ')+'</div>'
+    : '<div style="text-align:center;font-size:12px;color:var(--green);margin-top:7px;">✓ All positions covered</div>';
 
-  return `<div onclick="event.stopPropagation()" style="padding:10px 12px 8px;border-top:1px solid rgba(255,255,255,.1);flex-shrink:0;background:rgba(0,0,0,.35);">
-    <div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">COURT AFTER SUB — tap number to reassign</div>
-    <div style="display:flex;gap:6px;">${tiles}</div>
-    ${missingNote}
-  </div>`;
+  return '<div onclick="event.stopPropagation()" style="padding:10px 12px 6px;flex-shrink:0;background:rgba(0,0,0,.4);border-top:1px solid rgba(255,255,255,.1);">'+
+    '<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;text-align:center;">COURT AFTER SUB — tap to change position</div>'+
+    '<div style="display:flex;gap:6px;height:90px;">'+tiles+'</div>'+
+    missingNote+
+    '</div>';
 }
 
 function pauseOverlayHTML(){
@@ -2281,11 +2279,11 @@ function pauseOverlayHTML(){
   return `
 <div id="pause-ovl" class="povl" style="display:${S.isRunning?'none':'flex'}" onclick="resumeFromOverlay()">
   <div class="po-top">${topHTML}</div>
+  ${posBoard}
   <div class="po-roster" style="flex:1;min-height:0;">
     <div class="po-col" style="border-right:1px solid rgba(255,255,255,.08)">${leftHTML}</div>
     <div class="po-col">${rightHTML}</div>
   </div>
-  ${posBoard}
 </div>`;
 }
 
@@ -4202,6 +4200,50 @@ function renderGame(){
     instrTxt='Select players on both sides to enable sub';
   }
 
+  // Build post-sub position preview for live game screen (compact, shown when selections active)
+  let livePosBoardHTML = '';
+  if(canSub || fillingUp){
+    const stayOnLive = cp.filter(p=>!S.selCourt.has(p.id));
+    const nextOnLive = bp.filter(p=>S.selBench.has(p.id));
+    if(stayOnLive.length + nextOnLive.length === COURT_SIZE){
+      const newCourtLive = [...stayOnLive, ...nextOnLive];
+      const anyRatings = newCourtLive.some(p=>allPositionsForPlayer(p.id).length>0);
+      if(anyRatings){
+        const covAfter = new Set();
+        newCourtLive.forEach(p=>{ const pos=getGamePos(p.id); if(pos) covAfter.add(pos); });
+        const missingLive = ['1','2','3','4','5'].filter(n=>!covAfter.has(n));
+        const tilesLive = newCourtLive.map(p=>{
+          const pos=getGamePos(p.id);
+          const allPos=allPositionsForPlayer(p.id);
+          const isOn=S.selBench.has(p.id);
+          const firstName=(S.names[p.id]||'').split(' ')[0];
+          const canFill=allPos.filter(ap=>missingLive.includes(ap)&&ap!==pos);
+          const posClass=pos?'pos-'+pos:'';
+          const recBit=canFill.length?'<div style="font-size:8px;color:var(--accent);">→'+canFill[0]+'</div>':'';
+          var courtStr='court';
+          return '<button onclick="event.stopPropagation();openPosPicker('+p.id+',\'' + courtStr + '\')" '+
+            'class="'+posClass+'" '+
+            'style="flex:1;min-width:0;border-radius:8px;padding:6px 3px;border:'+(isOn?'2px':'1px')+' solid;cursor:pointer;'+
+            'background:'+(isOn?'rgba(0,207,180,.15)':'rgba(255,255,255,.04)')+';'+
+            'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;">'+
+            '<div style="font-family:Impact,sans-serif;font-size:20px;line-height:1;">'+(pos||'?')+'</div>'+
+            '<div style="font-size:8px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 2px;">'+(isOn?'▲':'')+firstName+'</div>'+
+            recBit+'</button>';
+        }).join('');
+        const missBit=missingLive.length
+          ?'<span style="font-size:10px;color:var(--red);margin-left:8px;">⚠ '+missingLive.join('·')+'</span>'
+          :'<span style="font-size:10px;color:var(--green);margin-left:8px;">✓</span>';
+        livePosBoardHTML=`<div onclick="event.stopPropagation()" style="padding:5px 8px;background:rgba(0,0,0,.35);border-top:1px solid rgba(255,255,255,.07);flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:5px;">
+            <div style="font-family:Impact,sans-serif;font-size:8px;letter-spacing:1.5px;color:var(--dim);white-space:nowrap;">AFTER SUB</div>
+            <div style="display:flex;gap:4px;flex:1;">${tilesLive}</div>
+            ${missBit}
+          </div>
+        </div>`;
+      }
+    }
+  }
+
   const pbtnLabel=!gameStarted?'▶ START':S.isRunning?'⏸ TIMEOUT':'▶ RESUME';
   const endLabel=isH2?'END GAME':'END HALF';
   const endCls=`endbtn ${isH2?'h2e':'h1e'}${S.alertState==='halfend'?' urgent':''}`;
@@ -4260,6 +4302,7 @@ function renderGame(){
   </div>
 
   <div class="instr">${instrTxt}</div>
+  ${livePosBoardHTML}
   ${pauseOverlayHTML()}
 </div>`;
 
