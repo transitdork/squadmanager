@@ -291,7 +291,14 @@ body{
 .cols{flex:1;display:flex;overflow:hidden;}
 .col{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:4px calc(env(safe-area-inset-right, 0px) + 4px) 4px calc(env(safe-area-inset-left, 0px) + 4px);gap:3px;}
 .col.bench-col{overflow-y:auto;}
-.pc.bench-card{height:clamp(58px,9vh,105px);flex-shrink:0;}
+.pc.bench-card{height:clamp(175px,28vh,322px);flex-shrink:0;}
+/* Bench card fonts — vw-based so text fills the card width */
+.pc.bench-card .cname{font-size:clamp(16px,5vw,32px);}
+.pc.bench-card .sv{font-size:clamp(17px,4.5vw,30px);}
+.pc.bench-card .sk{font-size:clamp(9px,2.4vw,15px);}
+.pc.bench-card .fd{width:clamp(26px,4.5vw,40px);height:clamp(26px,4.5vw,40px);}
+.pc.bench-card .ctop{margin-bottom:clamp(3px,1vh,7px);}
+.pc.bench-card .cstats{gap:clamp(10px,2.5vw,20px);margin-bottom:clamp(4px,1.2vh,9px);}
 .chdr{font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:2px;border-radius:5px;flex-shrink:0;}
 .chdr.court{background:rgba(62,207,110,.12);color:var(--green);}
 .chdr.bench{background:rgba(74,158,255,.1);color:var(--blue);}
@@ -495,7 +502,7 @@ body{
 
   /* All cards scale on iPad */
   .pc { border-radius: 14px; padding: 11px 14px; }
-  .pc.bench-card { height: clamp(72px, 11vh, 130px); }
+  .pc.bench-card { height: clamp(220px, 33vh, 360px); }
   .pc.court-card .cname { font-size: clamp(15px, 2.8vh, 28px); }
   .pc.court-card .sv    { font-size: clamp(16px, 3vh, 30px); }
   .pc.court-card .sk    { font-size: clamp(9px,  1.4vh, 14px); }
