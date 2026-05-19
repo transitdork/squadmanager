@@ -290,27 +290,29 @@ body{
 
 .cols{flex:1;display:flex;overflow:hidden;}
 .col{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:4px calc(env(safe-area-inset-right, 0px) + 4px) 4px calc(env(safe-area-inset-left, 0px) + 4px);gap:3px;}
-.col.bench-col{overflow-y:auto;}
-.pc.bench-card{height:clamp(175px,28vh,322px);flex-shrink:0;}
+.col.bench-col{overflow-y:auto;justify-content:flex-start;}
+/* Bench cards: same fixed height as court cards, set by JS via --card-h */
+.pc.bench-card{height:var(--card-h,120px);flex-shrink:0;flex:none;overflow:hidden;}
 /* Bench card fonts — vw-based so text fills the card width */
-.pc.bench-card .cname{font-size:clamp(16px,5vw,32px);}
-.pc.bench-card .sv{font-size:clamp(17px,4.5vw,30px);}
-.pc.bench-card .sk{font-size:clamp(9px,2.4vw,15px);}
-.pc.bench-card .fd{width:clamp(26px,4.5vw,40px);height:clamp(26px,4.5vw,40px);}
-.pc.bench-card .ctop{margin-bottom:clamp(3px,1vh,7px);}
-.pc.bench-card .cstats{gap:clamp(10px,2.5vw,20px);margin-bottom:clamp(4px,1.2vh,9px);}
+.pc.bench-card .cname{font-size:clamp(13px,min(3.8vw,3vh),26px);}
+.pc.bench-card .sv{font-size:clamp(13px,min(3.5vw,2.8vh),24px);}
+.pc.bench-card .sk{font-size:clamp(8px,min(2vw,1.6vh),13px);}
+.pc.bench-card .fd{width:clamp(22px,min(4vw,3.2vh),34px);height:clamp(22px,min(4vw,3.2vh),34px);}
+.pc.bench-card .ctop{margin-bottom:clamp(2px,0.8vh,5px);}
+.pc.bench-card .cstats{gap:clamp(6px,min(2vw,1.8vh),14px);margin-bottom:clamp(2px,0.8vh,5px);}
+.pc.bench-card .fr{gap:clamp(2px,min(1.5vw,1.2vh),5px);}
 .chdr{font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:2px;border-radius:5px;flex-shrink:0;}
 .chdr.court{background:rgba(62,207,110,.12);color:var(--green);}
 .chdr.bench{background:rgba(74,158,255,.1);color:var(--blue);}
 .pc{border-radius:10px;padding:7px 9px;border:1.5px solid;user-select:none;position:relative;flex-shrink:0;display:flex;flex-direction:column;justify-content:space-between;}
 .pc.court-card{flex:1;min-height:0;}
-.pc.court-card .cname{font-size:clamp(12px,2.2vh,22px);}
-.pc.court-card .sv{font-size:clamp(13px,2.3vh,24px);}
-.pc.court-card .sk{font-size:clamp(7px,1.2vh,11px);}
-.pc.court-card .fd{width:clamp(20px,3.2vh,32px);height:clamp(20px,3.2vh,32px);}
+.pc.court-card .cname{font-size:clamp(12px,min(3.5vw,2.2vh),22px);}
+.pc.court-card .sv{font-size:clamp(13px,min(3.2vw,2.3vh),24px);}
+.pc.court-card .sk{font-size:clamp(7px,min(1.8vw,1.2vh),11px);}
+.pc.court-card .fd{width:clamp(20px,min(3.8vw,3.2vh),32px);height:clamp(20px,min(3.8vw,3.2vh),32px);}
 .pc.court-card .ctop{margin-bottom:clamp(2px,0.8vh,6px);}
-.pc.court-card .cstats{margin-bottom:clamp(2px,0.8vh,6px);gap:clamp(6px,1.4vh,14px);}
-.pc.court-card .fr{gap:clamp(2px,0.7vh,5px);}
+.pc.court-card .cstats{margin-bottom:clamp(2px,0.8vh,6px);gap:clamp(6px,min(2vw,1.4vh),14px);}
+.pc.court-card .fr{gap:clamp(2px,min(1.5vw,0.7vh),5px);}
 .pc.selectable{cursor:pointer;}
 .pc.cn{background:var(--greenDim);border-color:rgba(62,207,110,.2);}
 .pc.cx{background:var(--amberDim);border-color:var(--amber);box-shadow:0 0 0 1px rgba(255,140,0,.2);}
@@ -502,7 +504,7 @@ body{
 
   /* All cards scale on iPad */
   .pc { border-radius: 14px; padding: 11px 14px; }
-  .pc.bench-card { height: clamp(220px, 33vh, 360px); }
+  /* bench-card height now set by JS --card-h */
   .pc.court-card .cname { font-size: clamp(15px, 2.8vh, 28px); }
   .pc.court-card .sv    { font-size: clamp(16px, 3vh, 30px); }
   .pc.court-card .sk    { font-size: clamp(9px,  1.4vh, 14px); }
@@ -4319,6 +4321,8 @@ function renderGame(){
   ${livePosBoardHTML}
   ${pauseOverlayHTML()}
 </div>`;
+  // After render: sync bench card height to match court card height
+  requestAnimationFrame(syncCardHeights);
 
   updateAlertBar();
   if(S.isRunning) startTick();
@@ -4403,6 +4407,17 @@ function renderHalftime(){
     <div class="ht-note">Tap any player to move between court and bench</div>
   </div>
 </div>`;
+}
+
+// Sync bench card height to exactly match court card height
+function syncCardHeights(){
+  const courtCards = document.querySelectorAll('.pc.court-card');
+  if(!courtCards.length) return;
+  // All court cards are same height (flex:1 divides evenly) — measure the first
+  const h = courtCards[0].getBoundingClientRect().height;
+  if(h > 0){
+    document.querySelector('.cols').style.setProperty('--card-h', Math.round(h)+'px');
+  }
 }
 
 function renderGameover(){
