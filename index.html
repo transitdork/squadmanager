@@ -558,7 +558,32 @@ body{
   border-radius:50%;background:var(--accent);cursor:pointer;
   border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4);}
 
-/* ── POSITION COLOURS ──  1=teal 2=blue 3=purple 4=amber 5=green */
+/* ── TIMELINE MODAL ── */
+.tl-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8000;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);}
+.tl-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;flex-shrink:0;}
+.tl-title{font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);}
+.tl-tabs{display:flex;gap:6px;flex-shrink:0;}
+.tl-tab{padding:6px 14px;border-radius:8px;border:1.5px solid var(--border);font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;background:none;color:var(--dim);}
+.tl-tab.active{background:var(--accent);color:#111;border-color:var(--accent);}
+.tl-body{flex:1;overflow-y:auto;padding:0 10px 12px;}
+/* Option D — Table */
+.tl-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;margin-bottom:4px;background:var(--card);}
+.tl-name{font-weight:700;font-size:13px;flex:0 0 90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tl-bar-wrap{flex:1;height:14px;background:var(--border);border-radius:4px;overflow:hidden;position:relative;}
+.tl-bar-played{height:100%;border-radius:4px 0 0 4px;transition:width .3s;}
+.tl-bar-forecast{height:100%;position:absolute;top:0;opacity:.4;border-radius:0 4px 4px 0;}
+.tl-bar-target{position:absolute;top:-1px;bottom:-1px;width:2px;background:rgba(255,255,255,.6);border-radius:1px;}
+.tl-times{font-family:Impact,sans-serif;font-size:11px;flex:0 0 72px;text-align:right;line-height:1.4;}
+/* Option B — Stacked timeline */
+.tl-stint-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+.tl-stint-name{font-size:11px;font-weight:700;flex:0 0 70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
+.tl-stint-track{flex:1;height:22px;background:var(--border);border-radius:4px;position:relative;overflow:hidden;}
+.tl-stint-on{position:absolute;top:0;bottom:0;background:var(--green);opacity:.85;border-radius:2px;}
+.tl-stint-planned{position:absolute;top:0;bottom:0;opacity:.35;border-radius:2px;}
+.tl-cursor{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;border-radius:1px;z-index:2;}
+.tl-half-line{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.25);z-index:1;}
+.tl-axis{display:flex;justify-content:space-between;padding:2px 0 8px 76px;font-size:9px;color:var(--dim);}
+
 .pos-badge{display:inline-flex;align-items:center;justify-content:center;
   font-family:Impact,sans-serif;font-weight:700;letter-spacing:.5px;
   border-radius:5px;cursor:pointer;flex-shrink:0;transition:opacity .15s;}
@@ -4288,6 +4313,7 @@ function renderGame(){
       <div id="timeout-clock-note" style="display:${!S.isRunning&&S.isClockRunning?'block':'none'};font-size:9px;color:var(--warn);text-align:center;letter-spacing:.5px;margin-top:1px;">⏱ CLOCK RUNNING</div>
       <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
         <button class="${endCls}" onclick="${endAction}">${endLabel}</button>
+        <button onclick="openTimelineModal()" style="background:rgba(74,158,255,.15);border:1.5px solid rgba(74,158,255,.3);color:var(--blue);border-radius:8px;padding:5px 8px;font-size:14px;cursor:pointer;" title="Playing time timeline">📊</button>
         <button class="sgear" onclick="S._prevPhase='${S.phase}';S.phase='settings';render()" title="Settings">⚙</button>
       </div>
     </div>
@@ -4418,6 +4444,194 @@ function syncCardHeights(){
   if(h > 0){
     document.querySelector('.cols').style.setProperty('--card-h', Math.round(h)+'px');
   }
+}
+
+// ── TIMELINE MODAL ──
+let _tlView = 'table'; // 'table' | 'timeline'
+
+function openTimelineModal(){
+  const existing = document.getElementById('tl-modal');
+  if(existing) existing.remove();
+
+  const el = document.createElement('div');
+  el.id = 'tl-modal';
+  el.className = 'tl-backdrop';
+  el.innerHTML = buildTimelineHTML(_tlView);
+  document.body.appendChild(el);
+}
+
+function switchTlView(view){
+  _tlView = view;
+  const body = document.getElementById('tl-body');
+  if(body) body.innerHTML = view==='table' ? buildTableHTML() : buildStintHTML();
+  // Update tab styles
+  document.querySelectorAll('.tl-tab').forEach(t=>{
+    t.classList.toggle('active', t.dataset.view===view);
+  });
+}
+
+function buildTimelineHTML(view){
+  return `<div class="tl-header">
+    <div class="tl-title">PLAYING TIME</div>
+    <div class="tl-tabs">
+      <button class="tl-tab ${view==='table'?'active':''}" data-view="table" onclick="switchTlView('table')">📊 TABLE</button>
+      <button class="tl-tab ${view==='timeline'?'active':''}" data-view="timeline" onclick="switchTlView('timeline')">▬ TIMELINE</button>
+    </div>
+    <button onclick="document.getElementById('tl-modal').remove()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;flex-shrink:0;">✕</button>
+  </div>
+  <div id="tl-body" class="tl-body">${view==='table'?buildTableHTML():buildStintHTML()}</div>`;
+}
+
+function buildTableHTML(){
+  const players = S.players || [];
+  if(!players.length) return '<div style="text-align:center;color:var(--dim);padding:20px">No players</div>';
+
+  const totalSecs = (S.h1Dur+S.h2Dur)*60;
+  const gameSecs  = S.gameTime;
+  const remaining = Math.max(0, totalSecs - gameSecs);
+  const fairShare = Math.round(totalSecs * COURT_SIZE / Math.max(players.length,COURT_SIZE));
+
+  // Get forecast from plan
+  const forecasts = {};
+  const planTimes = calcPlanPlayTimes ? calcPlanPlayTimes() : [];
+  planTimes.forEach(pt=>{ forecasts[pt.name]=pt.secs; });
+
+  // Sort: most under fair share first
+  const sorted = [...players].sort((a,b)=>{
+    const aUnder = fairShare - a.playTime;
+    const bUnder = fairShare - b.playTime;
+    return bUnder - aUnder;
+  });
+
+  const rows = sorted.map(p=>{
+    const played = p.playTime;
+    const forecast = forecasts[p.name] || (p.onCourt ? played + remaining : played);
+    const pct = Math.min(100, Math.round(played/totalSecs*100));
+    const fPct = Math.min(100, Math.round(forecast/totalSecs*100));
+    const targetPct = Math.round(fairShare/totalSecs*100);
+    const diff = played - fairShare;
+    const diffStr = diff===0?'±0':(diff>0?'+':'')+Math.floor(Math.abs(diff)/60)+':'+(String(Math.abs(diff)%60).padStart(2,'0'));
+    const diffColor = diff > 30?'var(--warn)': diff < -30?'var(--red)':'var(--green)';
+
+    // Bar colour: green if ≥ fair share, amber if close, red if well under
+    const barColor = played >= fairShare*0.9 ? 'var(--green)' : played >= fairShare*0.6 ? 'var(--warn)' : 'var(--red)';
+    const fBarColor = forecast >= fairShare*0.9 ? 'var(--green)' : forecast >= fairShare*0.6 ? 'var(--warn)' : 'var(--red)';
+
+    const onDot = p.onCourt ? '<span style="color:var(--green);font-size:9px;">▶</span> ' : '';
+
+    return `<div class="tl-row">
+      <div class="tl-name">${onDot}${p.name.split(' ')[0]}</div>
+      <div class="tl-bar-wrap">
+        <div class="tl-bar-played" style="width:${pct}%;background:${barColor};"></div>
+        ${forecast>played?`<div class="tl-bar-forecast" style="left:${pct}%;width:${fPct-pct}%;background:${fBarColor};"></div>`:''}
+        <div class="tl-bar-target" style="left:${targetPct}%;"></div>
+      </div>
+      <div class="tl-times">
+        <div style="color:${barColor}">${fmt(played)}</div>
+        <div style="font-size:9px;color:${diffColor}">${diffStr}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const fairFmt = fmt(fairShare);
+  return `<div style="font-size:10px;color:var(--dim);padding:6px 10px 10px;line-height:1.5;">
+    Fair share: <strong style="color:var(--text)">${fairFmt}</strong> · 
+    White line = target · Faded bar = forecast · ▶ = on court
+  </div>${rows}`;
+}
+
+function buildStintHTML(){
+  const players = S.players || [];
+  if(!players.length) return '<div style="text-align:center;color:var(--dim);padding:20px">No players</div>';
+
+  const totalSecs = (S.h1Dur+S.h2Dur)*60;
+  const h1Secs    = S.h1Dur*60;
+  const gameSecs  = S.gameTime;
+  const pct = s => Math.min(100, Math.round(s/totalSecs*100));
+
+  // Build each player's court stints from subLog
+  function playerStints(pname){
+    // Build a list of {start, end, onCourt} intervals
+    const stints = [];
+    // Determine start state: was this player in the starting 5?
+    const startOnCourt = players.find(p=>p.name===pname)
+      ? !!(S.subLog.length
+          ? !S.subLog.some(e=>e.on.includes(pname) && e.gameTime===S.subLog[0]?.gameTime && S.subLog[0]?.gameTime===0)
+          : players.find(p=>p.name===pname)?.onCourt)
+      : false;
+
+    // Walk the sub log to reconstruct stints
+    let onCourt = players.find(p=>p.name===pname)?.onCourt;
+    // Determine initial state: if player never appears in a sub's "on" list, they started on court
+    const everwentOn = S.subLog.some(e=>e.on.includes(pname));
+    const everwentOff = S.subLog.some(e=>e.off.includes(pname));
+    let startedOnCourt = !everwentOn || (everwentOff && !everwentOn);
+    // Use a simpler heuristic: check first sub involving them
+    const firstSub = S.subLog.find(e=>e.on.includes(pname)||e.off.includes(pname));
+    if(firstSub){
+      startedOnCourt = firstSub.on.includes(pname) ? false : true;
+    } else {
+      startedOnCourt = onCourt; // no subs — use current state
+    }
+
+    let curState = startedOnCourt;
+    let curStart = 0;
+
+    S.subLog.forEach(sub=>{
+      if(sub.on.includes(pname)){
+        if(!curState){ stints.push({start:curStart, end:sub.gameTime, on:false}); curStart=sub.gameTime; curState=true; }
+      }
+      if(sub.off.includes(pname)){
+        if(curState){ stints.push({start:curStart, end:sub.gameTime, on:true}); curStart=sub.gameTime; curState=false; }
+      }
+    });
+    // Final stint to now
+    stints.push({start:curStart, end:gameSecs, on:curState});
+    return stints;
+  }
+
+  // Get forecast plan stints
+  const planTimes = calcPlanPlayTimes ? calcPlanPlayTimes() : [];
+  const forecastSecs = {};
+  planTimes.forEach(pt=>{ forecastSecs[pt.name]=pt.secs; });
+
+  const rows = players.map(p=>{
+    const stints = playerStints(p.name);
+    const stintBars = stints.map(s=>{
+      if(!s.on) return '';
+      const l = pct(s.start), w = Math.max(0.5, pct(s.end)-pct(s.start));
+      return `<div class="tl-stint-on" style="left:${l}%;width:${w}%;"></div>`;
+    }).join('');
+
+    // Forecast bar (remaining planned time)
+    const fSecs = forecastSecs[p.name];
+    const playedSecs = p.playTime;
+    let forecastBar = '';
+    if(fSecs && fSecs > playedSecs && gameSecs < totalSecs){
+      const fl = pct(gameSecs), fw = Math.max(0.5, pct(Math.min(fSecs, totalSecs))-pct(gameSecs));
+      const fColor = fSecs >= (totalSecs*COURT_SIZE/players.length)*0.9 ? 'var(--green)' : 'var(--warn)';
+      forecastBar = `<div class="tl-stint-planned" style="left:${fl}%;width:${fw}%;background:${fColor};"></div>`;
+    }
+
+    // Cursor and half-line
+    const cursor = `<div class="tl-cursor" style="left:${pct(gameSecs)}%;"></div>`;
+    const halfLine = `<div class="tl-half-line" style="left:${pct(h1Secs)}%;"></div>`;
+
+    const onDot = p.onCourt ? '▶ ' : '';
+    return `<div class="tl-stint-row">
+      <div class="tl-stint-name">${onDot}${p.name.split(' ')[0]}</div>
+      <div class="tl-stint-track">${halfLine}${stintBars}${forecastBar}${cursor}</div>
+    </div>`;
+  }).join('');
+
+  // Axis labels
+  const axisMarks = [0, 0.25, 0.5, 0.75, 1].map(f=>`<span>${fmt(Math.round(f*totalSecs))}</span>`).join('');
+
+  return `<div style="font-size:10px;color:var(--dim);padding:6px 10px 10px;line-height:1.5;">
+    Green = on court · Faded = forecast · | = half break · ▶ = currently on court
+  </div>
+  <div class="tl-axis">${axisMarks}</div>
+  ${rows}`;
 }
 
 function renderGameover(){
