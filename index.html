@@ -570,17 +570,17 @@ body{
 .tl-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;margin-bottom:4px;background:var(--card);}
 .tl-name{font-weight:700;font-size:13px;flex:0 0 90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tl-bar-wrap{flex:1;height:14px;background:var(--border);border-radius:4px;overflow:hidden;position:relative;}
-.tl-bar-played{height:100%;border-radius:4px 0 0 4px;transition:width .3s;}
-.tl-bar-forecast{height:100%;position:absolute;top:0;opacity:.4;border-radius:0 4px 4px 0;}
+.tl-bar-played{height:100%;border-radius:4px 0 0 4px;transition:width .95s linear;}
+.tl-bar-forecast{height:100%;position:absolute;top:0;opacity:.4;border-radius:0 4px 4px 0;transition:left .95s linear,width .95s linear;}
 .tl-bar-target{position:absolute;top:-1px;bottom:-1px;width:2px;background:rgba(255,255,255,.6);border-radius:1px;}
 .tl-times{font-family:Impact,sans-serif;font-size:11px;flex:0 0 72px;text-align:right;line-height:1.4;}
 /* Option B — Stacked timeline */
 .tl-stint-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
 .tl-stint-name{font-size:11px;font-weight:700;flex:0 0 70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
 .tl-stint-track{flex:1;height:22px;background:var(--border);border-radius:4px;position:relative;overflow:hidden;}
-.tl-stint-on{position:absolute;top:0;bottom:0;background:var(--green);opacity:.85;border-radius:2px;}
+.tl-stint-on{position:absolute;top:0;bottom:0;background:var(--green);opacity:.85;border-radius:2px;transition:width .95s linear;}
 .tl-stint-planned{position:absolute;top:0;bottom:0;opacity:.35;border-radius:2px;}
-.tl-cursor{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;border-radius:1px;z-index:2;}
+.tl-cursor{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;border-radius:1px;z-index:2;transition:left .95s linear;}
 .tl-half-line{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.25);z-index:1;}
 .tl-axis{display:flex;justify-content:space-between;padding:2px 0 8px 76px;font-size:9px;color:var(--dim);}
 
@@ -1957,6 +1957,16 @@ function commitSub(){
   S.players.forEach(p=>{
     if(S.selCourt.has(p.id)){ p.onCourt=false; }
     if(S.selBench.has(p.id)){ p.onCourt=true; p.benchStint=0; }
+  });
+
+  // Auto-assign optimal positions to incoming players (non-manual only)
+  const newCourtIds = S.players.filter(p=>p.onCourt).map(p=>p.id);
+  const optimal = computeOptimalPositions(newCourtIds);
+  if(!S.manualPositions) S.manualPositions = {};
+  newCourtIds.forEach(pid=>{
+    if(!S.manualPositions[pid] && optimal[pid]){
+      S.gamePositions[pid] = optimal[pid];
+    }
   });
 
   S.selCourt=new Set(); S.selBench=new Set();
@@ -4448,23 +4458,39 @@ function syncCardHeights(){
 
 // ── TIMELINE MODAL ──
 let _tlView = 'table'; // 'table' | 'timeline'
+let _tlTimer = null;  // live-update interval
 
 function openTimelineModal(){
   const existing = document.getElementById('tl-modal');
   if(existing) existing.remove();
+  clearInterval(_tlTimer);
 
   const el = document.createElement('div');
   el.id = 'tl-modal';
   el.className = 'tl-backdrop';
   el.innerHTML = buildTimelineHTML(_tlView);
   document.body.appendChild(el);
+
+  // Update every second while modal is open and game is running
+  _tlTimer = setInterval(()=>{
+    const modal = document.getElementById('tl-modal');
+    if(!modal){ clearInterval(_tlTimer); _tlTimer=null; return; }
+    if(!S.isRunning && !S.isClockRunning) return; // paused — no need to redraw
+    const body = document.getElementById('tl-body');
+    if(body) body.innerHTML = _tlView==='table' ? buildTableHTML() : buildStintHTML();
+  }, 1000);
+}
+
+function closeTimelineModal(){
+  clearInterval(_tlTimer); _tlTimer=null;
+  const modal = document.getElementById('tl-modal');
+  if(modal) modal.remove();
 }
 
 function switchTlView(view){
   _tlView = view;
   const body = document.getElementById('tl-body');
   if(body) body.innerHTML = view==='table' ? buildTableHTML() : buildStintHTML();
-  // Update tab styles
   document.querySelectorAll('.tl-tab').forEach(t=>{
     t.classList.toggle('active', t.dataset.view===view);
   });
@@ -4477,7 +4503,7 @@ function buildTimelineHTML(view){
       <button class="tl-tab ${view==='table'?'active':''}" data-view="table" onclick="switchTlView('table')">📊 TABLE</button>
       <button class="tl-tab ${view==='timeline'?'active':''}" data-view="timeline" onclick="switchTlView('timeline')">▬ TIMELINE</button>
     </div>
-    <button onclick="document.getElementById('tl-modal').remove()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;flex-shrink:0;">✕</button>
+    <button onclick="closeTimelineModal()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;flex-shrink:0;">✕</button>
   </div>
   <div id="tl-body" class="tl-body">${view==='table'?buildTableHTML():buildStintHTML()}</div>`;
 }
@@ -5158,8 +5184,8 @@ function stateToJSON(){
     priorityPlayerIds: [...S.priorityPlayerIds],
     finalScore: S.finalScore||{us:null,them:null},
     subPlan: {
-      h1: (S.subPlan.h1||[]).map(s=>s?{off:[...s.off],on:[...s.on]}:null),
-      h2: (S.subPlan.h2||[]).map(s=>s?{off:[...s.off],on:[...s.on]}:null),
+      h1: (S.subPlan.h1||[]).map(s=>s?{off:[...s.off],on:[...s.on],atTime:s.atTime||null}:null),
+      h2: (S.subPlan.h2||[]).map(s=>s?{off:[...s.off],on:[...s.on],atTime:s.atTime||null}:null),
     },
     planSubIdx: S.planSubIdx,
     players: S.players,
@@ -5168,6 +5194,8 @@ function stateToJSON(){
     subCountdown: S.subCountdown,
     alertState: S.alertState,
     subLog: S.subLog,
+    gamePositions: S.gamePositions||{},
+    manualPositions: S.manualPositions||{},
   });
 }
 
@@ -5210,6 +5238,8 @@ function loadStateFromData(d){
     S.alertState=d.alertState||null;
     prevAlert=d.alertState||null;
     S.subLog=d.subLog||[];
+    S.gamePositions=d.gamePositions||{};
+    S.manualPositions=d.manualPositions||{};
     S.isRunning=false; // never auto-resume
     S.selCourt=new Set();
     S.selBench=new Set();
