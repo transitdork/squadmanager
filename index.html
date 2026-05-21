@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.21.5';
+const APP_VERSION = '2026.05.21.6';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -4988,14 +4988,23 @@ function exportGamePDF(){
       '<tbody>'+logRows+'</tbody></table>':'')+
     '</body></html>';
 
-  // Use Blob URL — works on iOS Safari where window.open popup is blocked
-  var blob=new Blob([html],{type:'text/html'});
-  var url=URL.createObjectURL(blob);
-  var a=document.createElement('a');
-  a.href=url; a.target='_blank'; a.download=teamName.replace(/\s+/g,'_')+'_game_report.html';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},500);
+  // Open in new tab and print (gives "Save as PDF" on iOS/desktop)
+  var w=window.open('','_blank');
+  if(!w){
+    // Popup blocked — fallback: Blob link with print prompt inside
+    var blob=new Blob([html],{type:'text/html'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.target='_blank';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
+    showToast('Tip: open the file and use Print → Save as PDF');
+  } else {
+    w.document.open(); w.document.write(html); w.document.close();
+    w.focus();
+    // Small delay so content renders before print dialog
+    setTimeout(function(){ w.print(); },600);
+  }
 }
 
 
@@ -5029,64 +5038,80 @@ function saveGameReport(){
 
 // ── Claude upload modal — formatted summary for pasting ──
 function uploadToClaudeModal(){
+  // Remove any existing instance
+  const existing=document.getElementById('claude-report-modal');
+  if(existing) existing.remove();
+
   const team=T.teams.find(t=>t.id===T.activeTeamId);
   const teamName=team?(team.club+' '+(team.ageBracket||'')).trim():'Team';
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
   const totalSecs=gameTotalSecs();
-  const fairShare=Math.round(totalSecs*5/Math.max(sorted.length,5));
+  const fairShare=Math.round(totalSecs*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
   const score=S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)
-    ?'Score: '+(S.finalScore.us??'?')+' – '+(S.finalScore.them??'?')+'\n':'';
+    ?'Score: '+(S.finalScore.us??'?')+' - '+(S.finalScore.them??'?')+'\n':'';
 
-  let txt=`SQUAD MANAGER GAME REPORT — ${teamName}\n`;
-  txt+=`Date: ${new Date().toLocaleDateString()} | Game time: ${fmt(S.gameTime)}\n${score}\n`;
-  txt+=`PLAYING TIME (fair share: ${fmt(fairShare)}/player)\n${'─'.repeat(52)}\n`;
-  txt+=`${'Player'.padEnd(18)}${'H1'.padEnd(8)}${'H2'.padEnd(8)}${'Total'.padEnd(8)}vs Fair\n`;
-  sorted.forEach(p=>{
+  let txt='SQUAD MANAGER GAME REPORT — '+teamName+'\n';
+  txt+='Date: '+new Date().toLocaleDateString()+' | Game time: '+fmt(S.gameTime)+'\n'+score+'\n';
+  txt+='PLAYING TIME (fair share: '+fmt(fairShare)+'/player)\n'+'─'.repeat(50)+'\n';
+  txt+=('Player'.padEnd(18)+('H1').padEnd(8)+('H2').padEnd(8)+('Total').padEnd(8)+'vs Fair\n');
+  sorted.forEach(function(p){
     const d=p.playTime-fairShare;
     const dStr=(d>=0?'+':'')+fmt(Math.abs(d));
-    txt+=`${p.name.padEnd(18)}${fmt(p.h1PlayTime).padEnd(8)}${fmt(p.h2PlayTime).padEnd(8)}${fmt(p.playTime).padEnd(8)}${dStr} | ${p.fouls}f\n`;
+    txt+=(p.name.padEnd(18)+fmt(p.h1PlayTime).padEnd(8)+fmt(p.h2PlayTime).padEnd(8)+fmt(p.playTime).padEnd(8)+dStr+' | '+p.fouls+'f\n');
   });
   if(S.subLog.length){
-    txt+=`\nSUBSTITUTION LOG (${S.subLog.length} subs)\n${'─'.repeat(52)}\n`;
-    S.subLog.forEach(e=>{
-      txt+=`${fmt(e.gameTime)} H${e.half}: ON ${e.on.join(',')} | OFF ${e.off.join(',')}\n`;
+    txt+='\nSUBSTITUTION LOG ('+S.subLog.length+' entries)\n'+'─'.repeat(50)+'\n';
+    S.subLog.forEach(function(e){
+      const period=e.isHalftime?'HALF TIME':('H'+e.half+' '+fmt(e.halfTime));
+      txt+=fmt(e.gameTime)+' '+period+': ON '+e.on.join(',')+' | OFF '+e.off.join(',')+'\n';
     });
   }
 
+  // Build modal using DOM (no innerHTML template literals — avoids escaping issues)
   const modal=document.createElement('div');
   modal.id='claude-report-modal';
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9000;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 12px env(safe-area-inset-bottom,0px);';
-  modal.id='claude-upload-modal';
-  modal.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px 10px;">
-      <div style="font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;color:#a78bfa;">🤖 UPLOAD TO CLAUDE</div>
-      <button onclick="document.getElementById('claude-report-modal').remove()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;">✕</button>
-    </div>
-    <div style="font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.6;">
-      1. Tap <strong style="color:#fff">COPY REPORT</strong> below<br>
-      2. Open <a href="https://claude.ai" target="_blank" style="color:#7ab8ff">claude.ai</a> in a new tab<br>
-      3. Paste and add your coaching question — e.g. <em>"What does this tell me about rotation patterns? Who needs more time next game?"</em>
-    </div>
-    <textarea readonly style="flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:monospace;font-size:11px;padding:10px;resize:none;outline:none;margin-bottom:10px;">${txt}</textarea>
-    <button id="claude-copy-btn" onclick="navigator.clipboard.writeText(document.querySelector('[style*=flex:1] + * textarea,textarea').value||'').then(()=>showToast('Copied ✓'));this.textContent='✓ COPIED!'"
-      style="background:#a78bfa;color:#111;border:none;border-radius:12px;padding:15px;font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;flex-shrink:0;margin-bottom:8px;">
-      COPY REPORT
-    </button>`;
-  // Fix copy button - use a simpler approach
-  modal.querySelector('#claude-copy-btn').id='claude-copy-btn';
-  const copyBtn=modal.querySelector('#claude-copy-btn')||modal.querySelector('button:last-of-type');
-  const ta=modal.querySelector('textarea');
-  copyBtn.onclick=()=>{
-    navigator.clipboard.writeText(ta.value).then(()=>{
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9000;display:flex;flex-direction:column;padding:env(safe-area-inset-top,12px) 12px env(safe-area-inset-bottom,12px);gap:10px;';
+
+  const hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding-top:4px;';
+  const title=document.createElement('div');
+  title.style.cssText='font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;color:#a78bfa;';
+  title.textContent='🤖 UPLOAD TO CLAUDE';
+  const closeBtn=document.createElement('button');
+  closeBtn.textContent='✕';
+  closeBtn.style.cssText='background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:36px;height:36px;font-size:20px;cursor:pointer;flex-shrink:0;';
+  closeBtn.onclick=function(){ document.getElementById('claude-report-modal').remove(); };
+  hdr.appendChild(title); hdr.appendChild(closeBtn);
+
+  const instructions=document.createElement('div');
+  instructions.style.cssText='font-size:12px;color:var(--dim);line-height:1.7;flex-shrink:0;';
+  instructions.innerHTML='1. Tap <strong style="color:#fff">COPY REPORT</strong> below<br>2. Open <a href="https://claude.ai" target="_blank" style="color:#7ab8ff">claude.ai</a> in a new tab &amp; paste<br>3. Add your question — e.g. <em>"Who needs more time next game?"</em>';
+
+  const ta=document.createElement('textarea');
+  ta.readOnly=true;
+  ta.value=txt;
+  ta.style.cssText='flex:1;min-height:0;background:var(--card);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:monospace;font-size:11px;padding:10px;resize:none;outline:none;';
+
+  const copyBtn=document.createElement('button');
+  copyBtn.textContent='COPY REPORT';
+  copyBtn.style.cssText='background:#a78bfa;color:#111;border:none;border-radius:12px;padding:14px;font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;flex-shrink:0;';
+  copyBtn.onclick=function(){
+    navigator.clipboard.writeText(ta.value).then(function(){
       copyBtn.textContent='✓ COPIED!';
       showToast('Report copied — paste into Claude ✓');
-    }).catch(()=>{
+    }).catch(function(){
       ta.select(); document.execCommand('copy');
       copyBtn.textContent='✓ COPIED!';
     });
   };
+
+  modal.appendChild(hdr);
+  modal.appendChild(instructions);
+  modal.appendChild(ta);
+  modal.appendChild(copyBtn);
   document.body.appendChild(modal);
 }
+
 
 function renderGameover(){
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
