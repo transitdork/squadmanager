@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.21.3';
+const APP_VERSION = '2026.05.21.5';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -1129,7 +1129,11 @@ function getCurrentQuarter(){
 // Quarter break time within a half (midpoint)
 function getQuarterBreakTime(){ return Math.round(getHalfDur()/2); }
 
-function getHalfDur(){ return (S.phase==='h2'||S.phase==='q3break'?S.h2Dur:S.h1Dur)*60; }
+// Each half duration — for quarter teams always 20 min (2×10min) regardless of stored h1Dur/h2Dur
+function getHalfDur(){
+  if(usesQuarters()) return 20*60;
+  return (S.phase==='h2'||S.phase==='q3break'?S.h2Dur:S.h1Dur)*60;
+}
 // Total game seconds — always 40min for quarter teams regardless of stored h1Dur/h2Dur
 function gameTotalSecs(){ return usesQuarters() ? 40*60 : (S.h1Dur+S.h2Dur)*60; }
 function getSubInt(){  return S.phase==='h2'?S.h2Int:S.h1Int; }  // already in seconds
@@ -1211,7 +1215,7 @@ function calcForecast(){
   // For quarters: remaining = current period remaining + future periods
   const qBreakInH1 = usesQuarters()&&S.phase==='h1'&&!S.q1BreakDone;
   const h1Remaining = S.phase==='h1'?halfRem:0;
-  const halfDurSecs = usesQuarters() ? 20*60 : S.h2Dur*60;
+  const halfDurSecs = getHalfDur();
   const h2Remaining = S.phase==='h2'?halfRem:halfDurSecs;
   const gameRem = h1Remaining + h2Remaining;
   const remPP=Math.round(gameRem*COURT_SIZE/aCount);
@@ -1295,7 +1299,7 @@ function getCourtAtPlanPoint(halfKey, subIdx){
 function getPlanHighlights(){
   // Final-5 always shows regardless of showPlanned toggle
   if(S.useFinalPreset && S.finalPresetIds.size===COURT_SIZE && S.phase==='h2'){
-    const halfSecs=S.h2Dur*60;
+    const halfSecs=getHalfDur();
     const numSubs=Math.max(0,Math.ceil(halfSecs/S.h2Int)-1);
     if(S.planSubIdx>=numSubs-1){
       const finalIds=S.finalPresetIds;
@@ -2122,11 +2126,20 @@ function toggleHtPlayer(pid){
 }
 
 function startSecondHalf(){
+  // Log any halftime lineup changes as a sub entry at gameTime boundary
+  const prevCourt = new Set(S.players.filter(p=>p.onCourt).map(p=>p.id));
+  const offIds = [...prevCourt].filter(id=>!S.htOnCourt.has(id));
+  const onIds  = [...S.htOnCourt].filter(id=>!prevCourt.has(id));
+  if(offIds.length||onIds.length){
+    const getName = id=>{ const p=S.players.find(q=>q.id===id); return p?p.name:'?'; };
+    S.subLog.push({gameTime:S.gameTime, halfTime:0, half:2, isHalftime:true,
+      on:onIds.map(getName), off:offIds.map(getName)});
+  }
   S.players.forEach(p=>{ p.onCourt=S.htOnCourt.has(p.id); p.benchStint=0; });
   S.halfTime=0; S.subCountdown=S.h2Int;
   S.alertState=null; prevAlert=null; S.planSubIdx=0;
   S.selCourt=new Set(); S.selBench=new Set();
-  S.phase='h2'; S.isRunning=true; S.isClockRunning=true;  // start immediately
+  S.phase='h2'; S.isRunning=true; S.isClockRunning=true;
   render();
   startTick();
 }
@@ -3529,7 +3542,7 @@ async function generateAIRotation(){
     if(parsed.starting5 && parsed.starting5.length===COURT_SIZE){
       // (validation uses original name list so just keep h1StartCourt as-is for now)
     }
-    const h1Val = validateAndFixHalf(parsed.h1, S.h1Dur*60, h1StartCourt);
+    const h1Val = validateAndFixHalf(parsed.h1, usesQuarters()?20*60:S.h1Dur*60, h1StartCourt);
     parsed.h1 = h1Val.fixed;
 
     // H2 start: use AI's h2Starting5 if valid, else carry over from h1 final
@@ -3549,7 +3562,7 @@ async function generateAIRotation(){
     } else {
       h2StartCourt=[...h1Val.finalCourt];
     }
-    const h2Val = validateAndFixHalf(parsed.h2, S.h2Dur*60, h2StartCourt);
+    const h2Val = validateAndFixHalf(parsed.h2, usesQuarters()?20*60:S.h2Dur*60, h2StartCourt);
     parsed.h2 = h2Val.fixed;
 
     // ── Recalculate expectedTimes from the validated subs ──
@@ -3572,8 +3585,8 @@ async function generateAIRotation(){
       const finalStint=halfSecs-prev;
       if(finalStint>0) court.forEach(id=>{ if(id<playSecs.length) playSecs[id]+=finalStint; });
     }
-    simHalf(parsed.h1, S.h1Dur*60, h1StartCourt);
-    simHalf(parsed.h2, S.h2Dur*60, h2StartCourt);
+    simHalf(parsed.h1, usesQuarters()?20*60:S.h1Dur*60, h1StartCourt);
+    simHalf(parsed.h2, usesQuarters()?20*60:S.h2Dur*60, h2StartCourt);
     const recalcTimes = {};
     filtered.forEach((nm,i)=>{ const t=playSecs[i]; recalcTimes[nm]=Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); });
     parsed.expectedTimes = recalcTimes; // replace AI's self-reported times with ground truth
@@ -3725,9 +3738,9 @@ async function generateAIRotation(){
       [...onCourt].forEach(id=>playTime[id]+=(halfSecs-prev));
       return{subs,playTime,finalCourt:onCourt};
     }
-    const h1Res=buildEqualHalf(S.h1Dur*60,filtered.slice(0,COURT_SIZE).map((_,i)=>i));
+    const h1Res=buildEqualHalf(usesQuarters()?20*60:S.h1Dur*60,filtered.slice(0,COURT_SIZE).map((_,i)=>i));
     const h2StartIds=filtered.map((_,i)=>({i,t:h1Res.playTime[i]})).sort((a,b)=>a.t-b.t).slice(0,COURT_SIZE).map(x=>x.i);
-    const h2Res=buildEqualHalf(S.h2Dur*60,h2StartIds);
+    const h2Res=buildEqualHalf(usesQuarters()?20*60:S.h2Dur*60,h2StartIds);
     const totalPlay=h1Res.playTime.map((t,i)=>t+(h2Res.playTime[i]||0));
     const times={};
     filtered.forEach((nm,i)=>{const t=totalPlay[i];times[nm]=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');});
@@ -3810,8 +3823,9 @@ function applyAIRotation(plan, filtered){
   // Auto-adjust sub intervals so slot count matches AI sub count
   const h1Subs=(plan.h1||[]).length;
   const h2Subs=(plan.h2||[]).length;
-  if(h1Subs>0){ S.h1Int=Math.max(20,Math.floor(S.h1Dur*60/(h1Subs+1))); }
-  if(h2Subs>0){ S.h2Int=Math.max(20,Math.floor(S.h2Dur*60/(h2Subs+1))); }
+  const _halfSecs=usesQuarters()?20*60:S.h1Dur*60;
+  if(h1Subs>0){ S.h1Int=Math.max(20,Math.floor(_halfSecs/(h1Subs+1))); }
+  if(h2Subs>0){ S.h2Int=Math.max(20,Math.floor(_halfSecs/(h2Subs+1))); }
 
   // Apply AI starting 5 — reorder S.names so getCourtAtPlanPoint tracks correctly
   if(plan.starting5&&plan.starting5.length===COURT_SIZE){
@@ -4777,42 +4791,21 @@ function buildStintHTML(){
 
   // Build each player's court stints from subLog
   function playerStints(pname){
-    // Build a list of {start, end, onCourt} intervals
-    const stints = [];
-    // Determine start state: was this player in the starting 5?
-    const startOnCourt = players.find(p=>p.name===pname)
-      ? !!(S.subLog.length
-          ? !S.subLog.some(e=>e.on.includes(pname) && e.gameTime===S.subLog[0]?.gameTime && S.subLog[0]?.gameTime===0)
-          : players.find(p=>p.name===pname)?.onCourt)
-      : false;
-
-    // Walk the sub log to reconstruct stints
-    let onCourt = players.find(p=>p.name===pname)?.onCourt;
-    // Determine initial state: if player never appears in a sub's "on" list, they started on court
-    const everwentOn = S.subLog.some(e=>e.on.includes(pname));
-    const everwentOff = S.subLog.some(e=>e.off.includes(pname));
-    let startedOnCourt = !everwentOn || (everwentOff && !everwentOn);
-    // Use a simpler heuristic: check first sub involving them
-    const firstSub = S.subLog.find(e=>e.on.includes(pname)||e.off.includes(pname));
-    if(firstSub){
-      startedOnCourt = firstSub.on.includes(pname) ? false : true;
-    } else {
-      startedOnCourt = onCourt; // no subs — use current state
-    }
-
-    let curState = startedOnCourt;
-    let curStart = 0;
-
-    S.subLog.forEach(sub=>{
-      if(sub.on.includes(pname)){
-        if(!curState){ stints.push({start:curStart, end:sub.gameTime, on:false}); curStart=sub.gameTime; curState=true; }
+    const firstSub=S.subLog.find(e=>e.on.includes(pname)||e.off.includes(pname));
+    const onCourt=players.find(p=>p.name===pname)?.onCourt||false;
+    var startedOnCourt=firstSub?(firstSub.on.includes(pname)?false:true):onCourt;
+    var curState=startedOnCourt, curStart=0;
+    const stints=[];
+    S.subLog.forEach(function(sub){
+      if(sub.isHalftime){
+        const willBe=sub.on.includes(pname)?true:sub.off.includes(pname)?false:curState;
+        if(willBe!==curState){ stints.push({start:curStart,end:sub.gameTime,on:curState}); curStart=sub.gameTime; curState=willBe; }
+        return;
       }
-      if(sub.off.includes(pname)){
-        if(curState){ stints.push({start:curStart, end:sub.gameTime, on:true}); curStart=sub.gameTime; curState=false; }
-      }
+      if(sub.on.includes(pname)&&!curState){ stints.push({start:curStart,end:sub.gameTime,on:false}); curStart=sub.gameTime; curState=true; }
+      if(sub.off.includes(pname)&&curState){ stints.push({start:curStart,end:sub.gameTime,on:true}); curStart=sub.gameTime; curState=false; }
     });
-    // Final stint to now
-    stints.push({start:curStart, end:gameSecs, on:curState});
+    stints.push({start:curStart,end:gameSecs,on:curState});
     return stints;
   }
 
@@ -4862,44 +4855,149 @@ function buildStintHTML(){
 
 // ── Game report: PDF export via print ──
 function exportGamePDF(){
-  const team = T.teams.find(t=>t.id===T.activeTeamId);
-  const teamName = team ? (team.club+' '+(team.ageBracket||'')).trim() : 'Squad Manager';
-  const score = S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)
-    ? (S.finalScore.us??'—')+' – '+(S.finalScore.them??'—') : '';
+  const team=T.teams.find(t=>t.id===T.activeTeamId);
+  const teamName=team?(team.club+' '+(team.ageBracket||'')).trim():'Squad Manager';
+  const score=S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)
+    ?(S.finalScore.us??'—')+' – '+(S.finalScore.them??'—'):'';
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
   const totalSecs=gameTotalSecs();
-  const fairShare=Math.round(totalSecs*5/Math.max(sorted.length,5));
+  const fairShare=Math.round(totalSecs*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
   const isQ=usesQuarters();
-  const h1L=isQ?'Q1+Q2':'H1'; const h2L=isQ?'Q3+Q4':'H2';
+  const h1L=isQ?'Q1+Q2':'H1', h2L=isQ?'Q3+Q4':'H2';
 
-  const rows=sorted.map(p=>{
+  // ── Playing time bar chart (SVG) ──
+  const BAR_W=360, BAR_H=18, GAP=6, LEFT=110, RIGHT=80;
+  const chartH=sorted.length*(BAR_H+GAP)+20;
+  const barSVG=(()=>{
+    let svgRows='';
+    sorted.forEach(function(p,i){
+      const pct=Math.min(1,p.playTime/totalSecs);
+      const tPct=Math.min(1,fairShare/totalSecs);
+      const diff=p.playTime-fairShare;
+      const col=p.playTime>=fairShare*0.9?'#3ecf6e':p.playTime>=fairShare*0.6?'#ffcc00':'#ff5555';
+      const dStr=(diff>=0?'+':'')+fmt(Math.abs(diff));
+      const y=20+i*(BAR_H+GAP);
+      svgRows+=
+        '<text x="'+LEFT+'" y="'+(y+13)+'" font-size="11" fill="#222" text-anchor="end" font-family="Arial">'+p.name+'</text>'+
+        '<rect x="'+(LEFT+4)+'" y="'+y+'" width="'+Math.round(pct*BAR_W)+'" height="'+BAR_H+'" fill="'+col+'" rx="3"/>'+
+        '<rect x="'+(LEFT+4+Math.round(tPct*BAR_W)-1)+'" y="'+(y-2)+'" width="2" height="'+(BAR_H+4)+'" fill="rgba(0,0,0,0.35)"/>'+
+        '<text x="'+(LEFT+4+BAR_W+6)+'" y="'+(y+13)+'" font-size="10" fill="'+col+'" font-family="Arial">'+fmt(p.playTime)+'</text>'+
+        '<text x="'+(LEFT+4+BAR_W+50)+'" y="'+(y+13)+'" font-size="10" fill="'+(diff>=0?'#3ecf6e':'#ff5555')+'" font-family="Arial">'+dStr+'</text>';
+    });
+    return '<svg width="'+(LEFT+4+BAR_W+RIGHT)+'" height="'+chartH+'" xmlns="http://www.w3.org/2000/svg">'+
+      '<text x="'+(LEFT+4)+'" y="13" font-size="9" fill="#666" font-family="Arial">0:00</text>'+
+      '<text x="'+(LEFT+4+BAR_W/2)+'" y="13" font-size="9" fill="#666" font-family="Arial" text-anchor="middle">'+fmt(totalSecs/2)+'</text>'+
+      '<text x="'+(LEFT+4+BAR_W)+'" y="13" font-size="9" fill="#666" font-family="Arial" text-anchor="end">'+fmt(totalSecs)+'</text>'+
+      svgRows+'</svg>';
+  })();
+
+  // ── Rotation timeline (SVG) ──
+  const h1Secs=usesQuarters()?20*60:S.h1Dur*60;
+  function playerStintsPDF(pname){
+    const firstSub=S.subLog.find(e=>e.on.includes(pname)||e.off.includes(pname));
+    const pObj=S.players.find(p=>p.name===pname);
+    var cur=firstSub?(firstSub.on.includes(pname)?false:true):(pObj?pObj.onCourt:false);
+    var start=0; const stints=[];
+    S.subLog.forEach(function(sub){
+      if(sub.isHalftime){
+        const will=sub.on.includes(pname)?true:sub.off.includes(pname)?false:cur;
+        if(will!==cur){stints.push({start,end:sub.gameTime,on:cur});start=sub.gameTime;cur=will;}
+        return;
+      }
+      if(sub.on.includes(pname)&&!cur){stints.push({start,end:sub.gameTime,on:false});start=sub.gameTime;cur=true;}
+      if(sub.off.includes(pname)&&cur){stints.push({start,end:sub.gameTime,on:true});start=sub.gameTime;cur=false;}
+    });
+    stints.push({start,end:S.gameTime,on:cur});
+    return stints;
+  }
+  const TL_W=360, TL_H=20, TL_LEFT=110;
+  const tlChartH=sorted.length*(TL_H+GAP)+20;
+  const tlSVG=(()=>{
+    let rows='';
+    sorted.forEach(function(p,i){
+      const y=20+i*(TL_H+GAP);
+      const stints=playerStintsPDF(p.name);
+      let bars='';
+      stints.forEach(function(s){
+        if(!s.on) return;
+        const lx=Math.round(s.start/totalSecs*TL_W);
+        const rw=Math.max(1,Math.round((s.end-s.start)/totalSecs*TL_W));
+        bars+='<rect x="'+(TL_LEFT+4+lx)+'" y="'+y+'" width="'+rw+'" height="'+TL_H+'" fill="#3ecf6e" opacity="0.8" rx="2"/>';
+      });
+      rows+=
+        '<text x="'+TL_LEFT+'" y="'+(y+14)+'" font-size="11" fill="#222" text-anchor="end" font-family="Arial">'+p.name+'</text>'+
+        '<rect x="'+(TL_LEFT+4)+'" y="'+y+'" width="'+TL_W+'" height="'+TL_H+'" fill="#e8e8e8" rx="2"/>'+
+        bars+
+        '<rect x="'+(TL_LEFT+4+Math.round(h1Secs/totalSecs*TL_W)-1)+'" y="'+y+'" width="1" height="'+TL_H+'" fill="rgba(0,0,0,0.25)"/>';
+    });
+    return '<svg width="'+(TL_LEFT+4+TL_W+20)+'" height="'+tlChartH+'" xmlns="http://www.w3.org/2000/svg">'+
+      '<text x="'+(TL_LEFT+4)+'" y="13" font-size="9" fill="#666" font-family="Arial">0:00</text>'+
+      '<text x="'+(TL_LEFT+4+TL_W/2)+'" y="13" font-size="9" fill="#666" font-family="Arial" text-anchor="middle">'+fmt(totalSecs/2)+'</text>'+
+      '<text x="'+(TL_LEFT+4+TL_W)+'" y="13" font-size="9" fill="#666" font-family="Arial" text-anchor="end">'+fmt(totalSecs)+'</text>'+
+      rows+'</svg>';
+  })();
+
+  // ── Stats table rows ──
+  const rows=sorted.map(function(p){
     const diff=p.playTime-fairShare;
     const dStr=(diff>=0?'+':'')+fmt(Math.abs(diff));
-    return `<tr><td>${p.name}</td><td>${fmt(p.h1PlayTime)}</td><td>${fmt(p.h2PlayTime)}</td><td><strong>${fmt(p.playTime)}</strong></td><td style="color:${diff>=0?'green':'red'}">${dStr}</td><td>${p.fouls}</td></tr>`;
+    return '<tr><td>'+p.name+'</td><td>'+fmt(p.h1PlayTime)+'</td><td>'+fmt(p.h2PlayTime)+'</td>'+
+      '<td><strong>'+fmt(p.playTime)+'</strong></td>'+
+      '<td style="color:'+(diff>=0?'green':'red')+'">'+dStr+'</td>'+
+      '<td>'+p.fouls+'</td></tr>';
   }).join('');
 
-  const logRows=S.subLog.map(e=>`<tr><td>${fmt(e.gameTime)}</td><td>H${e.half} ${fmt(e.halfTime)}</td><td style="color:green">▲ ${e.on.join(', ')}</td><td style="color:orange">▼ ${e.off.join(', ')}</td></tr>`).join('');
+  // ── Sub log rows ──
+  const logRows=S.subLog.map(function(e){
+    var period=e.isHalftime?'Half Time':('H'+e.half+' '+fmt(e.halfTime));
+    var rowBg=e.isHalftime?'background:#fffbe6;':'';
+    return '<tr style="'+rowBg+'"><td>'+fmt(e.gameTime)+'</td><td>'+period+'</td>'+
+      '<td style="color:green">▲ '+e.on.join(', ')+'</td>'+
+      '<td style="color:orange">▼ '+e.off.join(', ')+'</td></tr>';
+  }).join('');
 
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Game Report</title>
-<style>body{font-family:Arial,sans-serif;margin:20px;color:#222;}h1{font-size:20px;margin-bottom:4px;}h2{font-size:14px;color:#666;margin:16px 0 6px;}
-table{border-collapse:collapse;width:100%;font-size:12px;}th,td{border:1px solid #ccc;padding:5px 8px;text-align:left;}th{background:#f0f0f0;}
-.score{font-size:32px;font-weight:700;text-align:center;margin:8px 0;}
-</style></head><body>
-<h1>${teamName}</h1>
-<div>Game played ${new Date().toLocaleDateString()}</div>
-${score?`<div class="score">${score}</div>`:''}
-<h2>Playing Time (fair share: ${fmt(fairShare)} / player)</h2>
-<table><thead><tr><th>Player</th><th>${h1L}</th><th>${h2L}</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead><tbody>${rows}</tbody></table>
-${S.subLog.length?`<h2>Substitution Log (${S.subLog.length} subs)</h2>
-<table><thead><tr><th>Game Time</th><th>Half Time</th><th>On</th><th>Off</th></tr></thead><tbody>${logRows}</tbody></table>`:''}
-</body></html>`;
+  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Game Report — '+teamName+'</title>'+
+    '<style>'+
+      'body{font-family:Arial,sans-serif;margin:24px;color:#222;max-width:750px;}'+
+      'h1{font-size:20px;margin:0 0 2px;}'+
+      'h2{font-size:13px;color:#555;margin:18px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px;}'+
+      'table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:4px;}'+
+      'th,td{border:1px solid #ccc;padding:5px 8px;text-align:left;}'+
+      'th{background:#f4f4f4;font-weight:600;}'+
+      '.score{font-size:36px;font-weight:700;text-align:center;margin:10px 0;letter-spacing:4px;}'+
+      '.legend{font-size:10px;color:#888;margin-bottom:8px;}'+
+      '@media print{body{margin:12px;}h2{page-break-after:avoid;}table,svg{page-break-inside:avoid;}}'+
+    '</style></head><body>'+
+    '<h1>'+teamName+'</h1>'+
+    '<div style="font-size:12px;color:#555;">Game played '+new Date().toLocaleDateString()+
+      (score?' &nbsp;|&nbsp; Score: <strong>'+score+'</strong>':'')+
+      ' &nbsp;|&nbsp; '+sorted.length+' players &nbsp;|&nbsp; '+fmt(S.gameTime)+' played</div>'+
+    (score?'<div class="score">'+score+'</div>':'')+
+    '<h2>Playing Time &nbsp;<span style="font-weight:400;color:#888;">(fair share: '+fmt(fairShare)+'/player · dark line = target)</span></h2>'+
+    '<div class="legend">Green = at/above target &nbsp; Yellow = slightly under &nbsp; Red = significantly under</div>'+
+    barSVG+
+    '<h2>Rotation Timeline &nbsp;<span style="font-weight:400;color:#888;">(green = on court · grey line = half break)</span></h2>'+
+    '<div class="legend">Shows when each player was on court throughout the game</div>'+
+    tlSVG+
+    '<h2>Player Statistics</h2>'+
+    '<table><thead><tr><th>Player</th><th>'+h1L+'</th><th>'+h2L+'</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table>'+
+    (S.subLog.length?
+      '<h2>Substitution Log ('+S.subLog.length+' entries)</h2>'+
+      '<table><thead><tr><th>Game Time</th><th>Period</th><th>On</th><th>Off</th></tr></thead>'+
+      '<tbody>'+logRows+'</tbody></table>':'')+
+    '</body></html>';
 
-  const w=window.open('','_blank','width=800,height=900');
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(()=>{ w.print(); }, 500);
+  // Use Blob URL — works on iOS Safari where window.open popup is blocked
+  var blob=new Blob([html],{type:'text/html'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.target='_blank'; a.download=teamName.replace(/\s+/g,'_')+'_game_report.html';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},500);
 }
+
 
 // ── Save game report to localStorage ──
 const REPORTS_KEY='squadmgr_reports_v1';
@@ -4962,7 +5060,7 @@ function uploadToClaudeModal(){
   modal.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px 10px;">
       <div style="font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;color:#a78bfa;">🤖 UPLOAD TO CLAUDE</div>
-      <button onclick="document.getElementById('claude-upload-modal').remove()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;">✕</button>
+      <button onclick="document.getElementById('claude-report-modal').remove()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;">✕</button>
     </div>
     <div style="font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.6;">
       1. Tap <strong style="color:#fff">COPY REPORT</strong> below<br>
@@ -4970,12 +5068,13 @@ function uploadToClaudeModal(){
       3. Paste and add your coaching question — e.g. <em>"What does this tell me about rotation patterns? Who needs more time next game?"</em>
     </div>
     <textarea readonly style="flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:monospace;font-size:11px;padding:10px;resize:none;outline:none;margin-bottom:10px;">${txt}</textarea>
-    <button onclick="navigator.clipboard.writeText(document.querySelector('[style*=flex:1] + * textarea,textarea').value||'').then(()=>showToast('Copied ✓'));this.textContent='✓ COPIED!'"
+    <button id="claude-copy-btn" onclick="navigator.clipboard.writeText(document.querySelector('[style*=flex:1] + * textarea,textarea').value||'').then(()=>showToast('Copied ✓'));this.textContent='✓ COPIED!'"
       style="background:#a78bfa;color:#111;border:none;border-radius:12px;padding:15px;font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;flex-shrink:0;margin-bottom:8px;">
       COPY REPORT
     </button>`;
   // Fix copy button - use a simpler approach
-  const copyBtn=modal.querySelector('button:last-child');
+  modal.querySelector('#claude-copy-btn').id='claude-copy-btn';
+  const copyBtn=modal.querySelector('#claude-copy-btn')||modal.querySelector('button:last-of-type');
   const ta=modal.querySelector('textarea');
   copyBtn.onclick=()=>{
     navigator.clipboard.writeText(ta.value).then(()=>{
@@ -5006,9 +5105,11 @@ function renderGameover(){
 
   // Sub log — use Array.from to avoid nested template literal issue
   const logEntries = Array.from(S.subLog).map(function(e){
-    return '<div class="log-entry">' +
+    var periodLabel = e.isHalftime ? '🏀 HALF TIME' : ('H'+e.half+' · '+fmt(e.halfTime));
+    var bgStyle = e.isHalftime ? 'background:rgba(255,204,0,.08);border-left:2px solid var(--warn);' : '';
+    return '<div class="log-entry" style="'+bgStyle+'">' +
       '<span class="log-time">'+fmt(e.gameTime)+'</span>' +
-      '<span style="color:#7a80a0;margin-left:7px;font-size:9px">H'+e.half+' · '+fmt(e.halfTime)+'</span>' +
+      '<span style="color:#7a80a0;margin-left:7px;font-size:9px">'+periodLabel+'</span>' +
       '<div style="margin-top:2px;font-size:10px">' +
         '<span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span>' +
         '<span style="color:#7a80a0;margin:0 5px">←</span>' +
@@ -5024,13 +5125,23 @@ function renderGameover(){
     const h1Secs=S.h1Dur*60;
     const pct=s=>Math.min(100,Math.round(s/totalSecs*100));
     function playerStints(pname){
-      const stints=[];
-      const everwentOn=S.subLog.some(e=>e.on.includes(pname));
-      const everwentOff=S.subLog.some(e=>e.off.includes(pname));
+      // Determine starting state: was this player in the opening 5?
       const firstSub=S.subLog.find(e=>e.on.includes(pname)||e.off.includes(pname));
       var startedOnCourt=firstSub?(firstSub.on.includes(pname)?false:true):(S.players.find(p=>p.name===pname)?.onCourt||false);
       var curState=startedOnCourt, curStart=0;
+      const stints=[];
       S.subLog.forEach(function(sub){
+        // Halftime: treat as an instantaneous lineup reset at gameTime boundary
+        if(sub.isHalftime){
+          const wasOnCourt=sub.off.includes(pname)||(!sub.on.includes(pname)&&curState);
+          const willBeOnCourt=sub.on.includes(pname)||(!sub.off.includes(pname)&&curState);
+          // Close current stint at halftime boundary
+          if(curState!==willBeOnCourt){
+            stints.push({start:curStart,end:sub.gameTime,on:curState});
+            curStart=sub.gameTime; curState=willBeOnCourt;
+          }
+          return;
+        }
         if(sub.on.includes(pname) && !curState){ stints.push({start:curStart,end:sub.gameTime,on:false}); curStart=sub.gameTime; curState=true; }
         if(sub.off.includes(pname) && curState){ stints.push({start:curStart,end:sub.gameTime,on:true}); curStart=sub.gameTime; curState=false; }
       });
