@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.20.1';
+const APP_VERSION = '2026.05.21.1';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -2074,20 +2074,30 @@ function toggleFoul(pid, dot){
 }
 
 function startQuarterResume(fromPhase){
-  // Resume after a quarter break — continue the same half
-  S.isRunning=true; S.isClockRunning=true;
   S.alertState=null; prevAlert=null;
   S.selCourt=new Set(); S.selBench=new Set();
-  // Auto-commit any pending subs
+  // Apply any pending sub selections from quarter break screen
   if(S.pendingQBreakSubs){
     const {off, on} = S.pendingQBreakSubs;
-    S.players.forEach(p=>{
-      if(off.has(p.id)){ p.onCourt=false; }
-      if(on.has(p.id)){ p.onCourt=true; p.benchStint=0; }
-    });
+    const offArr=[...off], onArr=[...on];
+    const cnt=Math.min(offArr.length,onArr.length);
+    if(cnt>0){
+      const offNames=[], onNames=[];
+      S.players.forEach(p=>{
+        if(off.has(p.id)){ p.onCourt=false; offNames.push(p.name); }
+        if(on.has(p.id)){ p.onCourt=true; p.benchStint=0; onNames.push(p.name); }
+      });
+      S.subLog.push({gameTime:S.gameTime, halfTime:S.halfTime, half:S.phase==='q1break'?1:2, on:onNames, off:offNames});
+    }
     S.pendingQBreakSubs=null;
   }
+  // Recompute optimal positions for new court lineup
+  const newCourtIds=S.players.filter(p=>p.onCourt).map(p=>p.id);
+  const optimal=computeOptimalPositions(newCourtIds);
+  if(!S.manualPositions) S.manualPositions={};
+  newCourtIds.forEach(pid=>{ if(!S.manualPositions[pid]&&optimal[pid]) S.gamePositions[pid]=optimal[pid]; });
   S.phase = fromPhase==='q1break' ? 'h1' : 'h2';
+  S.isRunning=true; S.isClockRunning=true;
   render();
   startTick();
 }
@@ -2113,7 +2123,6 @@ function startSecondHalf(){
   S.halfTime=0; S.subCountdown=S.h2Int;
   S.alertState=null; prevAlert=null; S.planSubIdx=0;
   S.selCourt=new Set(); S.selBench=new Set();
-  S.q3BreakDone=false;
   S.phase='h2'; S.isRunning=true; S.isClockRunning=true;  // start immediately
   render();
   startTick();
@@ -2269,6 +2278,17 @@ function postSubPositionBoard(stayOn, nextOff, nextOn){
     '</div>';
 }
 
+// Toggle sub selection from pause overlay — refreshes just the overlay
+function toggleOvlSel(pid, fromCourt){
+  if(fromCourt){
+    if(S.selCourt.has(pid)) S.selCourt.delete(pid); else S.selCourt.add(pid);
+  } else {
+    if(S.selBench.has(pid)) S.selBench.delete(pid); else S.selBench.add(pid);
+  }
+  const ovl=document.getElementById('pause-ovl');
+  if(ovl) ovl.outerHTML=pauseOverlayHTML();
+}
+
 function pauseOverlayHTML(){
   const cp=courtPlayers();
   const bp=benchPlayers();
@@ -2319,8 +2339,13 @@ function pauseOverlayHTML(){
         if(pos) posBit='<span class="pos-badge '+(POS_COLOURS[+pos]||'')+'" style="font-size:12px;padding:2px 7px;margin-left:4px;">'+pos+'</span>';
       }
     }
-    return '<div style="border-radius:9px;padding:7px 11px;border:1.5px solid '+border+';background:'+bg+';display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">'+
-      '<span style="display:flex;align-items:center;font-weight:700;font-size:15px;color:#eef0f8;">'+name+posBit+'</span>'+
+    var fromCourt2 = !isComingOn; // off=fromCourt, on=fromBench
+    var isSel2 = pid!==undefined ? (fromCourt2 ? S.selCourt.has(pid) : S.selBench.has(pid)) : false;
+    var selOutline = isSel2 ? 'box-shadow:0 0 0 2px var(--accent);' : '';
+    var clickFn2 = pid!==undefined ? 'event.stopPropagation();toggleOvlSel('+pid+','+fromCourt2+');' : '';
+    var checkMark2 = isSel2 ? '<span style="color:var(--accent);margin-right:5px;font-size:14px;">✓</span>' : '';
+    return '<div onclick="'+clickFn2+'" style="border-radius:9px;padding:7px 11px;border:1.5px solid '+border+';background:'+bg+';'+selOutline+'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;cursor:pointer;">'+
+      '<span style="display:flex;align-items:center;font-weight:700;font-size:15px;color:#eef0f8;">'+checkMark2+name+posBit+'</span>'+
       '<span style="font-family:Impact,sans-serif;font-size:14px;color:'+timeColor+'">'+time+'</span>'+
       '</div>';
   };
@@ -2339,7 +2364,7 @@ function pauseOverlayHTML(){
   if(gameStarted){
     if(stayOn.length){
       leftHTML+=`<div class="po-chdr court">STAYING ON</div>`;
-      stayOn.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)', p.id); });
+      stayOn.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)', p.id, true); });
     }
     if(nextOff.length){
       const lbl=isFinalHL?'★ FINAL OFF':isPlanned?'PLANNED OFF':'SUB OFF';
@@ -2355,12 +2380,12 @@ function pauseOverlayHTML(){
     }
     if(otherBench.length){
       rightHTML+=`<div class="po-chdr bench" style="margin-top:${nextOn.length?7:0}px">BENCH</div>`;
-      otherBench.forEach(p=>{ rightHTML+=pillSmall(p.name, fmt(p.benchTime), 'var(--blue)'); });
+      otherBench.forEach(p=>{ rightHTML+=pillSmall(p.name, fmt(p.benchTime), 'var(--blue)', p.id, false); });
     }
     if(!bp.length) rightHTML+=`<div style="text-align:center;color:var(--dim);font-size:11px;padding:10px">Empty bench</div>`;
   } else {
     leftHTML+=`<div class="po-chdr court">STARTING COURT</div>`;
-    cp.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)', p.id); });
+    cp.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)', p.id, true); });
     rightHTML+=`<div class="po-chdr bench">BENCH</div>`;
     bp.forEach(p=>{ rightHTML+=pillSmall(p.name, fmt(p.benchTime), 'var(--blue)'); });
   }
@@ -2373,7 +2398,7 @@ function pauseOverlayHTML(){
       <div class="potime">${fmt(S.gameTime)}</div>
       <div class="po-subcountdown-lbl">${subLbl}</div>
       <div class="po-subcountdown" style="color:${subC}">${fmt(S.subCountdown)}</div>
-      <div class="posub">Tap anywhere to resume</div>`;
+      <div class="posub">${(()=>{ const cs=S.selCourt.size,bs=S.selBench.size; if(cs>0&&bs>0&&cs===bs) return '<span style="color:var(--accent);font-weight:700;">✓ '+cs+' sub ready — tap anywhere to make it</span>'; if(cs>0||bs>0) return 'Tap court to sub off · bench to sub on'; return 'Tap court/bench players to select sub'; })()}</div>\`;
   } else {
     const label=S.phase==='h2'?'2ND HALF':'1ST HALF';
     topHTML=`<div class="potitle" style="font-size:56px;text-align:center">${label}</div><div class="postart">Tap anywhere to start the clock</div>`;
@@ -2920,7 +2945,8 @@ function priorityPlayersHTML(filtered){
 }
 
 function autoModeTimeHTML(filtered, hasSubPlan){
-  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  // For quarter teams, game is 4×10min = 40min regardless of stored h1Dur/h2Dur
+  const totalSecs=usesQuarters() ? 40*60 : (S.h1Dur+S.h2Dur)*60;
   const n=filtered.length;
   if(n<COURT_SIZE) return n>0 ? priorityPlayersHTML(filtered) : '';
   const base=Math.floor(totalSecs*COURT_SIZE/n);
@@ -4166,7 +4192,7 @@ function renderSetup(restoreScroll){
   <div class="s-sec">
     <div class="s-hdr">${usesQuarters()?'Q1 / Q2':'1ST HALF'}</div>
     <div class="h-grid">
-      <div class="ni-wrap"><div class="s-lbl">Time (min)</div><input class="ni" type="number" min="1" max="60" value="${S.h1Dur}" onchange="S.h1Dur=Math.max(1,Math.min(60,parseInt(this.value)||20));renderSetup(true)"></div>
+      <div class="ni-wrap"><div class="s-lbl">${usesQuarters()?'Mins/quarter':'Mins/half'}</div><input class="ni" type="number" min="1" max="60" value="${usesQuarters()?S.h1Dur/2:S.h1Dur}" onchange="if(usesQuarters()){const v=Math.max(1,Math.min(30,parseInt(this.value)||10));S.h1Dur=v*2;S.h2Dur=v*2;}else{S.h1Dur=Math.max(1,Math.min(60,parseInt(this.value)||20));}renderSetup(true)"></div>
       ${stepperHTML('h1Int','Sub every')}
       <div class="ni-wrap"><div class="s-lbl">Per sub</div><input class="ni" type="number" min="1" max="5" value="${S.h1Sps}" onchange="S.h1Sps=Math.max(1,Math.min(5,parseInt(this.value)||2));renderSetup(true)"></div>
     </div>
@@ -4351,9 +4377,14 @@ function renderGame(){
   }
 
   const pbtnLabel=!gameStarted?'▶ START':S.isRunning?'⏸ TIMEOUT':'▶ RESUME';
-  const endLabel=isH2?'END GAME':(usesQuarters()?(S.alertState==='quartend'?(S.q1BreakDone?'END Q3':'END Q1'):S.q1BreakDone?'END Q2':'END Q1'):'END HALF');
-  const endCls=`endbtn ${isH2?'h2e':'h1e'}${S.alertState==='halfend'?' urgent':''}`;
-  const endAction=isH2?'confirmEndGame()':'confirmEndHalf()';
+  // Quarter teams need END Q3 during H2 before q3 break happens
+  var isQ3Pending = isH2 && usesQuarters() && !S.q3BreakDone;
+  var endLabel = isH2
+    ? (isQ3Pending ? 'END Q3' : 'END GAME')
+    : (usesQuarters() ? (S.q1BreakDone ? 'END Q2' : 'END Q1') : 'END HALF');
+  var urgentCls = (S.alertState==='halfend'||S.alertState==='quartend') ? ' urgent' : '';
+  var endCls = 'endbtn '+(isH2&&!isQ3Pending?'h2e':'h1e')+urgentCls;
+  var endAction = (isH2 && !isQ3Pending) ? 'confirmEndGame()' : 'confirmEndHalf()';
 
   $('app').innerHTML=`
 <div class="game">
@@ -4911,11 +4942,13 @@ function uploadToClaudeModal(){
   }
 
   const modal=document.createElement('div');
+  modal.id='claude-report-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9000;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 12px env(safe-area-inset-bottom,0px);';
+  modal.id='claude-upload-modal';
   modal.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px 10px;">
       <div style="font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;color:#a78bfa;">🤖 UPLOAD TO CLAUDE</div>
-      <button onclick="this.closest('[style]').remove()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;">✕</button>
+      <button onclick="document.getElementById('claude-upload-modal').remove()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;">✕</button>
     </div>
     <div style="font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.6;">
       1. Tap <strong style="color:#fff">COPY REPORT</strong> below<br>
@@ -5012,7 +5045,12 @@ ${S.subLog.map((e,i)=>`<div class="log-entry"><span class="log-time">${fmt(e.gam
       <tbody>${rows}</tbody>
     </table>
     ${goBarHTML}
-    ${logHTML}
+    <div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px;">
+      <div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">TIMELINE — on court per period</div>
+      ${buildStintHTML()}
+    </div>
+    ${S.subLog.length ? `<div class="log-title">SUBSTITUTION LOG · \${S.subLog.length} subs</div>
+\${S.subLog.map((e,i)=>'<div class="log-entry"><span class="log-time">'+fmt(e.gameTime)+'</span><span style="color:#7a80a0;margin-left:7px;font-size:9px">H'+e.half+' · '+fmt(e.halfTime)+'</span><div style="margin-top:2px;font-size:10px"><span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span><span style="color:#7a80a0;margin:0 5px">←</span><span style="color:#ff8c00">▼ '+e.off.join(', ')+'</span></div></div>').join('')}` : ''}
   </div>
   <div class="go-footer">
     <button class="exp-btn" onclick="exportReport()">⬆ TXT</button>
