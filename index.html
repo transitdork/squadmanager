@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.21.2';
+const APP_VERSION = '2026.05.21.3';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -1130,6 +1130,8 @@ function getCurrentQuarter(){
 function getQuarterBreakTime(){ return Math.round(getHalfDur()/2); }
 
 function getHalfDur(){ return (S.phase==='h2'||S.phase==='q3break'?S.h2Dur:S.h1Dur)*60; }
+// Total game seconds — always 40min for quarter teams regardless of stored h1Dur/h2Dur
+function gameTotalSecs(){ return usesQuarters() ? 40*60 : (S.h1Dur+S.h2Dur)*60; }
 function getSubInt(){  return S.phase==='h2'?S.h2Int:S.h1Int; }  // already in seconds
 function getCurrSps(){ return S.phase==='h2'?S.h2Sps:S.h1Sps; }
 
@@ -1203,13 +1205,14 @@ function doTick(){
 function calcForecast(){
   const active=S.players.filter(p=>p.fouls<5);
   const aCount=active.length||1;
-  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  const totalSecs=gameTotalSecs();
   const targetTime=Math.round(totalSecs*COURT_SIZE/aCount);
   const halfRem=getHalfDur()-S.halfTime;
   // For quarters: remaining = current period remaining + future periods
   const qBreakInH1 = usesQuarters()&&S.phase==='h1'&&!S.q1BreakDone;
   const h1Remaining = S.phase==='h1'?halfRem:0;
-  const h2Remaining = S.phase==='h2'?halfRem:S.h2Dur*60;
+  const halfDurSecs = usesQuarters() ? 20*60 : S.h2Dur*60;
+  const h2Remaining = S.phase==='h2'?halfRem:halfDurSecs;
   const gameRem = h1Remaining + h2Remaining;
   const remPP=Math.round(gameRem*COURT_SIZE/aCount);
   return {targetTime, remPP};
@@ -1761,7 +1764,7 @@ function buildSubPlanHTML(){
 
   // Playing time summary
   const planTimes=calcPlanPlayTimes();
-  const fairSecs = (S.h1Dur+S.h2Dur)*60*COURT_SIZE/filtered.length;
+  const fairSecs = gameTotalSecs()*COURT_SIZE/filtered.length;
   const summaryHTML=planTimes.length?`
     <div style="background:var(--card);border:1.5px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:10px;">
       <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--dim);margin-bottom:7px;">Expected Playing Time (planned subs)</div>
@@ -3174,7 +3177,7 @@ function renderAIParams(filtered){
   const bench=Math.max(0,n-COURT_SIZE);
   const maxPerSub=Math.min(bench,5)||1;
   const p=S.aiParams;
-  const fair=Math.round((S.h1Dur+S.h2Dur)*60*COURT_SIZE/Math.max(n,COURT_SIZE));
+  const fair=Math.round(gameTotalSecs()*COURT_SIZE/Math.max(n,COURT_SIZE));
 
   // Helper: render one param block (stacked label + slider)
   function param(id, label, valHTML, sliderHTML){
@@ -3370,7 +3373,7 @@ async function generateAIRotation(){
   showAIRotationModal(null, true, filtered, 0);
 
   // ── Build shared context (sent with every plan request) ──
-  const totalSecs  = (S.h1Dur+S.h2Dur)*60;
+  const totalSecs  = gameTotalSecs();
   const fairShare  = Math.round(totalSecs*COURT_SIZE/filtered.length);
   const fairFmt    = Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
   const adheresToPresets = S.aiAdheresToPresets !== false;
@@ -4292,7 +4295,7 @@ function renderGame(){
   const hiC=highlightCourt(), hiB=highlightBench();
   const {targetTime,remPP}=calcForecast();
   const active=S.players.filter(p=>p.fouls<5).length;
-  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  const totalSecs=gameTotalSecs();
   const halfRem=getHalfDur()-S.halfTime;
   const halfC=halfRem<=60?'#ff5555':halfRem<=120?'#ffcc00':'#eef0f8';
   const subC=S.alertState==='sub-now'?'#ff5555':S.alertState==='warning'?'#ffcc00':'#eef0f8';
@@ -4465,7 +4468,7 @@ function renderGame(){
 function miniBarChartHTML(){
   const players = S.players||[];
   if(!players.length) return '';
-  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  const totalSecs=gameTotalSecs();
   const fairShare=Math.round(totalSecs*COURT_SIZE/Math.max(players.length,COURT_SIZE));
   const sorted=[...players].sort((a,b)=>b.playTime-a.playTime);
   const rows=sorted.map(p=>{
@@ -4709,7 +4712,7 @@ function buildTableHTML(){
   const players = S.players || [];
   if(!players.length) return '<div style="text-align:center;color:var(--dim);padding:20px">No players</div>';
 
-  const totalSecs = (S.h1Dur+S.h2Dur)*60;
+  const totalSecs = gameTotalSecs();
   const gameSecs  = S.gameTime;
   const remaining = Math.max(0, totalSecs - gameSecs);
   const fairShare = Math.round(totalSecs * COURT_SIZE / Math.max(players.length,COURT_SIZE));
@@ -4767,7 +4770,7 @@ function buildStintHTML(){
   const players = S.players || [];
   if(!players.length) return '<div style="text-align:center;color:var(--dim);padding:20px">No players</div>';
 
-  const totalSecs = (S.h1Dur+S.h2Dur)*60;
+  const totalSecs = gameTotalSecs();
   const h1Secs    = S.h1Dur*60;
   const gameSecs  = S.gameTime;
   const pct = s => Math.min(100, Math.round(s/totalSecs*100));
@@ -4864,7 +4867,7 @@ function exportGamePDF(){
   const score = S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)
     ? (S.finalScore.us??'—')+' – '+(S.finalScore.them??'—') : '';
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
-  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  const totalSecs=gameTotalSecs();
   const fairShare=Math.round(totalSecs*5/Math.max(sorted.length,5));
   const isQ=usesQuarters();
   const h1L=isQ?'Q1+Q2':'H1'; const h2L=isQ?'Q3+Q4':'H2';
@@ -4931,7 +4934,7 @@ function uploadToClaudeModal(){
   const team=T.teams.find(t=>t.id===T.activeTeamId);
   const teamName=team?(team.club+' '+(team.ageBracket||'')).trim():'Team';
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
-  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  const totalSecs=gameTotalSecs();
   const fairShare=Math.round(totalSecs*5/Math.max(sorted.length,5));
   const score=S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)
     ?'Score: '+(S.finalScore.us??'?')+' – '+(S.finalScore.them??'?')+'\n':'';
@@ -4988,7 +4991,7 @@ function uploadToClaudeModal(){
 
 function renderGameover(){
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
-  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  const totalSecs=gameTotalSecs();
   const fairShare=Math.round(totalSecs*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
   const isQ=usesQuarters();
   const h1Label=isQ?'Q1+Q2':'H1'; const h2Label=isQ?'Q3+Q4':'H2';
