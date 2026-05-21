@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.21.6';
+const APP_VERSION = '2026.05.21.7';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -2111,6 +2111,14 @@ function startQuarterResume(fromPhase){
 
 function endHalf(){
   stopTick(); S.isRunning=false; S.isClockRunning=false;
+  // Quarter teams: route to the correct break screen
+  if(usesQuarters() && S.phase==='h1' && !S.q1BreakDone){
+    S.q1BreakDone=true; S.phase='q1break'; render(); return;
+  }
+  if(usesQuarters() && S.phase==='h2' && !S.q3BreakDone){
+    S.q3BreakDone=true; S.phase='q3break'; render(); return;
+  }
+  // Non-quarter teams, or Q2→halftime, or Q4→game end (shouldn't reach here for Q4)
   const h2Court=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE
     ? new Set(S.h2PresetIds)
     : new Set(S.players.filter(p=>p.onCourt).map(p=>p.id));
@@ -5426,26 +5434,25 @@ function showConfirm({title, body, okLabel, okClass, onOk}){
 function hideConfirm(){ $('confirm-modal').style.display='none'; $('confirm-modal').innerHTML=''; }
 
 function confirmEndHalf(){
-  // Quarter teams: if at or past quarter break time, go to quarter break screen
+  // Work out which period we're ending for the label
+  var label;
   if(usesQuarters()){
-    const qbTime = getQuarterBreakTime();
-    const atQ1End = S.phase==='h1' && !S.q1BreakDone && S.halfTime>=qbTime;
-    const atQ3End = S.phase==='h2' && !S.q3BreakDone && S.halfTime>=qbTime;
-    if(atQ1End||atQ3End||S.alertState==='quartend'){
-      // Manual quarter break — go straight to quarter break screen
-      stopTick(); S.isRunning=false; S.isClockRunning=false;
-      if(S.phase==='h1') S.q1BreakDone=true;
-      if(S.phase==='h2') S.q3BreakDone=true;
-      S.phase=(S.phase==='h1'?'q1break':'q3break');
-      render(); return;
-    }
+    if(S.phase==='h1') label = S.q1BreakDone ? 'Q2' : 'Q1';
+    else               label = 'Q3'; // H2+!q3BreakDone; Q4 uses confirmEndGame
+  } else {
+    label = 'HALF';
   }
-  const isQ = usesQuarters();
-  const qLabel = isQ?(S.q1BreakDone?'Q2':'Q1'):'half';
+  var dest = (usesQuarters() && ((S.phase==='h1'&&!S.q1BreakDone)||(S.phase==='h2'&&!S.q3BreakDone)))
+    ? 'quarter break' : 'halftime';
+
+  // If the alert is already showing the end signal, skip confirm and act immediately
+  if(S.alertState==='quartend'||S.alertState==='halfend'){
+    endHalf(); return;
+  }
   showConfirm({
-    title:'END '+qLabel.toUpperCase()+'?', okClass:'warn',
-    body:'Game time: <strong>'+fmt(S.gameTime)+'</strong><br>This will take you to the '+(isQ?'quarter break':'halftime')+' screen.',
-    okLabel:'END '+qLabel.toUpperCase(),
+    title:'END '+label+'?', okClass:'warn',
+    body:'Game time: <strong>'+fmt(S.gameTime)+'</strong><br>This will take you to the '+dest+' screen.',
+    okLabel:'END '+label,
     onOk: endHalf
   });
 }
