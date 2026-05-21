@@ -1140,6 +1140,7 @@ function setAlert(a){
   if(a==='warning'){ playDing(1); vibrate([150,80,150]); }
   if(a==='sub-now'){ playDing(2); vibrate([200,100,200,100,400]); flashScreen('sub'); }
   if(a==='halfend'){ playDing(3); vibrate([300,100,300,100,300,100,500]); flashScreen('half'); }
+  if(a==='quartend'){ playDing(2); vibrate([200,100,200]); flashScreen('half'); }
   updateAlertBar();
 }
 
@@ -1186,17 +1187,11 @@ function doTick(){
     if(S.alertState!=='halfend'&&S.alertState!=='sub-now') setAlert(null);
   }
 
-  // Quarter break detection (VJBL/EDL only)
+  // Quarter time alert (VJBL/EDL) — signal coach to end quarter manually
   if(usesQuarters()){
     const qbTime = getQuarterBreakTime();
-    if(S.phase==='h1' && !S.q1BreakDone && S.halfTime>=qbTime){
-      stopTick(); S.isRunning=false; S.isClockRunning=false;
-      S.q1BreakDone=true; S.phase='q1break'; render(); return;
-    }
-    if(S.phase==='h2' && !S.q3BreakDone && S.halfTime>=qbTime){
-      stopTick(); S.isRunning=false; S.isClockRunning=false;
-      S.q3BreakDone=true; S.phase='q3break'; render(); return;
-    }
+    if(S.phase==='h1' && !S.q1BreakDone && S.halfTime===qbTime) setAlert('quartend');
+    if(S.phase==='h2' && !S.q3BreakDone && S.halfTime===qbTime) setAlert('quartend');
   }
 
   // Half / game end
@@ -1256,6 +1251,7 @@ function updateAlertBar(){
   if(!el) return;
   if(S.alertState==='warning'){  el.className='abar warn'; el.textContent='⏱ SUB IN 30 SECONDS'; el.style.display='block'; }
   else if(S.alertState==='sub-now'){ el.className='abar now'; el.textContent='🔔 TIME TO SUBSTITUTE!'; el.style.display='block'; }
+  else if(S.alertState==='quartend'){ el.className='abar half'; el.textContent='🏀 '+(S.q1BreakDone?'Q3 TIME — TAP END Q3':'Q1 TIME — TAP END Q1'); el.style.display='block'; }
   else if(S.alertState==='halfend'){ el.className='abar half'; el.textContent='🏀 '+(S.phase==='h2'?'FULL TIME — TAP END GAME':(usesQuarters()?(S.q1BreakDone?'END Q2 — TAP END Q2':'END Q1 — TAP END Q1'):'HALF TIME — TAP END HALF')); el.style.display='block'; }
   else { el.style.display='none'; }
 }
@@ -2942,7 +2938,7 @@ function autoModeTimeHTML(filtered, hasSubPlan){
     <div class="s-sec">
       <div class="s-hdr">AUTO-MODE: EXPECTED PLAYING TIME</div>
       <div style="background:var(--card);border:1.5px solid var(--border);border-radius:9px;padding:9px 11px;">
-        <div style="font-size:9px;color:var(--dim);margin-bottom:7px;text-transform:uppercase;letter-spacing:1px;">Based on ${n} players, ${fmt(totalSecs)} total game · Sub every ${fmtInterval(S.h1Int)}</div>
+        <div style="font-size:9px;color:var(--dim);margin-bottom:7px;text-transform:uppercase;letter-spacing:1px;">Based on ${n} players, ${usesQuarters()?'4 × '+S.h1Dur/2+' min quarters':fmt(totalSecs)+' total game'} · Sub every ${fmtInterval(S.h1Int)}</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
           ${times.map((secs,i)=>{
             const isPri=S.priorityPlayerIds.has(i);
@@ -4355,7 +4351,7 @@ function renderGame(){
   }
 
   const pbtnLabel=!gameStarted?'▶ START':S.isRunning?'⏸ TIMEOUT':'▶ RESUME';
-  const endLabel=isH2?'END GAME':(usesQuarters()?(S.q1BreakDone?'END Q2':'END Q1'):'END HALF');
+  const endLabel=isH2?'END GAME':(usesQuarters()?(S.alertState==='quartend'?(S.q1BreakDone?'END Q3':'END Q1'):S.q1BreakDone?'END Q2':'END Q1'):'END HALF');
   const endCls=`endbtn ${isH2?'h2e':'h1e'}${S.alertState==='halfend'?' urgent':''}`;
   const endAction=isH2?'confirmEndGame()':'confirmEndHalf()';
 
@@ -4819,21 +4815,181 @@ function buildStintHTML(){
   ${rows}`;
 }
 
+// ── Game report: PDF export via print ──
+function exportGamePDF(){
+  const team = T.teams.find(t=>t.id===T.activeTeamId);
+  const teamName = team ? (team.club+' '+(team.ageBracket||'')).trim() : 'Squad Manager';
+  const score = S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)
+    ? (S.finalScore.us??'—')+' – '+(S.finalScore.them??'—') : '';
+  const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
+  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  const fairShare=Math.round(totalSecs*5/Math.max(sorted.length,5));
+  const isQ=usesQuarters();
+  const h1L=isQ?'Q1+Q2':'H1'; const h2L=isQ?'Q3+Q4':'H2';
+
+  const rows=sorted.map(p=>{
+    const diff=p.playTime-fairShare;
+    const dStr=(diff>=0?'+':'')+fmt(Math.abs(diff));
+    return `<tr><td>${p.name}</td><td>${fmt(p.h1PlayTime)}</td><td>${fmt(p.h2PlayTime)}</td><td><strong>${fmt(p.playTime)}</strong></td><td style="color:${diff>=0?'green':'red'}">${dStr}</td><td>${p.fouls}</td></tr>`;
+  }).join('');
+
+  const logRows=S.subLog.map(e=>`<tr><td>${fmt(e.gameTime)}</td><td>H${e.half} ${fmt(e.halfTime)}</td><td style="color:green">▲ ${e.on.join(', ')}</td><td style="color:orange">▼ ${e.off.join(', ')}</td></tr>`).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Game Report</title>
+<style>body{font-family:Arial,sans-serif;margin:20px;color:#222;}h1{font-size:20px;margin-bottom:4px;}h2{font-size:14px;color:#666;margin:16px 0 6px;}
+table{border-collapse:collapse;width:100%;font-size:12px;}th,td{border:1px solid #ccc;padding:5px 8px;text-align:left;}th{background:#f0f0f0;}
+.score{font-size:32px;font-weight:700;text-align:center;margin:8px 0;}
+</style></head><body>
+<h1>${teamName}</h1>
+<div>Game played ${new Date().toLocaleDateString()}</div>
+${score?`<div class="score">${score}</div>`:''}
+<h2>Playing Time (fair share: ${fmt(fairShare)} / player)</h2>
+<table><thead><tr><th>Player</th><th>${h1L}</th><th>${h2L}</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead><tbody>${rows}</tbody></table>
+${S.subLog.length?`<h2>Substitution Log (${S.subLog.length} subs)</h2>
+<table><thead><tr><th>Game Time</th><th>Half Time</th><th>On</th><th>Off</th></tr></thead><tbody>${logRows}</tbody></table>`:''}
+</body></html>`;
+
+  const w=window.open('','_blank','width=800,height=900');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(()=>{ w.print(); }, 500);
+}
+
+// ── Save game report to localStorage ──
+const REPORTS_KEY='squadmgr_reports_v1';
+function saveGameReport(){
+  const team=T.teams.find(t=>t.id===T.activeTeamId);
+  const report={
+    id: 'rep_'+Date.now(),
+    savedAt: Date.now(),
+    teamId: T.activeTeamId,
+    teamName: team?(team.club+' '+(team.ageBracket||'')).trim():'Unknown',
+    date: new Date().toLocaleDateString(),
+    score: S.finalScore||{us:null,them:null},
+    players: S.players.map(p=>({name:p.name,playTime:p.playTime,h1PlayTime:p.h1PlayTime,h2PlayTime:p.h2PlayTime,fouls:p.fouls})),
+    subLog: S.subLog,
+    gameSecs: S.gameTime,
+    h1Dur: S.h1Dur, h2Dur: S.h2Dur,
+    notes: ''
+  };
+  try{
+    const raw=localStorage.getItem(REPORTS_KEY);
+    const reports=raw?JSON.parse(raw):[];
+    reports.unshift(report);
+    // Keep last 20 reports
+    if(reports.length>20) reports.length=20;
+    localStorage.setItem(REPORTS_KEY,JSON.stringify(reports));
+    showToast('Game report saved ✓ — view in ⚙ Settings → Game Reports');
+  }catch(e){ showToast('Could not save: '+e.message); }
+}
+
+// ── Claude upload modal — formatted summary for pasting ──
+function uploadToClaudeModal(){
+  const team=T.teams.find(t=>t.id===T.activeTeamId);
+  const teamName=team?(team.club+' '+(team.ageBracket||'')).trim():'Team';
+  const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
+  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  const fairShare=Math.round(totalSecs*5/Math.max(sorted.length,5));
+  const score=S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)
+    ?'Score: '+(S.finalScore.us??'?')+' – '+(S.finalScore.them??'?')+'\n':'';
+
+  let txt=`SQUAD MANAGER GAME REPORT — ${teamName}\n`;
+  txt+=`Date: ${new Date().toLocaleDateString()} | Game time: ${fmt(S.gameTime)}\n${score}\n`;
+  txt+=`PLAYING TIME (fair share: ${fmt(fairShare)}/player)\n${'─'.repeat(52)}\n`;
+  txt+=`${'Player'.padEnd(18)}${'H1'.padEnd(8)}${'H2'.padEnd(8)}${'Total'.padEnd(8)}vs Fair\n`;
+  sorted.forEach(p=>{
+    const d=p.playTime-fairShare;
+    const dStr=(d>=0?'+':'')+fmt(Math.abs(d));
+    txt+=`${p.name.padEnd(18)}${fmt(p.h1PlayTime).padEnd(8)}${fmt(p.h2PlayTime).padEnd(8)}${fmt(p.playTime).padEnd(8)}${dStr} | ${p.fouls}f\n`;
+  });
+  if(S.subLog.length){
+    txt+=`\nSUBSTITUTION LOG (${S.subLog.length} subs)\n${'─'.repeat(52)}\n`;
+    S.subLog.forEach(e=>{
+      txt+=`${fmt(e.gameTime)} H${e.half}: ON ${e.on.join(',')} | OFF ${e.off.join(',')}\n`;
+    });
+  }
+
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9000;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 12px env(safe-area-inset-bottom,0px);';
+  modal.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 4px 10px;">
+      <div style="font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;color:#a78bfa;">🤖 UPLOAD TO CLAUDE</div>
+      <button onclick="this.closest('[style]').remove()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.6;">
+      1. Tap <strong style="color:#fff">COPY REPORT</strong> below<br>
+      2. Open <a href="https://claude.ai" target="_blank" style="color:#7ab8ff">claude.ai</a> in a new tab<br>
+      3. Paste and add your coaching question — e.g. <em>"What does this tell me about rotation patterns? Who needs more time next game?"</em>
+    </div>
+    <textarea readonly style="flex:1;background:var(--card);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:monospace;font-size:11px;padding:10px;resize:none;outline:none;margin-bottom:10px;">${txt}</textarea>
+    <button onclick="navigator.clipboard.writeText(document.querySelector('[style*=flex:1] + * textarea,textarea').value||'').then(()=>showToast('Copied ✓'));this.textContent='✓ COPIED!'"
+      style="background:#a78bfa;color:#111;border:none;border-radius:12px;padding:15px;font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;flex-shrink:0;margin-bottom:8px;">
+      COPY REPORT
+    </button>`;
+  // Fix copy button - use a simpler approach
+  const copyBtn=modal.querySelector('button:last-child');
+  const ta=modal.querySelector('textarea');
+  copyBtn.onclick=()=>{
+    navigator.clipboard.writeText(ta.value).then(()=>{
+      copyBtn.textContent='✓ COPIED!';
+      showToast('Report copied — paste into Claude ✓');
+    }).catch(()=>{
+      ta.select(); document.execCommand('copy');
+      copyBtn.textContent='✓ COPIED!';
+    });
+  };
+  document.body.appendChild(modal);
+}
+
 function renderGameover(){
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
+  const totalSecs=(S.h1Dur+S.h2Dur)*60;
+  const fairShare=Math.round(totalSecs*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
+  const isQ=usesQuarters();
+  const h1Label=isQ?'Q1+Q2':'H1'; const h2Label=isQ?'Q3+Q4':'H2';
+
   const rows=sorted.map(p=>{
     const fc=p.fouls>=5?'#ff5555':p.fouls>=3?'#ffcc00':'#eef0f8';
-    return `<tr><td style="font-weight:700">${p.name}</td><td><span class="pt">${fmt(p.h1PlayTime)}</span></td><td><span class="pt">${fmt(p.h2PlayTime)}</span></td><td><span class="pt" style="color:#f08c00;font-size:15px">${fmt(p.playTime)}</span></td><td style="color:${fc};font-weight:${p.fouls>=3?700:400}">${p.fouls}</td></tr>`;
+    const diff=p.playTime-fairShare;
+    const diffStr=(diff>=0?'+':'')+Math.floor(Math.abs(diff)/60)+':'+(String(Math.abs(diff)%60).padStart(2,'0'));
+    const diffC=diff>=0?'var(--green)':Math.abs(diff)>60?'var(--red)':'var(--warn)';
+    return `<tr><td style="font-weight:700">${p.name}</td><td><span class="pt">${fmt(p.h1PlayTime)}</span></td><td><span class="pt">${fmt(p.h2PlayTime)}</span></td><td><span class="pt" style="color:#f08c00;font-size:15px">${fmt(p.playTime)}</span></td><td style="color:${diffC};font-size:11px">${diffStr}</td><td style="color:${fc};font-weight:${p.fouls>=3?700:400}">${p.fouls}</td></tr>`;
   }).join('');
+
   const logHTML=S.subLog.length?`
 <div class="log-title">SUBSTITUTION LOG · ${S.subLog.length} subs</div>
-${S.subLog.map(e=>`<div class="log-entry"><span class="log-time">${fmt(e.gameTime)}</span><span style="color:#7a80a0;margin-left:7px;font-size:9px">H${e.half} · ${fmt(e.halfTime)}</span><div style="margin-top:2px;font-size:10px"><span style="color:#3ecf6e">▲ ${e.on.join(', ')}</span><span style="color:#7a80a0;margin:0 5px">←</span><span style="color:#ff8c00">▼ ${e.off.join(', ')}</span></div></div>`).join('')}`:'';
+${S.subLog.map((e,i)=>`<div class="log-entry"><span class="log-time">${fmt(e.gameTime)}</span><span style="color:#7a80a0;margin-left:7px;font-size:9px">H${e.half} · ${fmt(e.halfTime)}</span><div style="margin-top:2px;font-size:10px"><span style="color:#3ecf6e">▲ ${e.on.join(', ')}</span><span style="color:#7a80a0;margin:0 5px">←</span><span style="color:#ff8c00">▼ ${e.off.join(', ')}</span></div></div>`).join('')}`:'';
+
+  // Mini bar chart inline for game over screen (uses same data as modal)
+  const goBarHTML=(()=>{
+    const bars=sorted.map(p=>{
+      const pct=Math.min(100,Math.round(p.playTime/totalSecs*100));
+      const targetPct=Math.round(fairShare/totalSecs*100);
+      const diff=p.playTime-fairShare;
+      const col=p.playTime>=fairShare*0.9?'var(--green)':p.playTime>=fairShare*0.6?'var(--warn)':'var(--red)';
+      const diffStr=(diff>=0?'+':'')+Math.floor(Math.abs(diff)/60)+':'+(String(Math.abs(diff)%60).padStart(2,'0'));
+      return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;">
+        <div style="width:72px;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name.split(' ')[0]}</div>
+        <div style="flex:1;height:14px;background:var(--border);border-radius:4px;position:relative;overflow:visible;">
+          <div style="height:100%;width:${pct}%;background:${col};border-radius:4px;"></div>
+          <div style="position:absolute;top:-2px;bottom:-2px;left:${targetPct}%;width:2px;background:rgba(255,255,255,.55);border-radius:1px;"></div>
+        </div>
+        <div style="font-family:Impact,sans-serif;font-size:11px;color:${col};flex-shrink:0;width:38px;text-align:right;">${fmt(p.playTime)}</div>
+        <div style="font-size:10px;color:${diff>=0?'var(--green)':'var(--red)'};flex-shrink:0;width:32px;">${diffStr}</div>
+      </div>`;
+    }).join('');
+    return `<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px;">
+      <div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">PLAYING TIME — white line = fair share (${fmt(fairShare)})</div>
+      ${bars}
+    </div>`;
+  })();
 
   $('app').innerHTML=`
 <div class="go">
   <div class="go-hdr">
     <div class="go-title">FULL TIME</div>
-    <div class="go-sub">${sorted.length} players · Game complete</div>
+    <div class="go-sub">${sorted.length} players · ${fmt(S.gameTime)} played</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;">
       <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Us</div>
@@ -4852,14 +5008,17 @@ ${S.subLog.map(e=>`<div class="log-entry"><span class="log-time">${fmt(e.gameTim
   </div>
   <div class="go-body">
     <table class="stats-tbl">
-      <thead><tr><th>Player</th><th>1st Half</th><th>2nd Half</th><th>Total</th><th>Fouls</th></tr></thead>
+      <thead><tr><th>Player</th><th>${h1Label}</th><th>${h2Label}</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
+    ${goBarHTML}
     ${logHTML}
   </div>
   <div class="go-footer">
-    <button class="exp-btn" onclick="exportReport()">⬆ EXPORT REPORT</button>
-    ${S.useSubPlan?`<button style="background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;border-radius:10px;padding:12px 10px;cursor:pointer;white-space:nowrap;" onclick="showSavePlanModal(null)">💾 Save Plan</button>`:''}
+    <button class="exp-btn" onclick="exportReport()">⬆ TXT</button>
+    <button class="exp-btn" onclick="exportGamePDF()" style="background:rgba(74,158,255,.15);border-color:rgba(74,158,255,.3);color:var(--blue);">📄 PDF</button>
+    <button class="exp-btn" onclick="saveGameReport()" style="background:rgba(62,207,110,.1);border-color:rgba(62,207,110,.3);color:var(--green);">💾 SAVE</button>
+    <button class="exp-btn" onclick="uploadToClaudeModal()" style="background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.3);color:var(--purple);">🤖 CLAUDE</button>
     <button class="new-btn" onclick="newGame()">NEW GAME</button>
   </div>
 </div>`;
@@ -5036,10 +5195,26 @@ function showConfirm({title, body, okLabel, okClass, onOk}){
 function hideConfirm(){ $('confirm-modal').style.display='none'; $('confirm-modal').innerHTML=''; }
 
 function confirmEndHalf(){
+  // Quarter teams: if at or past quarter break time, go to quarter break screen
+  if(usesQuarters()){
+    const qbTime = getQuarterBreakTime();
+    const atQ1End = S.phase==='h1' && !S.q1BreakDone && S.halfTime>=qbTime;
+    const atQ3End = S.phase==='h2' && !S.q3BreakDone && S.halfTime>=qbTime;
+    if(atQ1End||atQ3End||S.alertState==='quartend'){
+      // Manual quarter break — go straight to quarter break screen
+      stopTick(); S.isRunning=false; S.isClockRunning=false;
+      if(S.phase==='h1') S.q1BreakDone=true;
+      if(S.phase==='h2') S.q3BreakDone=true;
+      S.phase=(S.phase==='h1'?'q1break':'q3break');
+      render(); return;
+    }
+  }
+  const isQ = usesQuarters();
+  const qLabel = isQ?(S.q1BreakDone?'Q2':'Q1'):'half';
   showConfirm({
-    title:'END HALF?', okClass:'warn',
-    body:`Game time: <strong>${fmt(S.gameTime)}</strong><br>Half time: <strong>${fmt(S.halfTime)}</strong><br><br>This will take you to the halftime screen.`,
-    okLabel:'END HALF',
+    title:'END '+qLabel.toUpperCase()+'?', okClass:'warn',
+    body:'Game time: <strong>'+fmt(S.gameTime)+'</strong><br>This will take you to the '+(isQ?'quarter break':'halftime')+' screen.',
+    okLabel:'END '+qLabel.toUpperCase(),
     onOk: endHalf
   });
 }
