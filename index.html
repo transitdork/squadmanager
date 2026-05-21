@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.21.1';
+const APP_VERSION = '2026.05.21.2';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -2279,6 +2279,13 @@ function postSubPositionBoard(stayOn, nextOff, nextOn){
 }
 
 // Toggle sub selection from pause overlay — refreshes just the overlay
+function ovlSubInstruction(){
+  var cs=S.selCourt.size, bs=S.selBench.size;
+  if(cs>0&&bs>0&&cs===bs) return '<span style="color:var(--accent);font-weight:700;">✓ '+cs+' sub ready — tap anywhere to apply</span>';
+  if(cs>0||bs>0) return 'Tap court to sub off · bench to sub on (same count)';
+  return 'Tap players to select a sub · or tap to resume';
+}
+
 function toggleOvlSel(pid, fromCourt){
   if(fromCourt){
     if(S.selCourt.has(pid)) S.selCourt.delete(pid); else S.selCourt.add(pid);
@@ -2350,11 +2357,15 @@ function pauseOverlayHTML(){
       '</div>';
   };
 
-  const pillSmall=(name, time, timeColor, pid)=>{
-    const pos = (pid!==undefined) ? getGamePos(pid) : null;
+  const pillSmall=(name, time, timeColor, pid, fromCourt)=>{
+    var pos = (pid!==undefined) ? getGamePos(pid) : null;
     var posBit = pos ? '<span class="pos-badge '+(POS_COLOURS[+pos]||'')+'" style="font-size:10px;padding:2px 6px;margin-left:4px;cursor:pointer;" onclick="event.stopPropagation();openPosPicker('+pid+',\'court\')">'+pos+'</span>' : '';
-    return '<div style="border-radius:7px;padding:5px 9px;border:1px solid var(--border);background:rgba(30,34,50,.65);display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px;">'+
-      '<span style="display:flex;align-items:center;font-weight:600;font-size:12px;color:#eef0f8;">'+name+posBit+'</span>'+
+    var isSel = pid!==undefined && fromCourt!==undefined && (fromCourt ? S.selCourt.has(pid) : S.selBench.has(pid));
+    var selStyle = isSel ? 'border-color:var(--accent);background:rgba(255,140,0,.18);' : '';
+    var clickFn = pid!==undefined && fromCourt!==undefined ? 'event.stopPropagation();toggleOvlSel('+pid+','+fromCourt+');' : '';
+    var checkMark = isSel ? '<span style="color:var(--accent);margin-right:4px;font-size:11px;">✓</span>' : '';
+    return '<div onclick="'+clickFn+'" style="border-radius:7px;padding:5px 9px;border:1px solid var(--border);'+selStyle+'background:rgba(30,34,50,.65);display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px;cursor:'+(clickFn?'pointer':'default')+';">'+
+      '<span style="display:flex;align-items:center;font-weight:600;font-size:12px;color:#eef0f8;">'+checkMark+name+posBit+'</span>'+
       '<span style="font-family:Impact,sans-serif;font-size:11px;color:'+timeColor+'">'+time+'</span>'+
       '</div>';
   };
@@ -2398,7 +2409,7 @@ function pauseOverlayHTML(){
       <div class="potime">${fmt(S.gameTime)}</div>
       <div class="po-subcountdown-lbl">${subLbl}</div>
       <div class="po-subcountdown" style="color:${subC}">${fmt(S.subCountdown)}</div>
-      <div class="posub">${(()=>{ const cs=S.selCourt.size,bs=S.selBench.size; if(cs>0&&bs>0&&cs===bs) return '<span style="color:var(--accent);font-weight:700;">✓ '+cs+' sub ready — tap anywhere to make it</span>'; if(cs>0||bs>0) return 'Tap court to sub off · bench to sub on'; return 'Tap court/bench players to select sub'; })()}</div>\`;
+      <div class="posub">${ovlSubInstruction()}</div>`
   } else {
     const label=S.phase==='h2'?'2ND HALF':'1ST HALF';
     topHTML=`<div class="potitle" style="font-size:56px;text-align:center">${label}</div><div class="postart">Tap anywhere to start the clock</div>`;
@@ -4990,11 +5001,58 @@ function renderGameover(){
     return `<tr><td style="font-weight:700">${p.name}</td><td><span class="pt">${fmt(p.h1PlayTime)}</span></td><td><span class="pt">${fmt(p.h2PlayTime)}</span></td><td><span class="pt" style="color:#f08c00;font-size:15px">${fmt(p.playTime)}</span></td><td style="color:${diffC};font-size:11px">${diffStr}</td><td style="color:${fc};font-weight:${p.fouls>=3?700:400}">${p.fouls}</td></tr>`;
   }).join('');
 
-  const logHTML=S.subLog.length?`
-<div class="log-title">SUBSTITUTION LOG · ${S.subLog.length} subs</div>
-${S.subLog.map((e,i)=>`<div class="log-entry"><span class="log-time">${fmt(e.gameTime)}</span><span style="color:#7a80a0;margin-left:7px;font-size:9px">H${e.half} · ${fmt(e.halfTime)}</span><div style="margin-top:2px;font-size:10px"><span style="color:#3ecf6e">▲ ${e.on.join(', ')}</span><span style="color:#7a80a0;margin:0 5px">←</span><span style="color:#ff8c00">▼ ${e.off.join(', ')}</span></div></div>`).join('')}`:'';
+  // Sub log — use Array.from to avoid nested template literal issue
+  const logEntries = Array.from(S.subLog).map(function(e){
+    return '<div class="log-entry">' +
+      '<span class="log-time">'+fmt(e.gameTime)+'</span>' +
+      '<span style="color:#7a80a0;margin-left:7px;font-size:9px">H'+e.half+' · '+fmt(e.halfTime)+'</span>' +
+      '<div style="margin-top:2px;font-size:10px">' +
+        '<span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span>' +
+        '<span style="color:#7a80a0;margin:0 5px">←</span>' +
+        '<span style="color:#ff8c00">▼ '+e.off.join(', ')+'</span>' +
+      '</div></div>';
+  });
+  const logHTML = S.subLog.length ?
+    '<div class="log-title">SUBSTITUTION LOG · '+S.subLog.length+' sub'+(S.subLog.length!==1?'s':'')+'</div>' + logEntries.join('') : '';
 
-  // Mini bar chart inline for game over screen (uses same data as modal)
+  // Timeline chart for gameover — static stint view using subLog
+  const goTimelineHTML=(()=>{
+    if(!S.subLog.length && !sorted.length) return '';
+    const h1Secs=S.h1Dur*60;
+    const pct=s=>Math.min(100,Math.round(s/totalSecs*100));
+    function playerStints(pname){
+      const stints=[];
+      const everwentOn=S.subLog.some(e=>e.on.includes(pname));
+      const everwentOff=S.subLog.some(e=>e.off.includes(pname));
+      const firstSub=S.subLog.find(e=>e.on.includes(pname)||e.off.includes(pname));
+      var startedOnCourt=firstSub?(firstSub.on.includes(pname)?false:true):(S.players.find(p=>p.name===pname)?.onCourt||false);
+      var curState=startedOnCourt, curStart=0;
+      S.subLog.forEach(function(sub){
+        if(sub.on.includes(pname) && !curState){ stints.push({start:curStart,end:sub.gameTime,on:false}); curStart=sub.gameTime; curState=true; }
+        if(sub.off.includes(pname) && curState){ stints.push({start:curStart,end:sub.gameTime,on:true}); curStart=sub.gameTime; curState=false; }
+      });
+      stints.push({start:curStart,end:S.gameTime,on:curState});
+      return stints;
+    }
+    const tRows=sorted.map(function(p){
+      const stints=playerStints(p.name);
+      const bars=stints.map(function(s){
+        if(!s.on) return '';
+        const l=pct(s.start), w=Math.max(0.5,pct(s.end)-pct(s.start));
+        return '<div style="position:absolute;top:0;bottom:0;left:'+l+'%;width:'+w+'%;background:var(--green);opacity:.85;border-radius:2px;"></div>';
+      }).join('');
+      const halfLine='<div style="position:absolute;top:0;bottom:0;left:'+pct(h1Secs)+'%;width:1px;background:rgba(255,255,255,.25);z-index:1;"></div>';
+      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'+
+        '<div style="width:64px;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;flex-shrink:0;">'+p.name.split(' ')[0]+'</div>'+
+        '<div style="flex:1;height:20px;background:var(--border);border-radius:3px;position:relative;overflow:hidden;">'+halfLine+bars+'</div>'+
+      '</div>';
+    }).join('');
+    const axisMarks=[0,0.25,0.5,0.75,1].map(function(f){ return '<span>'+fmt(Math.round(f*totalSecs))+'</span>'; }).join('');
+    return '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px;">'+
+      '<div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:6px;">ROTATION TIMELINE · | = half break</div>'+
+      '<div style="display:flex;justify-content:space-between;padding:0 0 4px 70px;font-size:8px;color:var(--dim);">'+axisMarks+'</div>'+
+      tRows+'</div>';
+  })();
   const goBarHTML=(()=>{
     const bars=sorted.map(p=>{
       const pct=Math.min(100,Math.round(p.playTime/totalSecs*100));
@@ -5045,12 +5103,8 @@ ${S.subLog.map((e,i)=>`<div class="log-entry"><span class="log-time">${fmt(e.gam
       <tbody>${rows}</tbody>
     </table>
     ${goBarHTML}
-    <div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px;">
-      <div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">TIMELINE — on court per period</div>
-      ${buildStintHTML()}
-    </div>
-    ${S.subLog.length ? `<div class="log-title">SUBSTITUTION LOG · \${S.subLog.length} subs</div>
-\${S.subLog.map((e,i)=>'<div class="log-entry"><span class="log-time">'+fmt(e.gameTime)+'</span><span style="color:#7a80a0;margin-left:7px;font-size:9px">H'+e.half+' · '+fmt(e.halfTime)+'</span><div style="margin-top:2px;font-size:10px"><span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span><span style="color:#7a80a0;margin:0 5px">←</span><span style="color:#ff8c00">▼ '+e.off.join(', ')+'</span></div></div>').join('')}` : ''}
+    ${goTimelineHTML}
+    ${logHTML}
   </div>
   <div class="go-footer">
     <button class="exp-btn" onclick="exportReport()">⬆ TXT</button>
@@ -5810,46 +5864,44 @@ function registerSW(){
   const swCode = `
 const CACHE_NAME = 'squadmgr-${version}';
 
-// Install: open new versioned cache (don't pre-cache — let fetch handler fill it)
+// Install: skip waiting immediately so new SW takes over right away
 self.addEventListener('install', e => {
-  self.skipWaiting(); // activate immediately without waiting for old SW to die
+  e.waitUntil(self.skipWaiting());
 });
 
-// Activate: delete ALL old caches from previous versions
+// Activate: delete ALL old caches, claim all clients immediately
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys => Promise.all(
       keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-    )).then(() => self.clients.claim()) // take control of all open tabs immediately
+    )).then(() => self.clients.claim())
   );
 });
 
-// Fetch: stale-while-revalidate.
-// Serve from cache immediately (fast, works offline), then update cache in background.
+// Fetch: NETWORK-FIRST. Always try network; only fall back to cache if offline.
+// This ensures fresh code is always served when online.
 self.addEventListener('fetch', e => {
   if(e.request.method !== 'GET') return;
   e.respondWith(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.match(e.request).then(cached => {
-        // Fetch fresh copy in background to update cache
-        const fetchPromise = fetch(e.request).then(networkResp => {
-          if(networkResp && networkResp.status === 200){
-            cache.put(e.request, networkResp.clone());
-          }
-          return networkResp;
-        }).catch(() => null);
-
-        // Serve cached version immediately if we have it, otherwise wait for network
-        return cached || fetchPromise || new Response(
-          '<html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>Squad Manager</h2><p>Offline and not yet cached. Connect to internet and reload.</p></body></html>',
+    fetch(e.request).then(networkResp => {
+      // Cache successful responses
+      if(networkResp && networkResp.status === 200){
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, networkResp.clone()));
+      }
+      return networkResp;
+    }).catch(() =>
+      // Offline: serve from cache
+      caches.match(e.request).then(cached =>
+        cached || new Response(
+          '<html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>Squad Manager</h2><p>Offline — connect to internet and reload.</p></body></html>',
           {headers:{'Content-Type':'text/html'}}
-        );
-      });
-    })
+        )
+      )
+    )
   );
 });
 
-// Listen for skip-waiting message from the page (used when user taps "Update now")
+// Listen for skip-waiting message
 self.addEventListener('message', e => {
   if(e.data === 'skipWaiting') self.skipWaiting();
 });
