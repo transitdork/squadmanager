@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.22.1';
+const APP_VERSION = '2026.05.22.2';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -5369,106 +5369,244 @@ function uploadToClaudeModal(){
 }
 
 
+// ── Shared chart constants (all gameover charts use identical LP/RP so axes align) ──
+const GO_LP=68, GO_RP=10;
+
+function goGetMarkers(){
+  var total=gameTotalSecs();
+  if(usesQuarters()) return [
+    {t:total*0.25,label:'Q1',major:false},
+    {t:total*0.5, label:'HT',major:true},
+    {t:total*0.75,label:'Q3',major:false},
+    {t:total,     label:'FT',major:true},
+  ];
+  return [
+    {t:total*0.5,label:'HT',major:true},
+    {t:total,    label:'FT',major:true},
+  ];
+}
+
+function goPeriodLinesSVG(xf,chartH,markers,showLabels){
+  return markers.map(function(m){
+    var x=xf(m.t);
+    var stroke=m.major?'rgba(255,255,255,.38)':'rgba(255,255,255,.2)';
+    var sw=m.major?1.5:1;
+    var dash=m.major?'':' stroke-dasharray="4 3"';
+    var lbl=showLabels?'<text x="'+(x-3)+'" y="11" text-anchor="end" fill="'+(m.major?'rgba(255,255,255,.5)':'rgba(255,255,255,.3)')+'" font-size="9" font-family="system-ui,sans-serif">'+m.label+'</text>':'';
+    return '<line x1="'+x+'" y1="0" x2="'+x+'" y2="'+chartH+'" stroke="'+stroke+'" stroke-width="'+sw+'"'+dash+'/>'+lbl;
+  }).join('');
+}
+
+function goTimeAxisHTML(cw,markers,total){
+  var ticks=[{t:0,major:false}].concat(markers);
+  var out='<div style="position:relative;height:16px;margin-top:3px;">';
+  ticks.forEach(function(m){
+    var pct=(m.t/total)*100;
+    var xpx='calc('+GO_LP+'px + '+pct+'% * ((100% - '+(GO_LP+GO_RP)+'px) / 100))';
+    var anchor=m.t===0?'0':m.t===total?'-100%':'-50%';
+    var col=m&&m.major?'#6b7280':'#4b5563';
+    out+='<span style="position:absolute;left:'+xpx+';transform:translateX('+anchor+');font-size:9px;color:'+col+';white-space:nowrap;">'+fmt(m.t)+'</span>';
+  });
+  return out+'</div>';
+}
+
 function renderGameover(){
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
-  const totalSecs=gameTotalSecs();
-  const fairShare=Math.round(totalSecs*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
+  const total=gameTotalSecs();
+  const fairShare=Math.round(total*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
   const isQ=usesQuarters();
   const h1Label=isQ?'Q1+Q2':'H1'; const h2Label=isQ?'Q3+Q4':'H2';
+  const markers=goGetMarkers();
+  const trackedTotals=calcScoreTotals();
+  const hasTracked=S.scoreLog&&S.scoreLog.length>0;
 
-  const rows=sorted.map(p=>{
+  // Pre-fill final score from tracker if not yet set
+  if(hasTracked){
+    if(S.finalScore.us===null) S.finalScore.us=trackedTotals.us;
+    if(S.finalScore.them===null) S.finalScore.them=trackedTotals.them;
+  }
+
+  // ── Stats table ──────────────────────────────────────────────
+  const rows=sorted.map(function(p){
     const fc=p.fouls>=5?'#ff5555':p.fouls>=3?'#ffcc00':'#eef0f8';
     const diff=p.playTime-fairShare;
     const diffStr=(diff>=0?'+':'')+Math.floor(Math.abs(diff)/60)+':'+(String(Math.abs(diff)%60).padStart(2,'0'));
     const diffC=diff>=0?'var(--green)':Math.abs(diff)>60?'var(--red)':'var(--warn)';
-    return `<tr><td style="font-weight:700">${p.name}</td><td><span class="pt">${fmt(p.h1PlayTime)}</span></td><td><span class="pt">${fmt(p.h2PlayTime)}</span></td><td><span class="pt" style="color:#f08c00;font-size:15px">${fmt(p.playTime)}</span></td><td style="color:${diffC};font-size:11px">${diffStr}</td><td style="color:${fc};font-weight:${p.fouls>=3?700:400}">${p.fouls}</td></tr>`;
+    return '<tr><td style="font-weight:700">'+p.name+'</td>'
+      +'<td><span class="pt">'+fmt(p.h1PlayTime)+'</span></td>'
+      +'<td><span class="pt">'+fmt(p.h2PlayTime)+'</span></td>'
+      +'<td><span class="pt" style="color:#f08c00;font-size:15px">'+fmt(p.playTime)+'</span></td>'
+      +'<td style="color:'+diffC+';font-size:11px">'+diffStr+'</td>'
+      +'<td style="color:'+fc+';font-weight:'+(p.fouls>=3?700:400)+'">'+p.fouls+'</td></tr>';
   }).join('');
 
-  // Sub log — use Array.from to avoid nested template literal issue
-  const logEntries = Array.from(S.subLog).map(function(e){
-    var periodLabel = e.isHalftime ? '🏀 HALF TIME' : ('H'+e.half+' · '+fmt(e.halfTime));
-    var bgStyle = e.isHalftime ? 'background:rgba(255,204,0,.08);border-left:2px solid var(--warn);' : '';
-    return '<div class="log-entry" style="'+bgStyle+'">' +
-      '<span class="log-time">'+fmt(e.gameTime)+'</span>' +
-      '<span style="color:#7a80a0;margin-left:7px;font-size:9px">'+periodLabel+'</span>' +
-      '<div style="margin-top:2px;font-size:10px">' +
-        '<span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span>' +
-        '<span style="color:#7a80a0;margin:0 5px">←</span>' +
-        '<span style="color:#ff8c00">▼ '+e.off.join(', ')+'</span>' +
-      '</div></div>';
+  // ── Sub log ──────────────────────────────────────────────────
+  const logEntries=Array.from(S.subLog).map(function(e){
+    const periodLabel=e.isHalftime?'🏀 HALF TIME':('H'+e.half+' · '+fmt(e.halfTime));
+    const bgStyle=e.isHalftime?'background:rgba(255,204,0,.08);border-left:2px solid var(--warn);':'';
+    return '<div class="log-entry" style="'+bgStyle+'">'
+      +'<span class="log-time">'+fmt(e.gameTime)+'</span>'
+      +'<span style="color:#7a80a0;margin-left:7px;font-size:9px">'+periodLabel+'</span>'
+      +'<div style="margin-top:2px;font-size:10px">'
+        +'<span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span>'
+        +'<span style="color:#7a80a0;margin:0 5px">←</span>'
+        +'<span style="color:#ff8c00">▼ '+e.off.join(', ')+'</span>'
+      +'</div></div>';
   });
-  const logHTML = S.subLog.length ?
-    '<div class="log-title">SUBSTITUTION LOG · '+S.subLog.length+' sub'+(S.subLog.length!==1?'s':'')+'</div>' + logEntries.join('') : '';
+  const logHTML=S.subLog.length
+    ?'<div class="log-title">SUBSTITUTION LOG · '+S.subLog.length+' sub'+(S.subLog.length!==1?'s':'')+'</div>'+logEntries.join('')
+    :'';
 
-  // Timeline chart for gameover — static stint view using subLog
-  const goTimelineHTML=(()=>{
-    if(!S.subLog.length && !sorted.length) return '';
-    const h1Secs=S.h1Dur*60;
-    const pct=s=>Math.min(100,Math.round(s/totalSecs*100));
+  // ── Chart helpers ────────────────────────────────────────────
+  const CW=320;
+  const cw=CW-GO_LP-GO_RP;
+  function xf(t){ return GO_LP+(Math.min(t,total)/total)*cw; }
+
+  // ── Score differential chart ─────────────────────────────────
+  const diffChartHTML=(function(){
+    if(!hasTracked) return '';
+    const diff=buildScoreDiff();
+    const lTots=calcScoreTotals();
+    const lead=lTots.us-lTots.them;
+    const leadTxt=lead>0?'+'+lead+' US':lead<0?Math.abs(lead)+' THEM':'LEVEL';
+    const leadCol=lead>0?'var(--green)':lead<0?'var(--red)':'var(--dim)';
+    const BH=78;
+    const zeroY=BH/2;
+    const maxD=Math.max(6,Math.max.apply(null,diff.map(function(d){return Math.abs(d.d);})));
+    const sc=(zeroY-5)/maxD;
+    function yf(d){return Math.max(2,Math.min(BH-2,zeroY-d*sc));}
+
+    var posA='M'+xf(0)+' '+zeroY, negA='M'+xf(0)+' '+zeroY;
+    var line='M'+xf(diff[0].t)+' '+yf(diff[0].d);
+    for(var i=1;i<diff.length;i++){
+      var px=xf(diff[i-1].t), cx=xf(diff[i].t);
+      var py=yf(diff[i-1].d), cy=yf(diff[i].d);
+      posA+=' L'+px+' '+Math.min(zeroY,py)+' L'+cx+' '+Math.min(zeroY,cy);
+      negA+=' L'+px+' '+Math.max(zeroY,py)+' L'+cx+' '+Math.max(zeroY,cy);
+      line+=' L'+cx+' '+cy;
+    }
+    posA+=' L'+xf(diff[diff.length-1].t)+' '+zeroY+' Z';
+    negA+=' L'+xf(diff[diff.length-1].t)+' '+zeroY+' Z';
+
+    var yTicks='';
+    for(var v=-Math.floor(maxD);v<=Math.floor(maxD);v+=2){
+      if(v===0) continue;
+      var ty=yf(v);
+      if(ty>3&&ty<BH-1){
+        yTicks+='<line x1="'+GO_LP+'" y1="'+ty+'" x2="'+(GO_LP+cw)+'" y2="'+ty+'" stroke="#1a1d2e" stroke-width="1"/>'
+          +'<text x="'+(GO_LP-3)+'" y="'+(ty+3)+'" text-anchor="end" fill="#2d3040" font-size="8" font-family="system-ui">'+( v>0?'+'+v:v)+'</text>';
+      }
+    }
+
+    return '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:10px 10px 4px;margin-top:10px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">'
+        +'<div style="font-family:Impact,sans-serif;font-size:9px;letter-spacing:2px;color:var(--dim);">SCORE DIFFERENTIAL</div>'
+        +'<div style="font-family:Impact,sans-serif;font-size:12px;color:'+leadCol+'">Final: '+lTots.us+' \u2013 '+lTots.them+' ('+leadTxt+')</div>'
+      +'</div>'
+      +'<svg width="'+CW+'" height="'+BH+'" style="display:block;width:100%;max-width:'+CW+'px;">'
+        +'<rect x="'+GO_LP+'" y="0" width="'+cw+'" height="'+BH+'" fill="var(--surface)" rx="3"/>'
+        +yTicks
+        +'<line x1="'+GO_LP+'" y1="'+zeroY+'" x2="'+(GO_LP+cw)+'" y2="'+zeroY+'" stroke="rgba(255,255,255,.2)" stroke-width="1.5"/>'
+        +'<text x="'+(GO_LP-3)+'" y="'+(zeroY+3)+'" text-anchor="end" fill="#374151" font-size="8" font-family="system-ui">0</text>'
+        +goPeriodLinesSVG(xf,BH,markers,true)
+        +'<path d="'+posA+'" fill="rgba(46,168,75,.3)"/>'
+        +'<path d="'+negA+'" fill="rgba(239,68,68,.3)"/>'
+        +'<path d="'+line+'" stroke="#60a5fa" fill="none" stroke-width="2.5" stroke-linejoin="round"/>'
+      +'</svg>'
+      +goTimeAxisHTML(cw,markers,total)
+      +'<div style="display:flex;gap:10px;margin-top:4px;font-size:9px;">'
+        +'<span style="color:rgba(46,168,75,.8);">\u2588 Us ahead</span>'
+        +'<span style="color:rgba(239,68,68,.8);">\u2588 Them ahead</span>'
+        +'<span style="color:#60a5fa;">\u2501 differential</span>'
+        +'<span style="color:var(--dim);">'+S.scoreLog.length+' events</span>'
+      +'</div>'
+    +'</div>';
+  })();
+
+  // ── Rotation timeline chart ──────────────────────────────────
+  const rotChartHTML=(function(){
+    if(!sorted.length) return '';
+    const ROW_H=18;
+    const BH=sorted.length*ROW_H+4;
+
     function playerStints(pname){
-      // Determine starting state: was this player in the opening 5?
-      const firstSub=S.subLog.find(e=>e.on.includes(pname)||e.off.includes(pname));
-      var startedOnCourt=firstSub?(firstSub.on.includes(pname)?false:true):(S.players.find(p=>p.name===pname)?.onCourt||false);
+      const firstSub=S.subLog.find(function(e){return e.on.includes(pname)||e.off.includes(pname);});
+      const pObj=S.players.find(function(p){return p.name===pname;});
+      var startedOnCourt=firstSub?(firstSub.on.includes(pname)?false:true):(pObj?pObj.onCourt:false);
       var curState=startedOnCourt, curStart=0;
       const stints=[];
       S.subLog.forEach(function(sub){
-        // Halftime: treat as an instantaneous lineup reset at gameTime boundary
         if(sub.isHalftime){
-          const wasOnCourt=sub.off.includes(pname)||(!sub.on.includes(pname)&&curState);
-          const willBeOnCourt=sub.on.includes(pname)||(!sub.off.includes(pname)&&curState);
-          // Close current stint at halftime boundary
-          if(curState!==willBeOnCourt){
-            stints.push({start:curStart,end:sub.gameTime,on:curState});
-            curStart=sub.gameTime; curState=willBeOnCourt;
-          }
+          const will=sub.on.includes(pname)?true:sub.off.includes(pname)?false:curState;
+          if(will!==curState){stints.push({s:curStart,e:sub.gameTime,on:curState});curStart=sub.gameTime;curState=will;}
           return;
         }
-        if(sub.on.includes(pname) && !curState){ stints.push({start:curStart,end:sub.gameTime,on:false}); curStart=sub.gameTime; curState=true; }
-        if(sub.off.includes(pname) && curState){ stints.push({start:curStart,end:sub.gameTime,on:true}); curStart=sub.gameTime; curState=false; }
+        if(sub.on.includes(pname)&&!curState){stints.push({s:curStart,e:sub.gameTime,on:false});curStart=sub.gameTime;curState=true;}
+        if(sub.off.includes(pname)&&curState){stints.push({s:curStart,e:sub.gameTime,on:true});curStart=sub.gameTime;curState=false;}
       });
-      stints.push({start:curStart,end:S.gameTime,on:curState});
+      stints.push({s:curStart,e:S.gameTime,on:curState});
       return stints;
     }
-    const tRows=sorted.map(function(p){
+
+    var rows='';
+    sorted.forEach(function(p,pi){
+      const rowY=pi*ROW_H+2;
       const stints=playerStints(p.name);
-      const bars=stints.map(function(s){
-        if(!s.on) return '';
-        const l=pct(s.start), w=Math.max(0.5,pct(s.end)-pct(s.start));
-        return '<div style="position:absolute;top:0;bottom:0;left:'+l+'%;width:'+w+'%;background:var(--green);opacity:.85;border-radius:2px;"></div>';
-      }).join('');
-      const halfLine='<div style="position:absolute;top:0;bottom:0;left:'+pct(h1Secs)+'%;width:1px;background:rgba(255,255,255,.25);z-index:1;"></div>';
-      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'+
-        '<div style="width:64px;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;flex-shrink:0;">'+p.name.split(' ')[0]+'</div>'+
-        '<div style="flex:1;height:20px;background:var(--border);border-radius:3px;position:relative;overflow:hidden;">'+halfLine+bars+'</div>'+
-      '</div>';
-    }).join('');
-    const axisMarks=[0,0.25,0.5,0.75,1].map(function(f){ return '<span>'+fmt(Math.round(f*totalSecs))+'</span>'; }).join('');
-    return '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px;">'+
-      '<div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:6px;">ROTATION TIMELINE · | = half break</div>'+
-      '<div style="display:flex;justify-content:space-between;padding:0 0 4px 70px;font-size:8px;color:var(--dim);">'+axisMarks+'</div>'+
-      tRows+'</div>';
+      var bars='';
+      stints.forEach(function(s){
+        if(!s.on) return;
+        var lx=xf(s.s), rw=Math.max(1,xf(s.e)-xf(s.s));
+        bars+='<rect x="'+lx+'" y="'+rowY+'" width="'+rw+'" height="'+(ROW_H-2)+'" fill="var(--green)" opacity=".82" rx="1"/>';
+      });
+      rows+='<text x="'+(GO_LP-3)+'" y="'+(rowY+ROW_H-4)+'" text-anchor="end" fill="#9ca3af" font-size="10" font-family="system-ui">'+p.name.split(' ')[0]+'</text>'
+        +'<rect x="'+GO_LP+'" y="'+rowY+'" width="'+cw+'" height="'+(ROW_H-2)+'" fill="#161924" rx="1"/>'+bars;
+    });
+
+    return '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:10px 10px 4px;margin-top:10px;">'
+      +'<div style="font-family:Impact,sans-serif;font-size:9px;letter-spacing:2px;color:var(--dim);margin-bottom:4px;">ROTATION TIMELINE</div>'
+      +'<svg width="'+CW+'" height="'+BH+'" style="display:block;width:100%;max-width:'+CW+'px;">'
+        +'<rect x="'+GO_LP+'" y="0" width="'+cw+'" height="'+BH+'" fill="var(--surface)" rx="3"/>'
+        +goPeriodLinesSVG(xf,BH,markers,false)
+        +rows
+        +goPeriodLinesSVG(xf,BH,markers,false)
+      +'</svg>'
+      +goTimeAxisHTML(cw,markers,total)
+    +'</div>';
   })();
-  const goBarHTML=(()=>{
-    const bars=sorted.map(p=>{
-      const pct=Math.min(100,Math.round(p.playTime/totalSecs*100));
-      const targetPct=Math.round(fairShare/totalSecs*100);
+
+  // ── Playing time bar chart ───────────────────────────────────
+  const barChartHTML=(function(){
+    const targetPct=(fairShare/total)*100;
+    var bars='';
+    sorted.forEach(function(p){
+      const pct=Math.min(100,Math.round(p.playTime/total*100));
       const diff=p.playTime-fairShare;
       const col=p.playTime>=fairShare*0.9?'var(--green)':p.playTime>=fairShare*0.6?'var(--warn)':'var(--red)';
       const diffStr=(diff>=0?'+':'')+Math.floor(Math.abs(diff)/60)+':'+(String(Math.abs(diff)%60).padStart(2,'0'));
-      return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;">
-        <div style="width:72px;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name.split(' ')[0]}</div>
-        <div style="flex:1;height:14px;background:var(--border);border-radius:4px;position:relative;overflow:visible;">
-          <div style="height:100%;width:${pct}%;background:${col};border-radius:4px;"></div>
-          <div style="position:absolute;top:-2px;bottom:-2px;left:${targetPct}%;width:2px;background:rgba(255,255,255,.55);border-radius:1px;"></div>
-        </div>
-        <div style="font-family:Impact,sans-serif;font-size:11px;color:${col};flex-shrink:0;width:38px;text-align:right;">${fmt(p.playTime)}</div>
-        <div style="font-size:10px;color:${diff>=0?'var(--green)':'var(--red)'};flex-shrink:0;width:32px;">${diffStr}</div>
-      </div>`;
-    }).join('');
-    return `<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px;">
-      <div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">PLAYING TIME — white line = fair share (${fmt(fairShare)})</div>
-      ${bars}
-    </div>`;
+      var mLines='';
+      markers.forEach(function(m){
+        var mpct=(m.t/total)*100;
+        mLines+='<div style="position:absolute;top:0;bottom:0;left:'+mpct+'%;width:'+(m.major?1.5:1)+'px;background:'+(m.major?'rgba(255,255,255,.4)':'rgba(255,255,255,.2)')+';z-index:2;"></div>';
+      });
+      bars+='<div style="display:flex;align-items:center;gap:0;margin-bottom:4px;">'
+        +'<div style="width:'+(GO_LP-4)+'px;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;padding-right:4px;flex-shrink:0;">'+p.name.split(' ')[0]+'</div>'
+        +'<div style="width:'+cw+'px;flex-shrink:0;height:13px;background:var(--border);border-radius:3px;position:relative;overflow:hidden;">'
+          +'<div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:3px;"></div>'
+          +'<div style="position:absolute;top:-1px;bottom:-1px;left:'+targetPct+'%;width:2px;background:rgba(255,255,255,.55);border-radius:1px;z-index:3;"></div>'
+          +mLines
+        +'</div>'
+        +'<div style="width:'+GO_RP+'px;padding-left:4px;font-family:Impact,sans-serif;font-size:10px;color:'+col+';flex-shrink:0;">'+fmt(p.playTime)+'</div>'
+        +'<div style="font-size:9px;color:'+(diff>=0?'var(--green)':'var(--red)')+';margin-left:3px;flex-shrink:0;">'+diffStr+'</div>'
+      +'</div>';
+    });
+    return '<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:10px 10px 4px;margin-top:10px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">'
+        +'<div style="font-family:Impact,sans-serif;font-size:9px;letter-spacing:2px;color:var(--dim);">PLAYING TIME</div>'
+        +'<div style="font-size:9px;color:var(--dim);">\u2503 fair share = '+fmt(fairShare)+'</div>'
+      +'</div>'
+      +bars
+      +goTimeAxisHTML(cw,markers,total)
+    +'</div>';
   })();
 
   $('app').innerHTML=`
@@ -5476,79 +5614,33 @@ function renderGameover(){
   <div class="go-hdr">
     <div class="go-title">FULL TIME</div>
     <div class="go-sub">${sorted.length} players · ${fmt(S.gameTime)} played</div>
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+    <div style="display:flex;align-items:flex-start;justify-content:center;gap:10px;margin-top:12px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Us</div>
         <input id="score-us" type="number" min="0" max="999" value="${S.finalScore.us??''}" placeholder="—"
-          style="width:60px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--green);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"
+          style="width:62px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--green);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"
           oninput="S.finalScore.us=this.value===''?null:+this.value;saveState()">
+        ${hasTracked?`<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">${trackedTotals.us}</span></div>`:''}
       </div>
-      <div style="font-family:Impact,sans-serif;font-size:24px;color:var(--dim);margin-top:12px;">:</div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+      <div style="font-family:Impact,sans-serif;font-size:24px;color:var(--dim);margin-top:14px;">:</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Them</div>
         <input id="score-them" type="number" min="0" max="999" value="${S.finalScore.them??''}" placeholder="—"
-          style="width:60px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--red);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"
+          style="width:62px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--red);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"
           oninput="S.finalScore.them=this.value===''?null:+this.value;saveState()">
+        ${hasTracked?`<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">${trackedTotals.them}</span></div>`:''}
       </div>
     </div>
+    ${hasTracked?`<div style="font-size:9px;color:#374151;margin-top:5px;text-align:center;">Edit score if tracker missed any points</div>`:''}
   </div>
   <div class="go-body">
     <table class="stats-tbl">
       <thead><tr><th>Player</th><th>${h1Label}</th><th>${h2Label}</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    ${goBarHTML}
-    ${(()=>{
-      if(!S.scoreLog||!S.scoreLog.length) return '';
-      const totals=calcScoreTotals();
-      const diff=buildScoreDiff();
-      const total=gameTotalSecs();
-      const h1s=usesQuarters()?20*60:S.h1Dur*60;
-      const W=320, BH=70, LP=8, RP=8, cw=W-LP-RP;
-      const zeroY=BH/2;
-      const maxD=Math.max(6,...diff.map(d=>Math.abs(d.d)));
-      const sc=(zeroY-4)/maxD;
-      function xf(t){return LP+(Math.min(t,total)/total)*cw;}
-      function yf(d){return Math.max(2,Math.min(BH-2,zeroY-d*sc));}
-      let posA='M'+xf(0)+' '+zeroY,negA='M'+xf(0)+' '+zeroY,line='M'+xf(diff[0].t)+' '+yf(diff[0].d);
-      for(let i=1;i<diff.length;i++){
-        const px=xf(diff[i-1].t),cx=xf(diff[i].t),py=yf(diff[i-1].d),cy=yf(diff[i].d);
-        posA+=` L${px} ${Math.min(zeroY,py)} L${cx} ${Math.min(zeroY,cy)}`;
-        negA+=` L${px} ${Math.max(zeroY,py)} L${cx} ${Math.max(zeroY,cy)}`;
-        line+=` L${cx} ${cy}`;
-      }
-      posA+=` L${xf(diff[diff.length-1].t)} ${zeroY} Z`;
-      negA+=` L${xf(diff[diff.length-1].t)} ${zeroY} Z`;
-      const htX=xf(h1s);
-      const lead=totals.us-totals.them;
-      const leadTxt=lead>0?`+${lead} US`:lead<0?`${Math.abs(lead)} THEM`:'LEVEL';
-      const leadCol=lead>0?'var(--green)':lead<0?'var(--red)':'var(--dim)';
-      return `<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-          <div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;color:var(--dim);">SCORE DIFFERENTIAL</div>
-          <div style="font-family:Impact,sans-serif;font-size:13px;color:${leadCol}">Final: ${totals.us} – ${totals.them} &nbsp;(${leadTxt})</div>
-        </div>
-        <svg width="${W}" height="${BH}" style="display:block;width:100%;max-width:${W}px;">
-          <rect x="${LP}" y="0" width="${cw}" height="${BH}" fill="var(--surface)" rx="3"/>
-          <path d="${posA}" fill="rgba(46,168,75,.3)"/>
-          <path d="${negA}" fill="rgba(239,68,68,.3)"/>
-          <line x1="${LP}" y1="${zeroY}" x2="${LP+cw}" y2="${zeroY}" stroke="rgba(255,255,255,.2)" stroke-width="1.5"/>
-          <line x1="${htX}" y1="0" x2="${htX}" y2="${BH}" stroke="rgba(255,255,255,.2)" stroke-width="1" stroke-dasharray="4 3"/>
-          <text x="${htX+3}" y="10" fill="rgba(255,255,255,.3)" font-size="8" font-family="Impact,sans-serif">HT</text>
-          <path d="${line}" stroke="#60a5fa" fill="none" stroke-width="2.5" stroke-linejoin="round"/>
-        </svg>
-        <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--dim);margin-top:3px;padding:0 ${LP}px;">
-          <span>0:00</span><span>${fmt(total/2)}</span><span>${fmt(total)}</span>
-        </div>
-        <div style="display:flex;gap:12px;margin-top:6px;font-size:10px;">
-          <span style="color:rgba(46,168,75,.8);">█ Us ahead</span>
-          <span style="color:rgba(239,68,68,.8);">█ Them ahead</span>
-          <span style="color:#60a5fa;">━ differential</span>
-          <span style="color:var(--dim);">${S.scoreLog.length} scoring events</span>
-        </div>
-      </div>`;
-    })()}
-    ${goTimelineHTML}
+    ${diffChartHTML}
+    ${rotChartHTML}
+    ${barChartHTML}
     ${logHTML}
   </div>
   <div class="go-footer">
