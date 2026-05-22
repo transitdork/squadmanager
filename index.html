@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.21.8';
+const APP_VERSION = '2026.05.22.1';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -990,6 +990,8 @@ const S = {
   subCountdown: 0,
   alertState: null,
   isRunning: false,       // player timers running
+  scoreLog: [],           // [{t, who:'us'|'them', pts}] — scoring events
+  scoreBarExpanded: false, // score bar toggle
   gamePositions: {},      // playerId→activePosition ('1'-'5') for current game only
   q1BreakDone: false,     // quarter break between Q1 and Q2 already shown
   q3BreakDone: false,     // quarter break between Q3 and Q4 already shown
@@ -1890,6 +1892,8 @@ function startGame(){
   unlockAudio();
   const filtered=S.names.filter(n=>n.trim());
   // Initialise game positions and manual overrides
+  S.scoreLog = [];
+  S.scoreBarExpanded = false;
   S.gamePositions = {};
   S.q1BreakDone = false; S.q3BreakDone = false;
   S.manualPositions = {};
@@ -4311,6 +4315,151 @@ function renderSetup(restoreScroll){
   if(savedScroll){ const el=$('app').querySelector('.setup'); if(el) el.scrollTop=savedScroll; }
 }
 
+
+// ── SCORE TRACKING ─────────────────────────────────────────────
+function calcScoreTotals(){
+  var us=0, them=0;
+  (S.scoreLog||[]).forEach(function(e){ if(e.who==='us') us+=e.pts; else them+=e.pts; });
+  return {us:us, them:them};
+}
+
+function buildScoreDiff(){
+  var pts=[{t:0,d:0}];
+  var us=0, them=0;
+  (S.scoreLog||[]).forEach(function(e){
+    if(e.who==='us') us+=e.pts; else them+=e.pts;
+    pts.push({t:e.t, d:us-them});
+  });
+  if(pts[pts.length-1].t<gameTotalSecs()) pts.push({t:gameTotalSecs(), d:us-them});
+  return pts;
+}
+
+function addScoreEvent(who, pts){
+  if(!S.scoreLog) S.scoreLog=[];
+  S.scoreLog.push({t:S.gameTime, who:who, pts:pts});
+  saveState();
+  // Update DOM directly without full re-render
+  updateScoreBarDOM();
+}
+
+function undoScoreEvent(){
+  if(!S.scoreLog||!S.scoreLog.length) return;
+  S.scoreLog.pop();
+  saveState();
+  updateScoreBarDOM();
+}
+
+function toggleScoreBar(){
+  S.scoreBarExpanded = !S.scoreBarExpanded;
+  var bar = document.getElementById('score-bar');
+  if(bar) bar.outerHTML = renderScoreBarHTML();
+}
+
+// Fast DOM update for score bar without full game re-render
+function updateScoreBarDOM(){
+  var bar = document.getElementById('score-bar');
+  if(bar) bar.outerHTML = renderScoreBarHTML();
+}
+
+// Mini differential SVG for score bar
+function scoreDiffSVG(width, height, compact){
+  var data = buildScoreDiff();
+  var totals = calcScoreTotals();
+  var LP=2, RP=2;
+  var cw=width-LP-RP, ch=height;
+  var zeroY=ch/2;
+  var maxD=Math.max(6, Math.max.apply(null, data.map(function(d){return Math.abs(d.d);})));
+  var sc=(zeroY-2)/maxD;
+  var total=gameTotalSecs();
+  function xf(t){ return LP+(Math.min(t,total)/total)*cw; }
+  function yf(d){ return Math.max(1,Math.min(ch-1,zeroY-d*sc)); }
+
+  var posA='M'+xf(0)+' '+zeroY, negA='M'+xf(0)+' '+zeroY;
+  var line='M'+xf(data[0].t)+' '+yf(data[0].d);
+  for(var i=1;i<data.length;i++){
+    var px=xf(data[i-1].t), cx=xf(data[i].t);
+    var py=yf(data[i-1].d), cy=yf(data[i].d);
+    posA+=' L'+px+' '+Math.min(zeroY,py)+' L'+cx+' '+Math.min(zeroY,cy);
+    negA+=' L'+px+' '+Math.max(zeroY,py)+' L'+cx+' '+Math.max(zeroY,cy);
+    line+=' L'+cx+' '+cy;
+  }
+  posA+=' L'+xf(data[data.length-1].t)+' '+zeroY+' Z';
+  negA+=' L'+xf(data[data.length-1].t)+' '+zeroY+' Z';
+
+  var htX = xf(gameTotalSecs()/2);
+  var curX = xf(S.gameTime);
+
+  return '<svg width="'+width+'" height="'+height+'" style="display:block;flex-shrink:0;">'
+    +'<rect x="'+LP+'" y="0" width="'+cw+'" height="'+ch+'" fill="rgba(0,0,0,.3)" rx="3"/>'
+    +'<path d="'+posA+'" fill="rgba(46,168,75,.32)"/>'
+    +'<path d="'+negA+'" fill="rgba(239,68,68,.32)"/>'
+    +'<line x1="'+LP+'" y1="'+zeroY+'" x2="'+(LP+cw)+'" y2="'+zeroY+'" stroke="rgba(255,255,255,.12)" stroke-width="1"/>'
+    +'<line x1="'+htX+'" y1="0" x2="'+htX+'" y2="'+ch+'" stroke="rgba(255,255,255,.15)" stroke-width="1" stroke-dasharray="2 2"/>'
+    +'<path d="'+line+'" stroke="#60a5fa" fill="none" stroke-width="1.8" stroke-linejoin="round"/>'
+    +'<line x1="'+curX+'" y1="0" x2="'+curX+'" y2="'+ch+'" stroke="rgba(255,255,255,.65)" stroke-width="1.5" stroke-dasharray="2 2"/>'
+    +'</svg>';
+}
+
+function renderScoreBarHTML(){
+  var totals = calcScoreTotals();
+  var us = totals.us, them = totals.them;
+  var lead = us - them;
+  var leadTxt = lead>0 ? '+'+lead+' US' : lead<0 ? Math.abs(lead)+' THEM' : 'LEVEL';
+  var leadCol = lead>0 ? 'var(--green)' : lead<0 ? 'var(--red)' : 'var(--dim)';
+  var hasScores = S.scoreLog && S.scoreLog.length > 0;
+
+  if(!S.scoreBarExpanded){
+    // ── COLLAPSED ──
+    return '<div id="score-bar" style="background:#0a0c14;border-top:1px solid #1a1d2e;border-bottom:1px solid #1a1d2e;padding:5px 10px;flex-shrink:0;">'
+      +'<div style="display:flex;align-items:center;gap:6px;">'
+        // US side
+        +'<div style="font-family:Impact,sans-serif;font-size:22px;color:var(--green);line-height:1;min-width:26px;text-align:center;">'+us+'</div>'
+        +'<button onclick="event.stopPropagation();addScoreEvent(\'us\',2)" style="flex:1;background:rgba(46,168,75,.18);border:1.5px solid rgba(46,168,75,.4);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">+2 US</button>'
+        // Middle
+        +'<div onclick="event.stopPropagation();toggleScoreBar()" style="display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;flex-shrink:0;padding:0 4px;">'
+          +'<div style="font-family:Impact,sans-serif;font-size:11px;color:'+leadCol+';letter-spacing:1px;white-space:nowrap;">'+leadTxt+'</div>'
+          +'<div style="font-size:8px;color:#374151;letter-spacing:.5px;">▼ MORE</div>'
+        +'</div>'
+        // THEM side
+        +'<button onclick="event.stopPropagation();addScoreEvent(\'them\',2)" style="flex:1;background:rgba(239,68,68,.18);border:1.5px solid rgba(239,68,68,.4);color:var(--red);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">+2 THEM</button>'
+        +'<div style="font-family:Impact,sans-serif;font-size:22px;color:var(--red);line-height:1;min-width:26px;text-align:center;">'+them+'</div>'
+      +'</div>'
+    +'</div>';
+  }
+
+  // ── EXPANDED ──
+  var chartW = 120;
+  return '<div id="score-bar" onclick="event.stopPropagation()" style="background:#0a0c14;border-top:1px solid #1a1d2e;border-bottom:1px solid #1a1d2e;padding:8px 10px;flex-shrink:0;">'
+    // Score row + mini chart
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">'
+      +'<div style="font-family:Impact,sans-serif;font-size:28px;color:var(--green);line-height:1;">'+us+'</div>'
+      +'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;margin:0 10px;">'
+        +'<div style="font-family:Impact,sans-serif;font-size:11px;color:'+leadCol+';letter-spacing:1px;">'+leadTxt+'</div>'
+        +scoreDiffSVG(chartW, 34, false)
+        +'<div style="display:flex;justify-content:space-between;width:'+chartW+'px;font-size:7px;color:#374151;margin-top:1px;">'
+          +'<span>0:00</span><span>HT</span><span>'+fmt(gameTotalSecs())+'</span>'
+        +'</div>'
+      +'</div>'
+      +'<div style="font-family:Impact,sans-serif;font-size:28px;color:var(--red);line-height:1;">'+them+'</div>'
+    +'</div>'
+    // +1/+2/+3 buttons
+    +'<div style="display:flex;gap:5px;margin-bottom:6px;">'
+      +[1,2,3].map(function(p){
+        return '<button onclick="event.stopPropagation();addScoreEvent(\'us\','+p+')" style="flex:1;background:rgba(46,168,75,.15);border:1px solid rgba(46,168,75,.35);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">+'+p+' US</button>';
+      }).join('')
+      +'<div style="width:1px;background:var(--border);margin:0 2px;"></div>'
+      +[1,2,3].map(function(p){
+        return '<button onclick="event.stopPropagation();addScoreEvent(\'them\','+p+')" style="flex:1;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.35);color:var(--red);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">+'+p+' THEM</button>';
+      }).join('')
+    +'</div>'
+    // Undo + collapse
+    +'<div style="display:flex;gap:6px;">'
+      +(hasScores ? '<button onclick="event.stopPropagation();undoScoreEvent()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">↩ UNDO LAST</button>' : '<div style="flex:1"></div>')
+      +'<button onclick="event.stopPropagation();toggleScoreBar()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">▲ COLLAPSE</button>'
+    +'</div>'
+  +'</div>';
+}
+
 function renderGame(){
   const isH2=S.phase==='h2';
   const cp=courtPlayers(), bp=benchPlayers();
@@ -4463,6 +4612,7 @@ function renderGame(){
 
   ${alertHTML}
   ${subBarHTML}
+  ${renderScoreBarHTML()}
 
   <div class="cols">
     <div class="col" style="border-right:1px solid var(--border)">
@@ -4955,6 +5105,46 @@ function exportGamePDF(){
       '<td>'+p.fouls+'</td></tr>';
   }).join('');
 
+  // ── Score differential SVG for PDF ──
+  var scoreDiffPDF=(function(){
+    if(!S.scoreLog||!S.scoreLog.length) return '';
+    var diff=buildScoreDiff();
+    var tot=gameTotalSecs();
+    var h1s=usesQuarters()?20*60:S.h1Dur*60;
+    var W=440,BH=70,LP=100,RP=50,cw=W-LP-RP;
+    var zeroY=BH/2;
+    var maxD=Math.max(6,Math.max.apply(null,diff.map(function(d){return Math.abs(d.d);})));
+    var sc=(zeroY-4)/maxD;
+    function xf(t){return LP+(Math.min(t,tot)/tot)*cw;}
+    function yf(d){return Math.max(2,Math.min(BH-2,zeroY-d*sc));}
+    var posA='M'+xf(0)+' '+zeroY,negA='M'+xf(0)+' '+zeroY,line='M'+xf(diff[0].t)+' '+yf(diff[0].d);
+    for(var i=1;i<diff.length;i++){
+      var px=xf(diff[i-1].t),cx=xf(diff[i].t),py=yf(diff[i-1].d),cy=yf(diff[i].d);
+      posA+=' L'+px+' '+Math.min(zeroY,py)+' L'+cx+' '+Math.min(zeroY,cy);
+      negA+=' L'+px+' '+Math.max(zeroY,py)+' L'+cx+' '+Math.max(zeroY,cy);
+      line+=' L'+cx+' '+cy;
+    }
+    posA+=' L'+xf(diff[diff.length-1].t)+' '+zeroY+' Z';
+    negA+=' L'+xf(diff[diff.length-1].t)+' '+zeroY+' Z';
+    var htX=xf(h1s);
+    var totals=calcScoreTotals();
+    return '<svg width="'+(W)+'" height="'+(BH+20)+'" xmlns="http://www.w3.org/2000/svg" style="display:block">'
+      +'<text x="'+LP+'" y="10" font-size="8" fill="#888" font-family="Arial">0:00</text>'
+      +'<text x="'+(LP+cw/2)+'" y="10" font-size="8" fill="#888" font-family="Arial" text-anchor="middle">'+fmt(tot/2)+'</text>'
+      +'<text x="'+(LP+cw)+'" y="10" font-size="8" fill="#888" font-family="Arial" text-anchor="end">'+fmt(tot)+'</text>'
+      +'<rect x="'+LP+'" y="14" width="'+cw+'" height="'+BH+'" fill="#f8f8f8" rx="3"/>'
+      +'<path d="'+posA.replace('M'+xf(0)+' '+zeroY,'M'+xf(0)+' '+(zeroY+14)).replace(/L(\d+\.?\d*) (\d+\.?\d*)/g,function(m,x,y){return 'L'+x+' '+(parseFloat(y)+14);})+'" fill="rgba(46,168,75,.25)"/>'
+      +'<path d="'+negA.replace('M'+xf(0)+' '+zeroY,'M'+xf(0)+' '+(zeroY+14)).replace(/L(\d+\.?\d*) (\d+\.?\d*)/g,function(m,x,y){return 'L'+x+' '+(parseFloat(y)+14);})+'" fill="rgba(204,51,51,.25)"/>'
+      +'<line x1="'+LP+'" y1="'+(zeroY+14)+'" x2="'+(LP+cw)+'" y2="'+(zeroY+14)+'" stroke="#ccc" stroke-width="1"/>'
+      +'<line x1="'+htX+'" y1="14" x2="'+htX+'" y2="'+(BH+14)+'" stroke="#aaa" stroke-width="1" stroke-dasharray="4 3"/>'
+      +'<path d="'+line.replace('M'+xf(diff[0].t)+' '+yf(diff[0].d),'M'+xf(diff[0].t)+' '+(yf(diff[0].d)+14)).replace(/L(\d+\.?\d*) (\d+\.?\d*)/g,function(m,x,y){return 'L'+x+' '+(parseFloat(y)+14);})+'" stroke="#2563eb" fill="none" stroke-width="2"/>'
+      +'<text x="'+(LP-3)+'" y="'+(zeroY+18)+'" text-anchor="end" font-size="8" fill="#666" font-family="Arial">0</text>'
+      +'<text x="'+(LP-3)+'" y="18" text-anchor="end" font-size="8" fill="#2ea84b" font-family="Arial">+'+Math.round(maxD)+'</text>'
+      +'<text x="'+(LP-3)+'" y="'+(BH+14)+'" text-anchor="end" font-size="8" fill="#cc3333" font-family="Arial">-'+Math.round(maxD)+'</text>'
+      +'<text x="'+(LP+cw+4)+'" y="'+(zeroY+18)+'" font-size="9" fill="#333" font-family="Arial" font-weight="bold">'+totals.us+' – '+totals.them+'</text>'
+      +'</svg>';
+  })();
+
   var logRows=S.subLog.map(function(e){
     var period=e.isHalftime?'Half Time':('H'+e.half+' '+fmt(e.halfTime));
     var bg=e.isHalftime?'background:#fffbe6;':'';
@@ -4989,6 +5179,7 @@ function exportGamePDF(){
     '<h2>Playing time &nbsp;<span style="font-weight:400;color:#888;">(fair share: '+fmt(fairShare)+'/player &nbsp;|&nbsp; ▏ line = target)</span></h2>'+
     '<div class="legend">■ green = at/above target &nbsp; ■ amber = slightly under &nbsp; ■ red = significantly under</div>'+
     barChart()+
+    (scoreDiffPDF?('<h2>Score Differential &nbsp;<span style="font-weight:400;color:#888;">(blue line · ▏ = half | green = us ahead · red = them ahead)</span></h2>'+scoreDiffPDF):'')+
     '<h2>Rotation timeline &nbsp;<span style="font-weight:400;color:#888;">(green = on court &nbsp;|&nbsp; ▏ = half break)</span></h2>'+
     tlChart()+
     '<h2>Player statistics</h2>'+
@@ -5117,6 +5308,13 @@ function uploadToClaudeModal(){
     const dStr=(d>=0?'+':'')+fmt(Math.abs(d));
     txt+=(p.name.padEnd(18)+fmt(p.h1PlayTime).padEnd(8)+fmt(p.h2PlayTime).padEnd(8)+fmt(p.playTime).padEnd(8)+dStr+' | '+p.fouls+'f\n');
   });
+  if(S.scoreLog&&S.scoreLog.length){
+    const st=calcScoreTotals();
+    txt+='\nSCORING LOG ('+S.scoreLog.length+' events | Final: '+st.us+' – '+st.them+')\n'+'─'.repeat(50)+'\n';
+    S.scoreLog.forEach(function(e){
+      txt+=fmt(e.t)+' '+e.who.toUpperCase()+' +'+e.pts+'\n';
+    });
+  }
   if(S.subLog.length){
     txt+='\nSUBSTITUTION LOG ('+S.subLog.length+' entries)\n'+'─'.repeat(50)+'\n';
     S.subLog.forEach(function(e){
@@ -5300,6 +5498,56 @@ function renderGameover(){
       <tbody>${rows}</tbody>
     </table>
     ${goBarHTML}
+    ${(()=>{
+      if(!S.scoreLog||!S.scoreLog.length) return '';
+      const totals=calcScoreTotals();
+      const diff=buildScoreDiff();
+      const total=gameTotalSecs();
+      const h1s=usesQuarters()?20*60:S.h1Dur*60;
+      const W=320, BH=70, LP=8, RP=8, cw=W-LP-RP;
+      const zeroY=BH/2;
+      const maxD=Math.max(6,...diff.map(d=>Math.abs(d.d)));
+      const sc=(zeroY-4)/maxD;
+      function xf(t){return LP+(Math.min(t,total)/total)*cw;}
+      function yf(d){return Math.max(2,Math.min(BH-2,zeroY-d*sc));}
+      let posA='M'+xf(0)+' '+zeroY,negA='M'+xf(0)+' '+zeroY,line='M'+xf(diff[0].t)+' '+yf(diff[0].d);
+      for(let i=1;i<diff.length;i++){
+        const px=xf(diff[i-1].t),cx=xf(diff[i].t),py=yf(diff[i-1].d),cy=yf(diff[i].d);
+        posA+=` L${px} ${Math.min(zeroY,py)} L${cx} ${Math.min(zeroY,cy)}`;
+        negA+=` L${px} ${Math.max(zeroY,py)} L${cx} ${Math.max(zeroY,cy)}`;
+        line+=` L${cx} ${cy}`;
+      }
+      posA+=` L${xf(diff[diff.length-1].t)} ${zeroY} Z`;
+      negA+=` L${xf(diff[diff.length-1].t)} ${zeroY} Z`;
+      const htX=xf(h1s);
+      const lead=totals.us-totals.them;
+      const leadTxt=lead>0?`+${lead} US`:lead<0?`${Math.abs(lead)} THEM`:'LEVEL';
+      const leadCol=lead>0?'var(--green)':lead<0?'var(--red)':'var(--dim)';
+      return `<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+          <div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;color:var(--dim);">SCORE DIFFERENTIAL</div>
+          <div style="font-family:Impact,sans-serif;font-size:13px;color:${leadCol}">Final: ${totals.us} – ${totals.them} &nbsp;(${leadTxt})</div>
+        </div>
+        <svg width="${W}" height="${BH}" style="display:block;width:100%;max-width:${W}px;">
+          <rect x="${LP}" y="0" width="${cw}" height="${BH}" fill="var(--surface)" rx="3"/>
+          <path d="${posA}" fill="rgba(46,168,75,.3)"/>
+          <path d="${negA}" fill="rgba(239,68,68,.3)"/>
+          <line x1="${LP}" y1="${zeroY}" x2="${LP+cw}" y2="${zeroY}" stroke="rgba(255,255,255,.2)" stroke-width="1.5"/>
+          <line x1="${htX}" y1="0" x2="${htX}" y2="${BH}" stroke="rgba(255,255,255,.2)" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="${htX+3}" y="10" fill="rgba(255,255,255,.3)" font-size="8" font-family="Impact,sans-serif">HT</text>
+          <path d="${line}" stroke="#60a5fa" fill="none" stroke-width="2.5" stroke-linejoin="round"/>
+        </svg>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--dim);margin-top:3px;padding:0 ${LP}px;">
+          <span>0:00</span><span>${fmt(total/2)}</span><span>${fmt(total)}</span>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:6px;font-size:10px;">
+          <span style="color:rgba(46,168,75,.8);">█ Us ahead</span>
+          <span style="color:rgba(239,68,68,.8);">█ Them ahead</span>
+          <span style="color:#60a5fa;">━ differential</span>
+          <span style="color:var(--dim);">${S.scoreLog.length} scoring events</span>
+        </div>
+      </div>`;
+    })()}
     ${goTimelineHTML}
     ${logHTML}
   </div>
@@ -5817,6 +6065,7 @@ function stateToJSON(){
     subCountdown: S.subCountdown,
     alertState: S.alertState,
     subLog: S.subLog,
+    scoreLog: S.scoreLog||[],
     gamePositions: S.gamePositions||{},
     manualPositions: S.manualPositions||{},
     q1BreakDone: S.q1BreakDone||false,
@@ -5863,6 +6112,7 @@ function loadStateFromData(d){
     S.alertState=d.alertState||null;
     prevAlert=d.alertState||null;
     S.subLog=d.subLog||[];
+    S.scoreLog=d.scoreLog||[];
     S.gamePositions=d.gamePositions||{};
     S.manualPositions=d.manualPositions||{};
     S.q1BreakDone=d.q1BreakDone||false;
