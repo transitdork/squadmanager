@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.25.3';
+const APP_VERSION = '2026.05.25.4';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -3520,32 +3520,78 @@ async function generateAIRotation(){
     return '  '+n+': '+Math.floor(t/60)+':'+(String(t%60).padStart(2,'0'))+(d?(' ('+(d>0?'+':'')+Math.round(d/60)+'m)'):' (equal)');
   }).join('\n');
 
+  // Pre-compute required minimum subs and worked example for context
+  var nBench=filtered.length-COURT_SIZE;
+  var minSubsPerHalf=Math.max(nBench, Math.ceil(filtered.length/2)-1);
+  // Show AI a concrete worked example using Plan D times as reference
+  var planDRef=buildPlanD();
+  var planDTimesStr=filtered.map(function(n){
+    var t=targets[n]||fair;
+    return n+': target '+Math.floor(t/60)+'m'+(t%60?String(t%60).padStart(2,'0')+'s':'');
+  }).join(', ');
+
   var sharedCtx=coachInstr
-    +'GAME: '+(S.h1Dur+S.h2Dur)+' min ('+(usesQuarters()?'4x10 min quarters':'2x20 min halves')+'), '+filtered.length+' players, '+COURT_SIZE+' on court\n'
-    +'Fair share: '+Math.floor(fair/60)+':'+(String(fair%60).padStart(2,'0'))+'/player\n\n'
-    +'PLAYER TIME TARGETS (achieve as closely as possible - adjust to find valid rotation if needed):\n'+timeTargetsStr+'\n\n'
+    +'GAME: '+(S.h1Dur+S.h2Dur)+' min ('+(usesQuarters()?'4x10 min quarters':'2x20 min halves')+'), '
+    +filtered.length+' players, '+COURT_SIZE+' on court at all times\n'
+    +'Half duration: '+Math.floor(halfSecs/60)+' min each half\n'
+    +'Fair share per player: '+Math.floor(fair/60)+':'+(String(fair%60).padStart(2,'0'))+' ('+fair+' seconds)\n\n'
+    +'PLAYING TIME TARGETS — YOU MUST ACHIEVE THESE (within 2 minutes per player):\n'
+    +filtered.map(function(n){
+      var t=targets[n]||fair,d=t-fair;
+      return '  '+n+': '+Math.floor(t/60)+'m'+(t%60?String(t%60).padStart(2,'0')+'s':'')
+        +' total game time ('+Math.floor(t/2/60)+'m'+(Math.round(t/2)%60?String(Math.round(t/2)%60).padStart(2,'0')+'s':'')
+        +' per half approx)';
+    }).join('\n')+'\n\n'
+    +'MINIMUM SUBS REQUIRED: at least '+minSubsPerHalf+' substitutions per half\n'
     +'ROTATION TIMING: '+timingStr+'\n\n'
     +(conflictsStr?'BENCH PREFERENCES (soft - may override to hit time targets):\n  '+conflictsStr+'\n\n':'')
-    +'LINEUPS:\n  Starting 5 (MANDATORY): '+posDesc+'\n'
-    +(h2PresetNames?'  H2 Starting 5 (MANDATORY): '+h2PresetNames.join(', ')+'\n':'  H2 Starting 5: AI chooses\n')
-    +(finalPresetNames?'  Finishing 5 (MANDATORY): '+finalPresetNames.join(', ')+'\n':'  Finishing 5: AI chooses\n')
-    +(priorityNames.length?'  Priority players: '+priorityNames.join(', ')+'\n':'')
-    +'\n'+(hasRatings?'PLAYER RATINGS:\n'+playerSummary+'\n\n':'No ratings - use equal time.\n\n')
-    +'RULES:\n'
-    +'  - off = players ON COURT at that moment; on = players ON BENCH\n'
-    +'  - off and on must be same length (keep exactly '+COURT_SIZE+' on court)\n'
-    +'  - Track court state through every sub - never sub off a benched player\n'
-    +'  - Use EXACT names: '+filtered.join(', ')+'\n';
+    +'LINEUPS:\n  Starting 5 (MANDATORY — these players start on court): '+posDesc+'\n'
+    +(h2PresetNames?'  H2 Starting 5 (MANDATORY): '+h2PresetNames.join(', ')+'\n':'  H2 Starting 5: carry over or adjust at halftime\n')
+    +(finalPresetNames?'  Finishing 5 (MANDATORY): '+finalPresetNames.join(', ')+'\n':'')
+    +(priorityNames.length?'  Priority players (extra time acceptable): '+priorityNames.join(', ')+'\n':'')
+    +'\n'+(hasRatings?'PLAYER RATINGS (use to form quality lineups):\n'+playerSummary+'\n\n':'No ratings saved.\n\n')
+    +'IMPORTANT RULES:\n'
+    +'  1. "off" list = players currently ON COURT at that moment\n'
+    +'  2. "on" list = players currently ON BENCH at that moment\n'
+    +'  3. off and on lists must be exactly the same length\n'
+    +'  4. Always maintain exactly '+COURT_SIZE+' players on court\n'
+    +'  5. Track court state carefully — never sub off someone already on the bench\n'
+    +'  6. Use EXACT player names: '+filtered.join(', ')+'\n'
+    +'  7. atTime format: "M:SS" within each half (e.g. "5:00" = 5 minutes into that half)\n'
+    +'  8. EVERY bench player must come on court for meaningful time EVERY HALF\n\n'
+    +'REFERENCE: An equal-time plan (Plan D) would use these subs — your plan should have a SIMILAR number of subs but arranged differently per your plan type:\n'
+    +'  H1: '+planDRef.h1.map(function(s){return s.atTime+' off='+s.off.join(',')+' on='+s.on.join(',');}).join(' | ')+'\n'
+    +'  H2: '+planDRef.h2.map(function(s){return s.atTime+' off='+s.off.join(',')+' on='+s.on.join(',');}).join(' | ')+'\n\n';
 
-  var schema='{"id":"X","label":"Name","rationale":"1-2 sentences","h2Starting5":["..."],"finishing5":["..."]'
-    +',"h1":[{"subNum":1,"atTime":"5:00","off":["A"],"on":["B"],"note":""}]'
-    +',"h2":[{"subNum":1,"atTime":"5:00","off":["C"],"on":["D"],"note":""}]}';
+  var schema='{"id":"X","label":"Name","rationale":"1-2 sentences explaining the strategy"'
+    +',"h2Starting5":["player1","player2","player3","player4","player5"]'
+    +',"finishing5":["player1","player2","player3","player4","player5"]'
+    +',"h1":[{"subNum":1,"atTime":"5:00","off":["PlayerA"],"on":["PlayerB"],"note":"brief reason"}]'
+    +',"h2":[{"subNum":1,"atTime":"5:00","off":["PlayerC"],"on":["PlayerD"],"note":"brief reason"}]}';
 
   var planDefs=[
-    {id:'A',label:'Balanced',task:'BALANCED rotation. Hit the time targets above as closely as possible. Use ratings to avoid weak lineups. Every lineup should have a ball-handler (pos 1/2) and interior player (pos 4/5) where available.'},
-    {id:'B',label:'Block',task:'BLOCK rotation. Keep 5-player units together for 8-12 min stretches. Swap 2-3 players at once. Honour time targets but accept slightly more variation to maintain unit cohesion.'},
-    {id:'C',label:'Strength-first',task:'STRENGTH-FIRST rotation. Give CORE-tier players 10-15% more time than their targets. Lower-tier players get proportionally less. State in rationale who gets more/less time and why.'},
-    {id:'E',label:'Position-balanced',task:'POSITION-BALANCED rotation. Primary goal: ensure all 5 court positions (1-PG through 5-C) are covered at all times based on player position ratings. Secondary goal: honour time targets. When conflict arises prefer position coverage. State in rationale which positions are hardest to cover.'},
+    {id:'A',label:'Balanced',task:'Generate a BALANCED rotation plan.\n'
+      +'REQUIREMENT: Schedule at least '+minSubsPerHalf+' subs per half (more is fine).\n'
+      +'GOAL: Every player gets within 2 minutes of their target time listed above.\n'
+      +'STYLE: Stagger subs throughout the game so no player sits for more than 10 consecutive minutes.\n'
+      +'Use player ratings to ensure each lineup has good positional balance.'},
+    {id:'B',label:'Block',task:'Generate a BLOCK rotation plan.\n'
+      +'REQUIREMENT: Schedule at least '+Math.max(2,Math.ceil(minSubsPerHalf/2))+' subs per half.\n'
+      +'GOAL: Keep cohesive 5-player units together for 8-10 minute blocks. Swap 2-3 players at once.\n'
+      +'IMPORTANT: Even with larger blocks, every bench player must still play meaningful time.\n'
+      +'Every player must still reach within 4 minutes of their target time.'},
+    {id:'C',label:'Strength-first',task:'Generate a STRENGTH-FIRST rotation plan.\n'
+      +'REQUIREMENT: Schedule at least '+minSubsPerHalf+' subs per half.\n'
+      +'GOAL: Give CORE-tier players approximately 10-15% MORE than their target times.\n'
+      +'Give RESERVE-tier players approximately 10-15% LESS than their targets.\n'
+      +'IMPORTANT: Even reserve players must play at least 12 minutes total — no player under 12 minutes.\n'
+      +'State in rationale which players get more/less time.'},
+    {id:'E',label:'Position-balanced',task:'Generate a POSITION-BALANCED rotation plan.\n'
+      +'REQUIREMENT: Schedule at least '+minSubsPerHalf+' subs per half.\n'
+      +'GOAL: Ensure all 5 court positions (1-PG, 2-SG, 3-SF, 4-PF, 5-C) are covered at all times.\n'
+      +'Use player position ratings to form lineups where each position is filled.\n'
+      +'SECONDARY GOAL: Achieve the time targets as closely as possible (within 3 minutes per player).\n'
+      +'State in rationale which positions were hardest to cover and how you handled it.'},
   ];
 
   function validateHalf(subs,startIds,halfDur){
@@ -3600,11 +3646,19 @@ async function generateAIRotation(){
       var actual=calcPlanActualTimes(parsed,filtered);
       var worst=Math.max.apply(null,filtered.map(function(n){return Math.abs((actual[n]||0)-(targets[n]||fair));}));
       parsed.expectedTimes=Object.fromEntries(filtered.map(function(n){return[n,Math.floor((actual[n]||0)/60)+':'+(String((actual[n]||0)%60).padStart(2,'0'))];}));
-      if(worst<=180||attempt===2)return parsed;
+      // Accept if within 2 min per player, or on final attempt
+      if(worst<=120||attempt===2)return parsed;
 
-      var corrections=filtered.filter(function(n){return Math.abs((actual[n]||0)-(targets[n]||fair))>120;})
-        .map(function(n){var d=(actual[n]||0)-(targets[n]||fair);return n+': got '+fmt(actual[n]||0)+', need '+fmt(targets[n]||fair)+' ('+(d>0?'reduce by ':'add ')+Math.round(Math.abs(d)/60)+'m)';}).join('; ');
-      retryPrompt=sharedCtx+'\n\n=== CORRECTION NEEDED ===\nFix these players:\n'+corrections+'\n\nReturn corrected plan as JSON:\n'+schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
+      var corrections=filtered.filter(function(n){return Math.abs((actual[n]||0)-(targets[n]||fair))>90;})
+        .map(function(n){
+          var d=(actual[n]||0)-(targets[n]||fair);
+          return n+': currently '+Math.floor((actual[n]||0)/60)+'m, target '+Math.floor((targets[n]||fair)/60)+'m — '
+            +(d>0?'REDUCE by '+Math.round(Math.abs(d)/60)+'m (sub them off sooner)':'ADD '+Math.round(Math.abs(d)/60)+'m (keep them on longer or bring back on)');
+        }).join('\n');
+      retryPrompt=sharedCtx+'\n\n=== TIME BALANCE CORRECTION NEEDED ===\n'
+        +'Your previous plan had these time imbalances that must be fixed:\n'+corrections+'\n\n'
+        +'REWRITE the full plan fixing these players. Remember: you need at least '+minSubsPerHalf+' subs per half.\n'
+        +'Return corrected plan as JSON:\n'+schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
     }
   }
 
