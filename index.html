@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.25.7';
+const APP_VERSION = '2026.05.25.8';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -3566,67 +3566,69 @@ function calcPlanActualTimes(plan,filtered){
 }
 
 // ── Plan D: client-side equal time with 2-player preferred subs ──
-function buildPlanD(){
+function buildPlanD(adjTargets){
   var filtered=S.names.filter(function(n){return n.trim();});
   var halfSecs=usesQuarters()?20*60:S.h1Dur*60;
+  var total=gameTotalSecs();
+  var fair=Math.round(total*COURT_SIZE/filtered.length);
+  // Use adjTargets if provided, else equal targets
+  var tgts=adjTargets||Object.fromEntries(filtered.map(function(n){return[n,fair];}));
   var h2PresetNames=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE
     ?[...S.h2PresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
 
+  // Check if any deltas are set
+  var hasDeltas=Object.values(tgts).some(function(t){return Math.abs(t-fair)>30;});
+
   var plan={id:'D',label:'Equal time',
-    rationale:'Equal playing time. Sub times at clean :00 :30 :20 :40 intervals. Prefers 2-player subs.',
+    rationale:hasDeltas
+      ?'Target-time schedule. Every player achieves their target within ~1 minute. Clean sub intervals.'
+      :'Equal playing time for all players. Clean :00 :30 :20 :40 sub intervals.',
     h1:[],h2:[],h2Starting5:[],finishing5:[],expectedTimes:{}};
 
   function buildHalf(halfDur,startNames){
     var n=filtered.length;
     if(n<=COURT_SIZE)return[];
-    var slotDur=halfDur/n;
+    // Half-targets: each player's court time per half
+    var halfTgt=Object.fromEntries(filtered.map(function(nm){
+      return[nm,(tgts[nm]||fair)/2];
+    }));
+    // n-1 individual subs, target-aware — NO merging to preserve accuracy
     var timeOn=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
-    var timeBench=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
     var onCourt=new Set(startNames);
     var last=0;
-    var rawSubs=[];
+    var subs=[];
+    var slotDur=halfDur/n;
     for(var slot=1;slot<n;slot++){
       var rawT=slotDur*slot;
       var dt=rawT-last;
       onCourt.forEach(function(nm){timeOn[nm]+=dt;});
-      filtered.filter(function(nm){return!onCourt.has(nm);}).forEach(function(nm){timeBench[nm]+=dt;});
       last=rawT;
-      var courtArr=[...onCourt].sort(function(a,b){return timeOn[b]-timeOn[a];});
-      var benchArr=filtered.filter(function(nm){return!onCourt.has(nm);})
-        .sort(function(a,b){return timeBench[b]-timeBench[a];});
+      // Off: who has highest timeOn/halfTarget ratio (most ahead of their proportional target)
+      var courtArr=[...onCourt].sort(function(a,b){
+        var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:timeOn[a];
+        var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:timeOn[b];
+        return rb-ra;
+      });
+      // On: who has lowest timeOn/halfTarget ratio (most behind their target)
+      var benchArr=filtered.filter(function(nm){return!onCourt.has(nm);}).sort(function(a,b){
+        var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:0;
+        var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:0;
+        return ra-rb;
+      });
       if(!benchArr.length)continue;
       var off=courtArr[0],on=benchArr[0];
       onCourt.delete(off);onCourt.add(on);
-      rawSubs.push({t:rawT,off:off,on:on});
-      timeOn[off]=0;timeBench[on]=0;
-    }
-    // Merge adjacent pairs → 2-player subs
-    var merged=[];
-    var i=0;
-    while(i<rawSubs.length){
-      var cleanT,off,on;
-      if(i+1<rawSubs.length){
-        var mid=(rawSubs[i].t+rawSubs[i+1].t)/2;
-        cleanT=snapToCleanInterval(mid);
-        off=[rawSubs[i].off,rawSubs[i+1].off];
-        on=[rawSubs[i].on,rawSubs[i+1].on];
-        i+=2;
-      } else {
-        cleanT=snapToCleanInterval(rawSubs[i].t);
-        off=[rawSubs[i].off];
-        on=[rawSubs[i].on];
-        i+=1;
+      var cleanT=snapToCleanInterval(rawT);
+      if(subs.length){
+        var prevT=parseAtTime(subs[subs.length-1].atTime);
+        if(cleanT<=prevT)cleanT=snapToCleanInterval(prevT+60);
       }
-      if(merged.length){
-        var prevT=parseAtTime(merged[merged.length-1].atTime);
-        if(cleanT<=prevT+60)cleanT=snapToCleanInterval(prevT+90);
-      }
-      cleanT=Math.max(60,Math.min(halfDur-60,cleanT));
-      merged.push({subNum:merged.length+1,
+      cleanT=Math.max(30,Math.min(halfDur-30,cleanT));
+      subs.push({subNum:subs.length+1,
         atTime:Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0')),
-        off:off,on:on,note:'Clean interval'});
+        off:[off],on:[on],note:'Target rotation'});
     }
-    return merged;
+    return subs;
   }
 
   var h1Names=filtered.slice(0,COURT_SIZE);
@@ -3642,6 +3644,7 @@ function buildPlanD(){
   }));
   return plan;
 }
+
 
 
 async function generateAIRotation(){
@@ -3713,53 +3716,63 @@ async function generateAIRotation(){
   // ── Pre-compute sub windows client-side ──
   // KEY ARCHITECTURE: we compute WHEN and HOW MANY; AI decides WHO.
   // This prevents the AI getting arithmetic wrong.
-  function computeWindows(halfDur,startNames,nWindows){
-    // Build raw single-player schedule from Plan D greedy algorithm
+  // computeWindows: TARGET-AWARE single-player sub schedule
+  // Off = who is most AHEAD of their target (highest timeOn/halfTarget ratio)
+  // On  = who is most BEHIND their target (lowest ratio)
+  // Then merge adjacent pairs → prefer 2-player windows
+  function computeWindows(halfDur,startNames){
     var n=filtered.length;
-    var slotDur=halfDur/n;
+    if(n<=COURT_SIZE)return[{atTime:'0:00',subSize:0}].slice(1); // empty
+    var halfTgt=Object.fromEntries(filtered.map(function(nm){
+      return[nm,(adjTargets[nm]||fair)/2];
+    }));
     var timeOn=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
-    var timeBench=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
     var onCourt=new Set(startNames);
     var last=0;
-    var rawTimes=[];
+    var rawSubs=[];
+    var slotDur=halfDur/n;
     for(var slot=1;slot<n;slot++){
       var rawT=slotDur*slot;
       var dt=rawT-last;
       onCourt.forEach(function(nm){timeOn[nm]+=dt;});
-      filtered.filter(function(nm){return!onCourt.has(nm);}).forEach(function(nm){timeBench[nm]+=dt;});
       last=rawT;
-      var courtArr=[...onCourt].sort(function(a,b){return timeOn[b]-timeOn[a];});
-      var benchArr=filtered.filter(function(nm){return!onCourt.has(nm);}).sort(function(a,b){return timeBench[b]-timeBench[a];});
+      var courtArr=[...onCourt].sort(function(a,b){
+        var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:timeOn[a];
+        var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:timeOn[b];
+        return rb-ra;
+      });
+      var benchArr=filtered.filter(function(nm){return!onCourt.has(nm);}).sort(function(a,b){
+        var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:0;
+        var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:0;
+        return ra-rb;
+      });
       if(!benchArr.length)continue;
       var off=courtArr[0],on=benchArr[0];
       onCourt.delete(off);onCourt.add(on);
-      rawTimes.push(rawT);
-      timeOn[off]=0;timeBench[on]=0;
+      rawSubs.push({t:rawT,off:off,on:on});
+      // Don't reset timeOn — cumulative tracking for target-aware decisions
     }
-    // Merge adjacent pairs into 2-player windows, snap to clean interval
-    var windows=[];
-    var usedTimes=new Set();
-    var i=0;
-    while(i<rawTimes.length){
-      var subSize,cleanT;
-      if(i+1<rawTimes.length){
-        var mid=(rawTimes[i]+rawTimes[i+1])/2;
+    // Merge adjacent pairs → 2-player windows
+    var windows=[];var usedT=new Set();var i=0;
+    while(i<rawSubs.length){
+      var subSize,cleanT,offList,onList;
+      if(i+1<rawSubs.length){
+        var mid=(rawSubs[i].t+rawSubs[i+1].t)/2;
         cleanT=snapToCleanInterval(mid);
-        subSize=2; i+=2;
+        subSize=2; offList=[rawSubs[i].off,rawSubs[i+1].off]; onList=[rawSubs[i].on,rawSubs[i+1].on]; i+=2;
       } else {
-        cleanT=snapToCleanInterval(rawTimes[i]);
-        subSize=1; i+=1;
+        cleanT=snapToCleanInterval(rawSubs[i].t);
+        subSize=1; offList=[rawSubs[i].off]; onList=[rawSubs[i].on]; i+=1;
       }
-      // Enforce minimum gap of 60s between windows
       if(windows.length){
         var prevT=parseAtTime(windows[windows.length-1].atTime);
         if(cleanT<=prevT+60)cleanT=snapToCleanInterval(prevT+90);
       }
       cleanT=Math.max(60,Math.min(halfDur-60,cleanT));
       var atStr=Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0'));
-      if(!usedTimes.has(atStr)){
-        windows.push({atTime:atStr,subSize:subSize});
-        usedTimes.add(atStr);
+      if(!usedT.has(atStr)){
+        windows.push({atTime:atStr,subSize:subSize,suggestedOff:offList,suggestedOn:onList});
+        usedT.add(atStr);
       }
     }
     return windows;
@@ -3768,7 +3781,7 @@ async function generateAIRotation(){
   var h1Start=filtered.slice(0,COURT_SIZE);
   var h2Start=h2PresetNames||h1Start;
 
-  // Standard windows (Plans A, C, E, balanced block)
+  // Compute target-aware windows for standard plans (A, C, E)
   var stdH1Windows=computeWindows(halfSecs,h1Start);
   var stdH2Windows=computeWindows(halfSecs,h2Start);
 
@@ -3790,11 +3803,17 @@ async function generateAIRotation(){
   var blockH2Windows=computeBlockWindows(halfSecs);
 
   // ── Format windows as instruction string for AI ──
+  // Includes target-aware suggestions so AI has a concrete starting point
   function windowsToStr(windows,halfLabel){
     return windows.map(function(w,i){
-      return '  Window '+(i+1)+' at '+w.atTime+' into '+halfLabel
+      var base='  Window '+(i+1)+' at '+w.atTime+' into '+halfLabel
         +': swap exactly '+w.subSize+' player'+(w.subSize>1?'s':'')
         +' ('+w.subSize+' off, '+w.subSize+' on)';
+      // Add suggested players from the target-aware algorithm
+      if(w.suggestedOff&&w.suggestedOff.length){
+        base+='  [suggested based on targets: off='+w.suggestedOff.join(',')+' on='+w.suggestedOn.join(',')+']';
+      }
+      return base;
     }).join('\n');
   }
 
@@ -3902,54 +3921,83 @@ async function generateAIRotation(){
       +'- SECONDARY GOAL: Keep each player within 3 minutes of their target time.\n'},
   ];
 
-  // ── Validate AI response — court state only ──
+  // ── Validate and fix AI response — target-aware ──
   function validateAndFixHalf(subs,startNames,halfDur,windows){
     var court=new Set(startNames);
     var fixed=[];
-    // Merge AI subs onto pre-computed window times
-    var windowMap={};
-    windows.forEach(function(w){windowMap[w.atTime]=w.subSize;});
+    // Track cumulative court time for target-aware fallback
+    var timeOn=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
+    var halfTgt=Object.fromEntries(filtered.map(function(nm){
+      return[nm,(adjTargets[nm]||fair)/2];
+    }));
+    var lastT=0;
+
     function resolve(name){
+      if(!name)return null;
       if(filtered.indexOf(name)>=0)return name;
-      var low=name.toLowerCase().trim();
+      var low=name.toLowerCase().trim().split(' ')[0];
       for(var j=0;j<filtered.length;j++){
-        if(filtered[j].toLowerCase().startsWith(low.split(' ')[0]))return filtered[j];
+        if(filtered[j].toLowerCase().startsWith(low))return filtered[j];
       }
       return null;
     }
-    // Process subs in window order
+
     windows.forEach(function(w,wi){
-      // Find matching AI sub (by atTime, fuzzy)
-      var aiSub=null;
-      for(var j=0;j<subs.length;j++){
-        if(subs[j].atTime===w.atTime||Math.abs(parseAtTime(subs[j].atTime)-parseAtTime(w.atTime))<=10){
-          aiSub=subs[j]; break;
-        }
+      var wTime=parseAtTime(w.atTime);
+      // Accumulate court time up to this window
+      var dt=wTime-lastT;
+      if(dt>0){
+        court.forEach(function(nm){timeOn[nm]+=dt;});
+        lastT=wTime;
       }
-      var wantSize=w.subSize;
+
+      // Find AI sub matching this window time
+      var aiSub=null;
+      for(var j=0;j<(subs||[]).length;j++){
+        if(Math.abs(parseAtTime(subs[j].atTime)-wTime)<=15){aiSub=subs[j];break;}
+      }
+
+      // Validate AI player selections
       var validOff=[], validOn=[];
       if(aiSub){
         validOff=(aiSub.off||[]).map(resolve).filter(function(n){return n&&court.has(n);});
         validOn=(aiSub.on||[]).map(resolve).filter(function(n){return n&&!court.has(n);});
       }
+
+      var wantSize=w.subSize;
       var cnt=Math.min(validOff.length,validOn.length,wantSize);
-      // If AI didn't give us enough valid players, fill with best candidates
+
+      // Fill missing slots with target-aware selection
       if(cnt<wantSize){
-        var extraOff=[...court].filter(function(n){return validOff.indexOf(n)<0;});
-        var extraOn=filtered.filter(function(n){return!court.has(n)&&validOn.indexOf(n)<0;});
+        // Off: highest timeOn/halfTarget ratio (most ahead of target = should rest)
+        var extraOff=[...court].filter(function(n){return validOff.indexOf(n)<0;})
+          .sort(function(a,b){
+            var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:timeOn[a];
+            var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:timeOn[b];
+            return rb-ra;
+          });
+        // On: lowest timeOn/halfTarget ratio (most behind target = needs court time)
+        var extraOn=filtered.filter(function(n){return!court.has(n)&&validOn.indexOf(n)<0;})
+          .sort(function(a,b){
+            var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:0;
+            var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:0;
+            return ra-rb;
+          });
         while(cnt<wantSize&&extraOff.length&&extraOn.length){
           validOff.push(extraOff.shift());
           validOn.push(extraOn.shift());
           cnt++;
         }
       }
+
       cnt=Math.min(validOff.length,validOn.length);
       if(!cnt)return;
       var fOff=validOff.slice(0,cnt);
       var fOn=validOn.slice(0,cnt);
       fOff.forEach(function(n){court.delete(n);});
       fOn.forEach(function(n){court.add(n);});
-      fixed.push({subNum:wi+1,atTime:w.atTime,off:fOff,on:fOn,note:(aiSub&&aiSub.note)||''});
+      fixed.push({subNum:wi+1,atTime:w.atTime,off:fOff,on:fOn,
+        note:(aiSub&&aiSub.note)||''});
     });
     return{fixed:fixed,finalCourt:new Set(court)};
   }
@@ -3961,6 +4009,8 @@ async function generateAIRotation(){
       +'\nOUTPUT: Return ONLY a single valid JSON object. No markdown, no extra text.\n'
       +'Schema: '+schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"')+'\n'
       +'The atTime values in h1 and h2 arrays MUST exactly match the window times listed above.\n'
+      +'The [suggested] players at each window are the algorithmically correct choice to hit time targets.\n'
+      +'You MAY change them to better fit your strategy mode, BUT must keep each player within 2 minutes of their target.\n'
       +'h2Starting5 and finishing5 are required fields.\n';
 
     var lastErr='';
@@ -4015,7 +4065,7 @@ async function generateAIRotation(){
   }
 
   // ── Build Plan D (client-side, no AI) ──
-  var planD=buildPlanD();
+  var planD=buildPlanD(adjTargets);
   var results=[planD];
   showAIRotationModal({plans:results},true,filtered,1);
 
