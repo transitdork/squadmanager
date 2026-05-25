@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.25.5';
+const APP_VERSION = '2026.05.25.6';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -3190,6 +3190,16 @@ async function callAI(prompt, maxTokens){
 // === AI Rotation Setup UI ===
 function aiRotationSetupHTML(filtered){
   var n=filtered.length;
+  // Null-safety: ensure new fields exist in case of old saved state
+  if(!S.aiParams) S.aiParams={};
+  if(!S.aiParams.playerDeltas)  S.aiParams.playerDeltas={};
+  if(!S.aiParams.benchConflicts) S.aiParams.benchConflicts=[];
+  if(S.aiParams.aiTiming===undefined)     S.aiParams.aiTiming=true;
+  if(S.aiParams.minSubsPerSub===undefined) S.aiParams.minSubsPerSub=1;
+  if(S.aiParams.maxSubsPerSub===undefined) S.aiParams.maxSubsPerSub=2;
+  if(S.aiParams.minSubGap===undefined)     S.aiParams.minSubGap=240;
+  if(S.aiParams.minBenchDuration===undefined) S.aiParams.minBenchDuration=3;
+  if(S.aiParams.maxBenchDuration===undefined) S.aiParams.maxBenchDuration=12;
   var p=S.aiParams;
   var total=gameTotalSecs();
   var fair=Math.round(total*COURT_SIZE/n);
@@ -3272,24 +3282,46 @@ function aiRotationSetupHTML(filtered){
       +posRow+'</div>';
   }
 
+  // Live slider update — updates label+bar without re-rendering the whole screen
+  window._aiSliderLive=function(name,val,fairSecs,maxD){
+    var delta=+val;
+    var col=delta>60?'var(--warn)':delta<-60?'var(--blue)':'var(--green)';
+    var dStr=(delta>=0?'+':'')+Math.floor(Math.abs(delta)/60)+':'+(String(Math.abs(delta)%60).padStart(2,'0'));
+    var target=fairSecs+delta;
+    var tStr=Math.floor(target/60)+':'+(String(target%60).padStart(2,'0'));
+    var barL=delta>=0?'50%':((50+delta/maxD*50).toFixed(1)+'%');
+    var barW=(Math.abs(delta)/maxD*50).toFixed(1)+'%';
+    var safe=name.replace(/[^a-zA-Z0-9]/g,'_');
+    var dEl=document.getElementById('ai-d-'+safe);
+    var tEl=document.getElementById('ai-t-'+safe);
+    var bEl=document.getElementById('ai-b-'+safe);
+    if(dEl){dEl.textContent=dStr;dEl.style.color=col;}
+    if(tEl){tEl.textContent=tStr;}
+    if(bEl){bEl.style.left=barL;bEl.style.width=barW;bEl.style.background=col;}
+    if(!S.aiParams.playerDeltas)S.aiParams.playerDeltas={};
+    S.aiParams.playerDeltas[name]=delta;
+  };
+
   function sliderHTML(name){
     var delta=deltas[name]||0,target=fair+delta,maxD=480;
     var col=delta>60?'var(--warn)':delta<-60?'var(--blue)':'var(--green)';
     var dStr=(delta>=0?'+':'')+Math.floor(Math.abs(delta)/60)+':'+(String(Math.abs(delta)%60).padStart(2,'0'));
     var barL=delta>=0?'50%':((50+delta/maxD*50).toFixed(1)+'%');
     var barW=(Math.abs(delta)/maxD*50).toFixed(1)+'%';
+    var safe=name.replace(/[^a-zA-Z0-9]/g,'_');
     return '<div style="margin-bottom:6px;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:7px;border:1px solid var(--border)">'
       +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
         +'<span style="width:44px;font-size:11px;font-weight:700;color:var(--text);flex-shrink:0">'+name+'</span>'
         +'<div style="flex:1"></div>'
-        +'<span style="font-family:Impact,sans-serif;font-size:10px;color:'+col+';min-width:30px;text-align:right">'+dStr+'</span>'
-        +'<span style="font-family:Impact,sans-serif;font-size:11px;color:var(--text);min-width:34px;text-align:right">'+Math.floor(target/60)+':'+(String(target%60).padStart(2,'0'))+'</span>'
+        +'<span id="ai-d-'+safe+'" style="font-family:Impact,sans-serif;font-size:10px;color:'+col+';min-width:30px;text-align:right">'+dStr+'</span>'
+        +'<span id="ai-t-'+safe+'" style="font-family:Impact,sans-serif;font-size:11px;color:var(--text);min-width:34px;text-align:right">'+Math.floor(target/60)+':'+(String(target%60).padStart(2,'0'))+'</span>'
       +'</div>'
       +'<div style="position:relative;height:4px;background:var(--border);border-radius:2px">'
         +'<div style="position:absolute;left:50%;top:-1px;bottom:-1px;width:1.5px;background:rgba(255,255,255,.25);transform:translateX(-50%)"></div>'
-        +'<div style="position:absolute;left:'+barL+';width:'+barW+';top:0;bottom:0;background:'+col+';border-radius:2px"></div>'
+        +'<div id="ai-b-'+safe+'" style="position:absolute;left:'+barL+';width:'+barW+';top:0;bottom:0;background:'+col+';border-radius:2px"></div>'
         +'<input type="range" min="'+(0-maxD)+'" max="'+maxD+'" step="30" value="'+delta+'"'
-          +' oninput="if(!S.aiParams.playerDeltas)S.aiParams.playerDeltas={};S.aiParams.playerDeltas[\''+name+'\']=+this.value;renderSetup(true)"'
+          +' oninput="window._aiSliderLive(\''+name+'\',this.value,'+fair+','+maxD+')"'
+          +' onchange="renderSetup(true)"'
           +' style="position:absolute;top:-8px;left:0;width:100%;opacity:0;cursor:pointer;height:20px">'
       +'</div>'
       +'<div style="display:flex;justify-content:space-between;font-size:7px;color:#374151;margin-top:1px">'
