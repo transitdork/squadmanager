@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.24.1';
+const APP_VERSION = '2026.05.25.1';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -961,17 +961,13 @@ const S = {
   finalsMode: false,      // AI uses 15-20% more time for top-rated players
   aiAdheresToPresets: true, // AI respects user h2Preset / finalPreset
   aiParamsOpen: false,      // AI parameters section expanded
-  aiParams: {               // Rotation constraints passed to AI
-    minSubsPerWindow: 1,    // min players subbed at once
-    maxSubsPerWindow: 2,    // max players subbed at once
-    minSubGap: 180,         // min seconds between subs (3 min)
-    maxSubGap: 360,         // max seconds between subs (6 min)
-    firstSubDelay: 180,     // min seconds before first sub (3 min)
-    minBenchRest: 180,      // min seconds player must sit before returning (3 min)
-    maxBenchRest: 0,        // max seconds player can sit before MUST return (0=no limit)
-    minGameTimeMins: 0,     // min guaranteed court time in minutes (0=use % only)
-    minPlayTimePct: 85,     // min play time as % of fair share
-    maxPlayTimePct: 115,    // max play time as % of fair share
+  aiParams: {
+    aiTiming: true,
+    minSubsPerSub: 1,
+    maxSubsPerSub: 2,
+    minSubGap: 240,
+    playerDeltas: {},
+    benchConflicts: [],
   },
   h1Sps:2,  h2Sps:2,
   useH2Preset: false,
@@ -3186,597 +3182,424 @@ async function callAI(prompt, maxTokens){
   }
 }
 
-// ── AI Plan Parameters UI ──
-function fmtGap(secs){ return Math.floor(secs/60)+':'+(String(secs%60).padStart(2,'0')); }
+// === AI Rotation Setup UI ===
+function aiRotationSetupHTML(filtered){
+  var n=filtered.length;
+  var p=S.aiParams;
+  var total=gameTotalSecs();
+  var fair=Math.round(total*COURT_SIZE/n);
+  var deltas=p.playerDeltas||{};
+  var conflicts=p.benchConflicts||[];
+  var hasSubPlan=S.subPlan&&((S.subPlan.h1||[]).filter(Boolean).length||(S.subPlan.h2||[]).filter(Boolean).length);
 
-function updateAIParamDefaults(playerCount){
-  // Auto-set sensible defaults based on squad size
-  const bench = Math.max(0, playerCount - COURT_SIZE);
-  S.aiParams.minSubsPerWindow = bench > 0 ? 1 : 0;
-  S.aiParams.maxSubsPerWindow = Math.min(Math.max(2, Math.ceil(bench/2)), 4);
-  // Keep user's time/pct prefs unless they haven't been touched
-}
+  var POS_C={'1':'#14b8a6','2':'#3b82f6','3':'#8b5cf6','4':'#f59e0b','5':'#10b981'};
+  var POS_N={'1':'PG','2':'SG','3':'SF','4':'PF','5':'C'};
 
-function renderAIParams(filtered){
-  const n=filtered.length;
-  const bench=Math.max(0,n-COURT_SIZE);
-  const maxPerSub=Math.min(bench,5)||1;
-  const p=S.aiParams;
-  const fair=Math.round(gameTotalSecs()*COURT_SIZE/Math.max(n,COURT_SIZE));
-
-  // Helper: render one param block (stacked label + slider)
-  function param(id, label, valHTML, sliderHTML){
-    return '<div class="aip">' +
-      '<div class="aip-hdr"><span class="aip-lbl">' + label + '</span>' +
-      '<span class="aip-vals" id="aip-v-' + id + '">' + valHTML + '</span></div>' +
-      '<div class="aip-sliders">' + sliderHTML + '</div></div>';
-  }
-
-
-  function slRow(tag, key, min, max, step, val, enforce){
-    const onchange = 'S.aiParams.'+key+'=+this.value;'+(enforce?enforce+';':'')+'renderSetup(true)';
-    return '<div class="aip-srow">' +
-      '<span class="aip-tag">'+tag+'</span>' +
-      '<input class="ai-pslider" type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" onchange="'+onchange+'">' +
-      '</div>';
-  }
-
-
-  const minSubVal = p.minSubsPerWindow===0?'any':String(p.minSubsPerWindow);
-  const fairFmt = fmtGap(fair);
-  const minPtFmt = fmtGap(Math.round(fair*p.minPlayTimePct/100));
-  const maxPtFmt = fmtGap(Math.round(fair*p.maxPlayTimePct/100));
-
-  return '<div class="ai-params-box">' +
-    '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--dim);margin-bottom:12px;">⚙ AI ROTATION CONSTRAINTS</div>' +
-
-    // Subs per window — dual slider
-    '<div class="aip">' +
-      '<div class="aip-hdr"><span class="aip-lbl">Players per sub</span>' +
-        '<span class="aip-vals">'+minSubVal+' — '+p.maxSubsPerWindow+'</span></div>' +
-      '<div class="aip-sliders">' +
-        slRow('Min', 'minSubsPerWindow', 0, maxPerSub, 1, p.minSubsPerWindow,
-          'if(S.aiParams.maxSubsPerWindow<S.aiParams.minSubsPerWindow)S.aiParams.maxSubsPerWindow=S.aiParams.minSubsPerWindow') +
-        slRow('Max', 'maxSubsPerWindow', 1, maxPerSub, 1, p.maxSubsPerWindow,
-          'if(S.aiParams.minSubsPerWindow>S.aiParams.maxSubsPerWindow)S.aiParams.minSubsPerWindow=S.aiParams.maxSubsPerWindow') +
-      '</div></div>' +
-
-    // Gap between subs — dual slider
-    '<div class="aip">' +
-      '<div class="aip-hdr"><span class="aip-lbl">Gap between subs</span>' +
-        '<span class="aip-vals">'+fmtGap(p.minSubGap)+' — '+fmtGap(p.maxSubGap)+'</span></div>' +
-      '<div class="aip-sliders">' +
-        slRow('Min', 'minSubGap', 40, 600, 20, p.minSubGap,
-          'if(S.aiParams.maxSubGap<S.aiParams.minSubGap)S.aiParams.maxSubGap=S.aiParams.minSubGap') +
-        slRow('Max', 'maxSubGap', 40, 600, 20, p.maxSubGap,
-          'if(S.aiParams.minSubGap>S.aiParams.maxSubGap)S.aiParams.minSubGap=S.aiParams.maxSubGap') +
-      '</div></div>' +
-
-    // First sub delay — single
-    '<div class="aip">' +
-      '<div class="aip-hdr"><span class="aip-lbl">First sub delay</span>' +
-        '<span class="aip-vals">'+(p.firstSubDelay===0?'immediate':fmtGap(p.firstSubDelay))+'</span></div>' +
-      '<div class="aip-sliders">' +
-        slRow('', 'firstSubDelay', 0, 600, 20, p.firstSubDelay, '') +
-      '</div></div>' +
-
-    // Min bench rest — single
-    '<div class="aip">' +
-      '<div class="aip-hdr"><span class="aip-lbl">Min bench rest</span>' +
-        '<span class="aip-vals">'+(p.minBenchRest===0?'none':fmtGap(p.minBenchRest))+'</span></div>' +
-      '<div class="aip-sliders">' +
-        slRow('', 'minBenchRest', 0, 600, 20, p.minBenchRest, '') +
-      '</div></div>' +
-
-    // Max bench rest — single
-    '<div class="aip">' +
-      '<div class="aip-hdr"><span class="aip-lbl">Max bench rest</span>' +
-        '<span class="aip-vals">'+(p.maxBenchRest===0?'no limit':fmtGap(p.maxBenchRest))+'</span></div>' +
-      '<div style="font-size:9px;color:var(--dim);margin-bottom:6px;">Player MUST return before this time</div>' +
-      '<div class="aip-sliders">' +
-        slRow('', 'maxBenchRest', 0, 600, 20, p.maxBenchRest, '') +
-      '</div></div>' +
-
-    // Min guaranteed game time — single (in minutes)
-    '<div class="aip">' +
-      '<div class="aip-hdr"><span class="aip-lbl">Min guaranteed time</span>' +
-        '<span class="aip-vals">'+(p.minGameTimeMins===0?'none':p.minGameTimeMins+' min')+'</span></div>' +
-      '<div style="font-size:9px;color:var(--dim);margin-bottom:6px;">Every player gets at least this many minutes</div>' +
-      '<div class="aip-sliders">' +
-        slRow('', 'minGameTimeMins', 0, Math.floor((S.h1Dur+S.h2Dur)*0.7), 1, p.minGameTimeMins, '') +
-      '</div></div>' +
-
-    // Play time % — dual slider, note fair share
-    '<div class="aip">' +
-      '<div class="aip-hdr"><span class="aip-lbl">Play time per player</span>' +
-        '<span class="aip-vals">'+p.minPlayTimePct+'% — '+p.maxPlayTimePct+'%</span></div>' +
-      '<div style="font-size:9px;color:var(--dim);margin-bottom:6px;">Fair share ~'+fairFmt+' · Range: '+minPtFmt+' – '+maxPtFmt+'</div>' +
-      '<div class="aip-sliders">' +
-        slRow('Min', 'minPlayTimePct', 50, 100, 5, p.minPlayTimePct,
-          'if(S.aiParams.maxPlayTimePct<S.aiParams.minPlayTimePct)S.aiParams.maxPlayTimePct=S.aiParams.minPlayTimePct') +
-        slRow('Max', 'maxPlayTimePct', 100, 150, 5, p.maxPlayTimePct,
-          'if(S.aiParams.minPlayTimePct>S.aiParams.maxPlayTimePct)S.aiParams.minPlayTimePct=S.aiParams.maxPlayTimePct') +
-      '</div></div>' +
-
-    (n<=COURT_SIZE?'<div style="font-size:9px;color:var(--warn);">Add more players to enable rotation.</div>':'') +
-  '</div>';
-}
-
-// ── Gemini connection test ──
-async function testGeminiKey(){
-  const btn = document.getElementById('gemini-test-btn');
-  const result = document.getElementById('gemini-test-result');
-  if(!btn||!result) return;
-  btn.textContent = '⏳ Testing…';
-  btn.disabled = true;
-  result.innerHTML = '';
-
-  const model = CFG.geminiModel || 'gemini-2.5-flash';
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent';
-  try {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.geminiKey },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: 'Reply with the single word: ready' }] }],
-        generationConfig: { maxOutputTokens: 10, temperature: 0 }
-      })
-    });
-    if(resp.status===429){
-      result.innerHTML = '<div style="color:var(--warn);font-size:11px;margin-top:6px;line-height:1.5;">⚠ <strong>Rate limited / quota exhausted.</strong><br>Your project\'s daily or per-minute limit is used up.<br>Check <a href="https://aistudio.google.com/usage" target="_blank" style="color:var(--blue)">aistudio.google.com/usage</a> to see remaining quota.<br>Quota resets at midnight US Pacific time.</div>';
-    } else if(resp.status===403){
-      result.innerHTML = '<div style="color:var(--red);font-size:11px;margin-top:6px;">✗ API key rejected. Check key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--blue)">aistudio.google.com</a></div>';
-    } else if(resp.status===400){
-      result.innerHTML = '<div style="color:var(--warn);font-size:11px;margin-top:6px;">⚠ Bad request — model <strong>'+model+'</strong> may require a paid account. Try switching to 2.5 Flash.</div>';
-    } else if(!resp.ok){
-      result.innerHTML = '<div style="color:var(--red);font-size:11px;margin-top:6px;">✗ Error: HTTP '+resp.status+'</div>';
+  // Register toggle functions
+  window._aiToggleS5=function(idx){
+    var f2=S.names.filter(function(n){return n.trim();});
+    if(idx<COURT_SIZE){
+      var bench=f2.findIndex(function(_,i){return i>=COURT_SIZE;});
+      if(bench>=0){var t=f2[idx];f2[idx]=f2[bench];f2[bench]=t;}
     } else {
-      const data = await resp.json();
-      const text = (data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').trim();
-      result.innerHTML = '<div style="color:var(--green);font-size:11px;margin-top:6px;">✓ Connected! <strong>'+model+'</strong> is working. Response: "'+text+'"</div>';
+      var t=f2[idx];f2[idx]=f2[COURT_SIZE-1];f2[COURT_SIZE-1]=t;
     }
-  } catch(e) {
-    result.innerHTML = '<div style="color:var(--red);font-size:11px;margin-top:6px;">✗ Network error: '+e.message+'</div>';
+    var ni=0; for(var i=0;i<S.names.length;i++){if(S.names[i].trim())S.names[i]=f2[ni++];}
+    renderSetup(true);
+  };
+  window._aiToggleH2=function(idx){
+    var s=new Set(S.h2PresetIds);
+    if(s.has(idx)){s.delete(idx);S.h2PresetIds=s;if(!s.size)S.useH2Preset=false;}
+    else if(s.size<COURT_SIZE){s.add(idx);S.h2PresetIds=s;S.useH2Preset=s.size===COURT_SIZE;}
+    renderSetup(true);
+  };
+  window._aiToggleFin=function(idx){
+    var s=new Set(S.finalPresetIds);
+    if(s.has(idx)){s.delete(idx);S.finalPresetIds=s;if(!s.size)S.useFinalPreset=false;}
+    else if(s.size<COURT_SIZE){s.add(idx);S.finalPresetIds=s;S.useFinalPreset=s.size===COURT_SIZE;}
+    renderSetup(true);
+  };
+
+  var start5=filtered.slice(0,COURT_SIZE);
+  var h2Names=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE?[...S.h2PresetIds].map(function(i){return filtered[i];}).filter(Boolean):[];
+  var finNames=S.useFinalPreset&&S.finalPresetIds.size===COURT_SIZE?[...S.finalPresetIds].map(function(i){return filtered[i];}).filter(Boolean):[];
+
+  function presetHTML(label,selNames,desc){
+    var positions=selNames.length===COURT_SIZE?assignPositionsToGroup(selNames):{};
+    var covered=new Set(Object.values(positions).map(String));
+    var missing=['1','2','3','4','5'].filter(function(p){return!covered.has(p);});
+    var toggleFn=label==='Starting 5'?'window._aiToggleS5':label==='H2 Starting 5'?'window._aiToggleH2':'window._aiToggleFin';
+    var btns=filtered.map(function(name,i){
+      var sel=selNames.includes(name);
+      var pos=sel?positions[name]:null;
+      var col=pos?POS_C[pos]:'var(--accent)';
+      return '<button onclick="event.stopPropagation();'+toggleFn+'('+i+')" style="padding:3px 8px;border-radius:6px;font-size:10px;cursor:pointer;'
+        +'background:'+(sel?col+'22':'rgba(255,255,255,.04)')+';'
+        +'border:1.5px solid '+(sel?col+'88':'var(--border)')+';color:'+(sel?col:'var(--dim)')+';">'
+        +name+(pos?'&thinsp;<b style=\"font-family:Impact,sans-serif;font-size:9px\">'+pos+'</b>':'')
+        +'</button>';
+    }).join('');
+    var posRow='';
+    if(selNames.length===COURT_SIZE){
+      posRow='<div style="display:flex;gap:4px;margin-top:6px">'
+        +selNames.map(function(nm){var pos=positions[nm];var col=POS_C[pos]||'#666';
+          return '<div style="flex:1;text-align:center;padding:3px 0;background:'+col+'18;border-radius:5px;border:1px solid '+col+'44">'
+            +'<div style="font-family:Impact,sans-serif;font-size:13px;color:'+col+'">'+pos+'</div>'
+            +'<div style="font-size:8px;color:#9ca3af">'+nm+'</div>'
+            +'<div style="font-size:7px;color:#4b5563">'+(POS_N[pos]||'?')+'</div></div>';
+        }).join('')+'</div>';
+      if(missing.length)posRow+='<div style="font-size:9px;color:var(--warn);margin-top:3px">No player rated for pos '+missing.join(',')+'</div>';
+    } else if(selNames.length>0){
+      posRow='<div style="font-size:9px;color:var(--dim);margin-top:3px">Select '+(COURT_SIZE-selNames.length)+' more</div>';
+    }
+    return '<div style="margin-bottom:10px;padding:10px 12px;background:rgba(255,255,255,.03);border-radius:9px;border:1px solid var(--border)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        +'<span style="font-size:11px;font-weight:700;color:#9ca3af">'+label+'</span>'
+        +'<span style="font-size:9px;color:var(--dim)">'+desc+'</span>'
+      +'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:4px">'+btns+'</div>'
+      +posRow+'</div>';
   }
-  btn.textContent = '🔌 Test Connection';
-  btn.disabled = false;
+
+  function sliderHTML(name){
+    var delta=deltas[name]||0,target=fair+delta,maxD=480;
+    var col=delta>60?'var(--warn)':delta<-60?'var(--blue)':'var(--green)';
+    var dStr=(delta>=0?'+':'')+Math.floor(Math.abs(delta)/60)+':'+(String(Math.abs(delta)%60).padStart(2,'0'));
+    var barL=delta>=0?'50%':((50+delta/maxD*50).toFixed(1)+'%');
+    var barW=(Math.abs(delta)/maxD*50).toFixed(1)+'%';
+    return '<div style="margin-bottom:6px;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:7px;border:1px solid var(--border)">'
+      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
+        +'<span style="width:44px;font-size:11px;font-weight:700;color:var(--text);flex-shrink:0">'+name+'</span>'
+        +'<div style="flex:1"></div>'
+        +'<span style="font-family:Impact,sans-serif;font-size:10px;color:'+col+';min-width:30px;text-align:right">'+dStr+'</span>'
+        +'<span style="font-family:Impact,sans-serif;font-size:11px;color:var(--text);min-width:34px;text-align:right">'+Math.floor(target/60)+':'+(String(target%60).padStart(2,'0'))+'</span>'
+      +'</div>'
+      +'<div style="position:relative;height:4px;background:var(--border);border-radius:2px">'
+        +'<div style="position:absolute;left:50%;top:-1px;bottom:-1px;width:1.5px;background:rgba(255,255,255,.25);transform:translateX(-50%)"></div>'
+        +'<div style="position:absolute;left:'+barL+';width:'+barW+';top:0;bottom:0;background:'+col+';border-radius:2px"></div>'
+        +'<input type="range" min="'+(0-maxD)+'" max="'+maxD+'" step="30" value="'+delta+'"'
+          +' oninput="if(!S.aiParams.playerDeltas)S.aiParams.playerDeltas={};S.aiParams.playerDeltas[\''+name+'\']=+this.value;renderSetup(true)"'
+          +' style="position:absolute;top:-8px;left:0;width:100%;opacity:0;cursor:pointer;height:20px">'
+      +'</div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:7px;color:#374151;margin-top:1px">'
+        +'<span>-8:00</span><span style="color:rgba(255,255,255,.15)">equal: '+Math.floor(fair/60)+':'+(String(fair%60).padStart(2,'0'))+'</span><span>+8:00</span>'
+      +'</div></div>';
+  }
+
+  var totalAllocated=filtered.reduce(function(a,nm){return a+(fair+(deltas[nm]||0));},0);
+  var courtAvail=total*COURT_SIZE;
+  var allocOk=Math.abs(totalAllocated-courtAvail)<300;
+
+  var optHtml=filtered.map(function(nm){return '<option value="'+nm+'">'+nm+'</option>';}).join('');
+
+  return '<div>'
+    +(hasSubPlan?'<div style="padding:8px 10px;background:rgba(62,207,110,.08);border:1px solid rgba(62,207,110,.2);border-radius:8px;margin-bottom:10px;font-size:10px;color:var(--green);line-height:1.5">'
+      +'Sub plan detected. '
+      +'<button onclick="inferPresetsFromSubPlan();renderSetup(true)" style="background:rgba(62,207,110,.15);border:1px solid rgba(62,207,110,.3);color:var(--green);border-radius:5px;padding:2px 7px;font-size:9px;cursor:pointer">Sync presets</button>'
+    +'</div>':'')
+    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin-bottom:8px">LINEUPS & PRESETS</div>'
+    +presetHTML('Starting 5',start5,'Required')
+    +presetHTML('H2 Starting 5',h2Names,'Optional')
+    +presetHTML('Finishing 5',finNames,'Optional')
+    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:14px 0 4px">PLAYING TIME TARGETS</div>'
+    +'<div style="font-size:10px;color:var(--dim);margin-bottom:8px">Centre = equal ('+Math.floor(fair/60)+':'+(String(fair%60).padStart(2,'0'))+'/player). Drag to adjust.</div>'
+    +filtered.map(sliderHTML).join('')
+    +'<div style="font-size:9px;padding:5px 8px;border-radius:6px;margin-top:2px;text-align:center;background:'+(allocOk?'rgba(62,207,110,.06)':'rgba(245,158,11,.06)')+';border:1px solid '+(allocOk?'rgba(62,207,110,.15)':'rgba(245,158,11,.2)')+';color:'+(allocOk?'var(--green)':'var(--warn)')+';">'
+      +'Allocated: '+Math.floor(totalAllocated/60)+'m &middot; Available: '+Math.floor(courtAvail/60)+'m'
+      +(!allocOk?' &middot; AI will balance automatically':'')
+    +'</div>'
+    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:14px 0 6px">ROTATION TIMING</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+      +[{v:true,l:'AI DECIDES',sub:'AI picks when/how many, optimising for time targets'},{v:false,l:'I SPECIFY',sub:'Set sub frequency and size'}].map(function(o){
+        return '<button onclick="S.aiParams.aiTiming='+o.v+';renderSetup(true)" style="flex:1;padding:8px;border-radius:8px;cursor:pointer;text-align:left;background:'+(p.aiTiming===o.v?'rgba(62,207,110,.12)':'rgba(255,255,255,.03)')+';border:1.5px solid '+(p.aiTiming===o.v?'rgba(62,207,110,.5)':'var(--border)')+';color:'+(p.aiTiming===o.v?'var(--green)':'var(--dim)')+';">'
+          +'<div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px">'+o.l+'</div>'
+          +'<div style="font-size:9px;margin-top:2px;color:'+(p.aiTiming===o.v?'#4b9e72':'#374151')+'">'+o.sub+'</div>'
+        +'</button>';
+      }).join('')
+    +'</div>'
+    +(!p.aiTiming?'<div style="display:flex;gap:8px;padding:10px 12px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid var(--border);margin-bottom:8px">'
+      +'<div style="flex:1"><div style="font-size:8px;color:var(--dim);margin-bottom:4px">PLAYERS PER SUB</div>'
+        +'<div style="display:flex;gap:4px;align-items:center">'
+          +'<span style="font-size:9px;color:var(--dim)">min</span>'
+          +'<input type="number" min="1" max="3" value="'+p.minSubsPerSub+'" oninput="S.aiParams.minSubsPerSub=+this.value" style="width:36px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px;text-align:center;font-size:12px">'
+          +'<span style="font-size:9px;color:var(--dim)">max</span>'
+          +'<input type="number" min="1" max="3" value="'+p.maxSubsPerSub+'" oninput="S.aiParams.maxSubsPerSub=+this.value" style="width:36px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px;text-align:center;font-size:12px">'
+        +'</div></div>'
+      +'<div style="flex:1"><div style="font-size:8px;color:var(--dim);margin-bottom:4px">MIN GAP (min)</div>'
+        +'<input type="number" min="2" max="12" value="'+Math.round(p.minSubGap/60)+'" oninput="S.aiParams.minSubGap=+this.value*60" style="width:48px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px;text-align:center;font-size:12px">'
+      +'</div></div>':'')
+    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:14px 0 4px">BENCH PREFERENCES</div>'
+    +'<div style="font-size:10px;color:var(--dim);margin-bottom:6px">Soft preference &mdash; AI may override to hit time targets.</div>'
+    +conflicts.map(function(pair,i){
+      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;padding:5px 8px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:7px">'
+        +'<span style="font-size:11px;color:#9ca3af;flex:1">'+pair[0]+' <span style="color:var(--dim)">not bench with</span> '+pair[1]+'</span>'
+        +'<button onclick="S.aiParams.benchConflicts.splice('+i+',1);renderSetup(true)" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;line-height:1">x</button>'
+      +'</div>';
+    }).join('')
+    +'<div style="display:flex;gap:5px;align-items:center;margin-top:4px">'
+      +'<select id="ai-ca" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px;font-size:11px">'+optHtml+'</select>'
+      +'<span style="font-size:9px;color:var(--dim);flex-shrink:0">not bench</span>'
+      +'<select id="ai-cb" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px;font-size:11px">'+optHtml+'</select>'
+      +'<button onclick="var a=document.getElementById(\'ai-ca\').value,b=document.getElementById(\'ai-cb\').value;if(a!==b){if(!S.aiParams.benchConflicts)S.aiParams.benchConflicts=[];S.aiParams.benchConflicts.push([a,b]);renderSetup(true);}" style="background:rgba(62,207,110,.1);border:1px solid rgba(62,207,110,.25);color:var(--green);border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer">+</button>'
+    +'</div>'
+    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:14px 0 4px">COACH INSTRUCTIONS</div>'
+    +'<div style="font-size:10px;color:var(--dim);margin-bottom:5px">Highest priority &mdash; overrides all other parameters.</div>'
+    +'<textarea rows="2" placeholder="e.g. Nishi needs 3 min rest every 8 min. Kaia and Izzy never bench together."'
+      +' oninput="window._aiExtraPrompt=this.value"'
+      +' style="width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;padding:8px 10px;resize:vertical;outline:none;box-sizing:border-box">'
+      +(window._aiExtraPrompt||'')+'</textarea>'
+    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:12px 0 5px">PLANS</div>'
+    +'<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">'
+      +[['A','#3ecf6e','Balanced'],['B','#60a5fa','Block units'],['C','#f59e0b','Strength-first'],['D','#a78bfa','Equal time (clean intervals)'],['E','#f43f5e','Position-balanced']].map(function(row){
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:'+row[1]+'12;border:1px solid '+row[1]+'44;border-radius:7px">'
+          +'<div style="width:16px;height:16px;border-radius:50%;background:'+row[1]+';font-family:Impact,sans-serif;font-size:10px;color:#111;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+row[0]+'</div>'
+          +'<div style="font-size:10px;color:#9ca3af">'+row[2]+'</div></div>';
+      }).join('')
+    +'</div>'
+    +'<button onclick="event.stopPropagation();generateAIRotation()" style="width:100%;background:rgba(62,207,110,.18);border:1.5px solid rgba(62,207,110,.5);color:var(--green);border-radius:12px;padding:13px 0;font-family:Impact,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer">GENERATE 5 PLANS</button>'
+    +(window._lastAIResult?'<button onclick="event.stopPropagation();reOpenAIPlans()" style="width:100%;margin-top:6px;background:rgba(167,139,250,.12);border:1.5px solid rgba(167,139,250,.3);color:var(--purple);border-radius:10px;padding:9px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer">View last plans</button>':'')
+  +'</div>';
 }
 
-// ── JSON extraction + repair for potentially truncated API responses ──
-function extractJSON(str){
-  str = (str||'').replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
-  let start = str.indexOf('{"');
-  if(start===-1) start = str.indexOf('{');
-  if(start===-1) return null;
-  // Walk forward to find balanced closing brace
-  let depth=0, inStr=false, esc=false;
-  for(let i=start; i<str.length; i++){
-    const c=str[i];
-    if(esc){esc=false;continue;}
-    if(c==='\\'&&inStr){esc=true;continue;}
-    if(c==='"'&&!esc){inStr=!inStr;continue;}
-    if(inStr)continue;
-    if(c==='{')depth++;
-    else if(c==='}'){depth--;if(depth===0)return str.slice(start,i+1);}
+
+// === AI helpers ===
+function snapToCleanInterval(secs){
+  var m=Math.floor(secs/60),s=secs%60;
+  var clean=[0,20,30,40,60];
+  var best=clean.reduce(function(a,b){return Math.abs(b-s)<Math.abs(a-s)?b:a;});
+  return best===60?(m+1)*60:m*60+best;
+}
+
+function assignPositionsToGroup(names){
+  var result={},used=new Set();
+  var players=names.map(function(n){
+    var team=T.teams.find(function(t){return t.id===T.activeTeamId;});
+    var tp=team&&team.players.find(function(p){return playerDisplayName(p)===n;});
+    var r=tp?getPlayerRatings(T.activeTeamId,tp.id):{};
+    return{name:n,pos:+r.position||0,pos2:+r.position2||0,pos3:+r.position3||0};
+  });
+  [function(p){return p.pos;},function(p){return p.pos2;},function(p){return p.pos3;}].forEach(function(g){
+    players.forEach(function(p){if(!result[p.name]){var v=g(p);if(v&&!used.has(v)){result[p.name]=v;used.add(v);}}});
+  });
+  var rem=[1,2,3,4,5].filter(function(n){return!used.has(n);});
+  players.forEach(function(p){if(!result[p.name]&&rem.length)result[p.name]=rem.shift();});
+  return result;
+}
+
+function computePlayerTargets(filtered){
+  var total=gameTotalSecs(),fair=Math.round(total*COURT_SIZE/filtered.length);
+  var deltas=S.aiParams.playerDeltas||{};
+  var targets={};
+  filtered.forEach(function(n){targets[n]=Math.max(0,Math.min(total,fair+(deltas[n]||0)));});
+  var courtTime=total*COURT_SIZE,rawSum=Object.values(targets).reduce(function(a,b){return a+b;},0);
+  if(rawSum>0&&Math.abs(rawSum-courtTime)>30){
+    var scale=courtTime/rawSum;
+    Object.keys(targets).forEach(function(n){targets[n]=Math.round(targets[n]*scale);});
   }
-  // Truncated — attempt repair by closing open structures
-  let partial=str.slice(start)
-    .replace(/,\s*$/,'')
-    .replace(/"[^\n"]*$/,'"')
-    .replace(/,\s*"[^"]*$/,'');
-  let d=0,a=0; inStr=false; esc=false;
-  for(let i=0;i<partial.length;i++){
-    const c=partial[i];
-    if(esc){esc=false;continue;}
-    if(c==='\\'&&inStr){esc=true;continue;}
-    if(c==='"'&&!esc){inStr=!inStr;continue;}
-    if(inStr)continue;
-    if(c==='{')d++;else if(c==='}')d--;
-    else if(c==='[')a++;else if(c===']')a--;
+  return targets;
+}
+
+function inferPresetsFromSubPlan(){
+  var filtered=S.names.filter(function(n){return n.trim();});
+  if(filtered.length<COURT_SIZE||!S.subPlan)return;
+  var court=new Set(filtered.slice(0,COURT_SIZE).map(function(n){return filtered.indexOf(n);}));
+  (S.subPlan.h1||[]).filter(Boolean).forEach(function(sub){
+    (sub.off||[]).forEach(function(n){var i=filtered.indexOf(n);if(i>=0)court.delete(i);});
+    (sub.on||[]).forEach(function(n){var i=filtered.indexOf(n);if(i>=0)court.add(i);});
+  });
+  if(court.size===COURT_SIZE){S.h2PresetIds=new Set(court);S.useH2Preset=true;}
+  var h2c=new Set(S.h2PresetIds.size===COURT_SIZE?S.h2PresetIds:court);
+  (S.subPlan.h2||[]).filter(Boolean).forEach(function(sub){
+    (sub.off||[]).forEach(function(n){var i=filtered.indexOf(n);if(i>=0)h2c.delete(i);});
+    (sub.on||[]).forEach(function(n){var i=filtered.indexOf(n);if(i>=0)h2c.add(i);});
+  });
+  if(h2c.size===COURT_SIZE){S.finalPresetIds=new Set(h2c);S.useFinalPreset=true;}
+}
+
+function calcPlanActualTimes(plan,filtered){
+  var halfSecs=usesQuarters()?20*60:S.h1Dur*60;
+  var times=Object.fromEntries(filtered.map(function(n){return[n,0];}));
+  function sim(subs,startNames,halfDur){
+    var court=new Set(startNames);var last=0;
+    var evts=[].concat(subs||[]).sort(function(a,b){return parseAtTime(a.atTime)-parseAtTime(b.atTime);});
+    evts.forEach(function(sub){
+      var t=parseAtTime(sub.atTime);
+      if(t<=last||t>halfDur)return;
+      court.forEach(function(n){if(times[n]!==undefined)times[n]+=t-last;});
+      last=t;
+      (sub.off||[]).forEach(function(n){court.delete(n);});
+      (sub.on||[]).forEach(function(n){court.add(n);});
+    });
+    court.forEach(function(n){if(times[n]!==undefined)times[n]+=halfDur-last;});
   }
-  let repaired=partial;
-  while(a-->0)repaired+=']';
-  while(d-->0)repaired+='}';
-  try{JSON.parse(repaired);return repaired;}catch(_){}
-  const lastClose=partial.lastIndexOf('"}');
-  if(lastClose>0){const attempt=partial.slice(0,lastClose+2)+']}';try{JSON.parse(attempt);return attempt;}catch(_){}}
-  return null;
+  var h1Start=filtered.slice(0,COURT_SIZE);
+  sim(plan.h1,h1Start,halfSecs);
+  var h2Start=plan.h2Starting5&&plan.h2Starting5.length===COURT_SIZE?plan.h2Starting5:h1Start;
+  sim(plan.h2,h2Start,halfSecs);
+  return times;
 }
 
 async function generateAIRotation(){
-  const hasKey = CFG.aiProvider==='gemini' ? !!CFG.geminiKey : !!CFG.apiKey;
-  if(!hasKey){
-    alert('Please add your ' + (CFG.aiProvider==='gemini'?'Google Gemini':'Anthropic') + ' API key in ⚙ Settings first.');
-    return;
-  }
-  const filtered = S.names.filter(n=>n.trim());
-  if(filtered.length < COURT_SIZE){
-    alert('Add at least ' + COURT_SIZE + ' players to the roster first.');
-    return;
-  }
+  if(CFG.aiProvider==='gemini'&&!CFG.geminiKey){alert('Add Gemini API key in Settings.');return;}
+  if(CFG.aiProvider==='claude'&&!CFG.apiKey){alert('Add Anthropic API key in Settings.');return;}
+  var filtered=S.names.filter(function(n){return n.trim();});
+  if(filtered.length<COURT_SIZE){alert('Add at least '+COURT_SIZE+' players first.');return;}
+  showAIRotationModal(null,true,filtered,0);
 
-  showAIRotationModal(null, true, filtered, 0);
-
-  // ── Build shared context (sent with every plan request) ──
-  const totalSecs  = gameTotalSecs();
-  const fairShare  = Math.round(totalSecs*COURT_SIZE/filtered.length);
-  const fairFmt    = Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
-  const adheresToPresets = S.aiAdheresToPresets !== false;
-  const finalsMode = S.finalsMode || false;
-  const h2PresetNote = adheresToPresets && S.useH2Preset && S.h2PresetIds.size===COURT_SIZE
-    ? 'H2 starting 5 (MANDATORY): ' + [...S.h2PresetIds].map(i=>filtered[i]).join(', ')
-    : 'AI chooses best H2 lineup';
-  const finalNote = adheresToPresets && S.useFinalPreset && S.finalPresetIds.size===COURT_SIZE
-    ? 'Finishing 5 (MANDATORY): ' + [...S.finalPresetIds].map(i=>filtered[i]).join(', ')
-    : 'AI chooses best finishing lineup';
-  const priorityNames = [...S.priorityPlayerIds].map(i=>filtered[i]).filter(Boolean);
-  const playerSummary = buildPlayerRatingSummary(filtered);
-  const hasRatings = filtered.some(name=>{
-    const team=T.teams.find(t=>t.id===T.activeTeamId);
-    const player=team&&team.players.find(p=>playerDisplayName(p)===name);
-    return player&&Object.keys(getPlayerRatings(T.activeTeamId,player.id)).length>0;
+  var p=S.aiParams,total=gameTotalSecs();
+  var fair=Math.round(total*COURT_SIZE/filtered.length);
+  var halfSecs=usesQuarters()?20*60:S.h1Dur*60;
+  var targets=computePlayerTargets(filtered);
+  var playerSummary=buildPlayerRatingSummary(filtered);
+  var hasRatings=filtered.some(function(name){
+    var team=T.teams.find(function(t){return t.id===T.activeTeamId;});
+    var pl=team&&team.players.find(function(q){return playerDisplayName(q)===name;});
+    return pl&&Object.keys(getPlayerRatings(T.activeTeamId,pl.id)).length>0;
   });
-  const p = S.aiParams;
 
-  const sharedContext = [
-    'GAME: ' + (S.h1Dur+S.h2Dur) + ' min total (' + S.h1Dur + '+' + S.h2Dur + '), '+filtered.length+' players, 5 on court',
-    'Fair share: ~' + fairFmt + '/player',
-    h2PresetNote, finalNote,
-    priorityNames.length ? 'Priority players (extra time ok): '+priorityNames.join(', ') : null,
-    finalsMode ? 'FINALS MODE: top-rated players may receive 15-20% more time' : null,
-    '',
-    'HARD CONSTRAINTS (must satisfy all):',
-    '  Players per sub: '+((p.minSubsPerWindow||0)===0?'any':p.minSubsPerWindow)+' – '+p.maxSubsPerWindow,
-    '  Gap between subs: '+fmtGap(p.minSubGap)+' – '+fmtGap(p.maxSubGap),
-    '  First sub: not before '+((p.firstSubDelay||0)===0?'kick-off':fmtGap(p.firstSubDelay)),
-    '  Min bench rest: '+((p.minBenchRest||0)===0?'none':fmtGap(p.minBenchRest)),
-    '  Max bench rest: '+((p.maxBenchRest||0)===0?'no limit':fmtGap(p.maxBenchRest)+' (player MUST return)'),
-    p.minGameTimeMins>0 ? '  Min guaranteed time: '+p.minGameTimeMins+' min per player' : null,
-    '  Play time: '+p.minPlayTimePct+'% – '+p.maxPlayTimePct+'% of fair share ('+fmtGap(Math.round(fairShare*p.minPlayTimePct/100))+' – '+fmtGap(Math.round(fairShare*p.maxPlayTimePct/100))+')',
-    '',
-    hasRatings ? ('PLAYER DATA:\\n'+playerSummary) : 'PLAYER DATA: No ratings — use equal time distribution.',
-    '',
-    'Starting 5 ON COURT: ' + filtered.slice(0,COURT_SIZE).join(', '),
-    'Starting on BENCH: '+(filtered.slice(COURT_SIZE).join(', ')||'none'),
-    '',
-    'IMPORTANT RULES FOR YOUR SUBS:',
-    '  - "off" must be players currently ON COURT at that moment',
-    '  - "on" must be players currently ON BENCH at that moment',
-    '  - off and on lists must ALWAYS be the same length to keep exactly 5 on court',
-    '  - Track court state carefully through every sub — do not sub off someone already on bench',
-    '  - expectedTimes must be calculated from your actual h1/h2 sub schedule, not estimated separately',
-    'CRITICAL — use these EXACT player name strings: ' + filtered.join(', '),
-  window._aiExtraPrompt && window._aiExtraPrompt.trim() ? ('COACH INSTRUCTION (apply to all plans): ' + window._aiExtraPrompt.trim()) : null,
-  ].filter(l=>l!==null).join('\n');
+  var h2PresetNames=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE?[...S.h2PresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
+  var finalPresetNames=S.useFinalPreset&&S.finalPresetIds.size===COURT_SIZE?[...S.finalPresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
+  var priorityNames=[...S.priorityPlayerIds].map(function(i){return filtered[i];}).filter(Boolean);
+  var start5=filtered.slice(0,COURT_SIZE);
+  var startPos=assignPositionsToGroup(start5);
+  var posDesc=start5.map(function(n){return n+(startPos[n]?' (pos '+startPos[n]+')':'');}).join(', ');
+  var conflictsStr=(p.benchConflicts||[]).map(function(pair){return pair[0]+' and '+pair[1]+' should not bench together';}).join('; ');
+  var timingStr=p.aiTiming?'YOU decide when and how many to sub - optimise for the time targets.':('Sub '+p.minSubsPerSub+'-'+p.maxSubsPerSub+' players at a time. Min '+Math.round(p.minSubGap/60)+' min between subs.');
+  var coachInstr=window._aiExtraPrompt&&window._aiExtraPrompt.trim()?'* COACH INSTRUCTION (HIGHEST PRIORITY - overrides everything below):\n  '+window._aiExtraPrompt.trim()+'\n\n':'';
+  var timeTargetsStr=filtered.map(function(n){
+    var t=targets[n]||fair,d=t-fair;
+    return '  '+n+': '+Math.floor(t/60)+':'+(String(t%60).padStart(2,'0'))+(d?(' ('+(d>0?'+':'')+Math.round(d/60)+'m)'):' (equal)');
+  }).join('\n');
 
-  // JSON schema for a single plan
-  const schema = '{"id":"X","label":"Name","rationale":"1 sentence","starting5":["..."],"h2Starting5":["..."],"finishing5":["..."],"h1":[{"subNum":1,"atTime":"4:00","off":["Player A"],"on":["Player B"],"note":"reason"}],"h2":[{"subNum":1,"atTime":"5:00","off":["Player C"],"on":["Player D"],"note":""}],"expectedTimes":{"Player A":"14:00"}}';
+  var sharedCtx=coachInstr
+    +'GAME: '+(S.h1Dur+S.h2Dur)+' min ('+(usesQuarters()?'4x10 min quarters':'2x20 min halves')+'), '+filtered.length+' players, '+COURT_SIZE+' on court\n'
+    +'Fair share: '+Math.floor(fair/60)+':'+(String(fair%60).padStart(2,'0'))+'/player\n\n'
+    +'PLAYER TIME TARGETS (achieve as closely as possible - adjust to find valid rotation if needed):\n'+timeTargetsStr+'\n\n'
+    +'ROTATION TIMING: '+timingStr+'\n\n'
+    +(conflictsStr?'BENCH PREFERENCES (soft - may override to hit time targets):\n  '+conflictsStr+'\n\n':'')
+    +'LINEUPS:\n  Starting 5 (MANDATORY): '+posDesc+'\n'
+    +(h2PresetNames?'  H2 Starting 5 (MANDATORY): '+h2PresetNames.join(', ')+'\n':'  H2 Starting 5: AI chooses\n')
+    +(finalPresetNames?'  Finishing 5 (MANDATORY): '+finalPresetNames.join(', ')+'\n':'  Finishing 5: AI chooses\n')
+    +(priorityNames.length?'  Priority players: '+priorityNames.join(', ')+'\n':'')
+    +'\n'+(hasRatings?'PLAYER RATINGS:\n'+playerSummary+'\n\n':'No ratings - use equal time.\n\n')
+    +'RULES:\n'
+    +'  - off = players ON COURT at that moment; on = players ON BENCH\n'
+    +'  - off and on must be same length (keep exactly '+COURT_SIZE+' on court)\n'
+    +'  - Track court state through every sub - never sub off a benched player\n'
+    +'  - Use EXACT names: '+filtered.join(', ')+'\n';
 
-  // ── 3 plan-specific prompts ──
-  const planDefs = [
-    { id:'A', label:'Balanced',
-      task:'BALANCED rotation. Prioritise even playing time while keeping lineup strength high. '+
-           'Use the Off/Def/Handle/Interior scores to avoid weak lineups. '+
-           'Every lineup MUST have at least one ball-handler (1-PG or 2-SG) and one interior player (4-PF or 5-C). '+
-           'Swap '+((p.minSubsPerWindow||1)===0?'1':p.minSubsPerWindow)+'-'+p.maxSubsPerWindow+' players at a time at regular intervals.' },
-    { id:'B', label:'Block',
-      task:'BLOCK rotation. Keep cohesive 5-player units together for longer stretches. '+
-           'Use the Off/Def scores to identify 2-3 strong unit combinations, then rotate those groups. '+
-           'Prefer swapping '+Math.max(2,p.maxSubsPerWindow||2)+' players at once. '+
-           'Every lineup must still have a ball-handler (1-PG/2-SG) and interior player (4-PF/5-C). '+
-           'Enforce the LINEUP RULES from the player data.' },
-    { id:'C', label:'Strength-first',
-      task:'STRENGTH-FIRST rotation. Maximise team strength on court at all times. '+
-           'Use the CORE/rotation/reserve tiers and overall ratings to give CORE players 10-15% more time. '+
-           'Build lineups from highest overall ratings down. '+
-           'Every lineup must have a ball-handler (1-PG/2-SG) and interior (4-PF/5-C). '+
-           'Strictly follow the LINEUP RULES. Playing time will be less even — this is intentional.' },
+  var schema='{"id":"X","label":"Name","rationale":"1-2 sentences","h2Starting5":["..."],"finishing5":["..."]'
+    +',"h1":[{"subNum":1,"atTime":"5:00","off":["A"],"on":["B"],"note":""}]'
+    +',"h2":[{"subNum":1,"atTime":"5:00","off":["C"],"on":["D"],"note":""}]}';
+
+  var planDefs=[
+    {id:'A',label:'Balanced',task:'BALANCED rotation. Hit the time targets above as closely as possible. Use ratings to avoid weak lineups. Every lineup should have a ball-handler (pos 1/2) and interior player (pos 4/5) where available.'},
+    {id:'B',label:'Block',task:'BLOCK rotation. Keep 5-player units together for 8-12 min stretches. Swap 2-3 players at once. Honour time targets but accept slightly more variation to maintain unit cohesion.'},
+    {id:'C',label:'Strength-first',task:'STRENGTH-FIRST rotation. Give CORE-tier players 10-15% more time than their targets. Lower-tier players get proportionally less. State in rationale who gets more/less time and why.'},
+    {id:'E',label:'Position-balanced',task:'POSITION-BALANCED rotation. Primary goal: ensure all 5 court positions (1-PG through 5-C) are covered at all times based on player position ratings. Secondary goal: honour time targets. When conflict arises prefer position coverage. State in rationale which positions are hardest to cover.'},
   ];
 
-  async function fetchPlan(def, idx){
-    const prompt = sharedContext + '\n\n=== YOUR TASK: Generate ONE rotation plan ===\n' + def.task +
-      '\n\nReturn ONLY a single JSON object matching this exact structure (no markdown, no wrapper array):\n' + schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
-    let raw;
-    try { raw = await callAI(prompt, 6000); }
-    catch(e){ throw e; }
-
-    // Try parsing directly first (responseMimeType should give clean JSON)
-    let parsed;
-    try {
-      parsed = JSON.parse(raw.trim());
-    } catch(_) {
-      // Fallback: extract JSON substring
-      const clean = extractJSON(raw);
-      if(!clean) throw new Error('No valid JSON in response. Raw: ' + raw.slice(0,120));
-      try { parsed = JSON.parse(clean); }
-      catch(e){ throw new Error('JSON parse failed: ' + e.message + '. Raw: ' + raw.slice(0,120)); }
+  function validateHalf(subs,startIds,halfDur){
+    var court=new Set(startIds);var fixed=[];
+    function resolve(name){
+      var i=filtered.indexOf(name);if(i>=0)return i;
+      var low=name.toLowerCase();
+      for(var j=0;j<filtered.length;j++){if(filtered[j].toLowerCase().startsWith(low.split(' ')[0]))return j;}
+      return -1;
     }
-
-    // Normalise: unwrap if AI returned {plans:[{...}]} despite instructions
-    if(parsed.plans && Array.isArray(parsed.plans) && parsed.plans.length){
-      parsed = parsed.plans.find(function(p){return p.id===def.id;}) || parsed.plans[0];
-    }
-
-    parsed.id = def.id;
-    parsed.label = def.label;
-
-    // ── Validate and fix the plan ──
-    // Simulate the sub sequence and detect/fix logical errors
-    // (AI sometimes subs off players not on court, causing cascading errors)
-    const nameList = filtered; // original filtered order
-    const nIdx = {};
-    filtered.forEach((n,i)=>{ nIdx[n]=i; });
-
-    function validateAndFixHalf(subs, halfSecs, startCourt){
-      const court = new Set(startCourt);
-      const fixed = [];
-      for(const sub of (subs||[])){
-        const off = (sub.off||[]);
-        const on  = (sub.on||[]);
-        // Filter: only sub off players actually on court
-        const validOff = off.filter(name=>{
-          // find matching court player
-          let idx = nIdx[name];
-          if(idx===undefined){
-            // fuzzy: first word match
-            const lower = (name||'').toLowerCase();
-            for(const [n,i] of Object.entries(nIdx)){
-              if(n.toLowerCase().startsWith(lower)||lower.startsWith(n.toLowerCase().split(' ')[0])){idx=i;break;}
-            }
-          }
-          return idx!==undefined && court.has(idx);
-        });
-        const validOn = on.filter(name=>{
-          let idx = nIdx[name];
-          if(idx===undefined){
-            const lower = (name||'').toLowerCase();
-            for(const [n,i] of Object.entries(nIdx)){
-              if(n.toLowerCase().startsWith(lower)||lower.startsWith(n.toLowerCase().split(' ')[0])){idx=i;break;}
-            }
-          }
-          return idx!==undefined && !court.has(idx);
-        });
-        // Trim to match lengths
-        const count = Math.min(validOff.length, validOn.length);
-        if(count===0) continue; // skip invalid sub entirely
-        const finalOff = validOff.slice(0,count);
-        const finalOn  = validOn.slice(0,count);
-        // Apply to court
-        finalOff.forEach(name=>{ const i=nIdx[name]; if(i!==undefined) court.delete(i); });
-        finalOn.forEach(name=>{ const i=nIdx[name]; if(i!==undefined) court.add(i); });
-        fixed.push({...sub, off:finalOff, on:finalOn});
-      }
-      return {fixed, finalCourt:new Set(court)};
-    }
-
-    const h1StartCourt = filtered.slice(0,COURT_SIZE).map((_,i)=>i);
-    // If AI specified starting5, use those indices for validation
-    if(parsed.starting5 && parsed.starting5.length===COURT_SIZE){
-      // (validation uses original name list so just keep h1StartCourt as-is for now)
-    }
-    const h1Val = validateAndFixHalf(parsed.h1, usesQuarters()?20*60:S.h1Dur*60, h1StartCourt);
-    parsed.h1 = h1Val.fixed;
-
-    // H2 start: use AI's h2Starting5 if valid, else carry over from h1 final
-    let h2StartCourt;
-    if(parsed.h2Starting5 && parsed.h2Starting5.length===COURT_SIZE){
-      h2StartCourt = parsed.h2Starting5.map(name=>{
-        let idx=nIdx[name];
-        if(idx===undefined){
-          const lower=(name||'').toLowerCase();
-          for(const [n,i] of Object.entries(nIdx)){
-            if(n.toLowerCase().startsWith(lower)){idx=i;break;}
-          }
-        }
-        return idx;
-      }).filter(i=>i!==undefined);
-      if(h2StartCourt.length!==COURT_SIZE) h2StartCourt=[...h1Val.finalCourt];
-    } else {
-      h2StartCourt=[...h1Val.finalCourt];
-    }
-    const h2Val = validateAndFixHalf(parsed.h2, usesQuarters()?20*60:S.h2Dur*60, h2StartCourt);
-    parsed.h2 = h2Val.fixed;
-
-    // ── Recalculate expectedTimes from the validated subs ──
-    // This ensures the summary matches what will actually be loaded
-    const playSecs = new Array(filtered.length).fill(0);
-    function simHalf(validatedSubs, halfSecs, startIds){
-      const court = new Set(startIds);
-      let prev=0;
-      for(const sub of validatedSubs){
-        const t = (() => {
-          if(sub.atTime){ const pts=String(sub.atTime).split(':'); const s=parseInt(pts[0])*60+(parseInt(pts[1])||0); if(s>0&&s<halfSecs) return s; }
-          return prev + Math.floor(halfSecs/(validatedSubs.length+1));
-        })();
-        const stint=t-prev;
-        if(stint>0) court.forEach(id=>{ if(id<playSecs.length) playSecs[id]+=stint; });
-        sub.off.forEach(name=>{ const i=nIdx[name];if(i!==undefined)court.delete(i); });
-        sub.on.forEach(name=>{  const i=nIdx[name];if(i!==undefined)court.add(i); });
-        prev=t;
-      }
-      const finalStint=halfSecs-prev;
-      if(finalStint>0) court.forEach(id=>{ if(id<playSecs.length) playSecs[id]+=finalStint; });
-    }
-    simHalf(parsed.h1, usesQuarters()?20*60:S.h1Dur*60, h1StartCourt);
-    simHalf(parsed.h2, usesQuarters()?20*60:S.h2Dur*60, h2StartCourt);
-    const recalcTimes = {};
-    filtered.forEach((nm,i)=>{ const t=playSecs[i]; recalcTimes[nm]=Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); });
-    parsed.expectedTimes = recalcTimes; // replace AI's self-reported times with ground truth
-
-    return parsed;
+    (subs||[]).forEach(function(sub){
+      var vOff=(sub.off||[]).map(resolve).filter(function(i){return i>=0&&court.has(i);});
+      var vOn=(sub.on||[]).map(resolve).filter(function(i){return i>=0&&!court.has(i);});
+      var cnt=Math.min(vOff.length,vOn.length);if(!cnt)return;
+      var fOff=vOff.slice(0,cnt).map(function(i){return filtered[i];});
+      var fOn=vOn.slice(0,cnt).map(function(i){return filtered[i];});
+      fOff.forEach(function(n){court.delete(filtered.indexOf(n));});
+      fOn.forEach(function(n){court.add(filtered.indexOf(n));});
+      fixed.push(Object.assign({},sub,{off:fOff,on:fOn}));
+    });
+    return{fixed:fixed,finalCourt:new Set(court)};
   }
 
-  // Run plans sequentially to avoid rate limits — show progress in loading modal
-  const plans = [];
-  const errors = [];
-  let offeredFlashFallback = false;
+  async function fetchWithRetry(def,displayIdx){
+    var retryPrompt='';
+    for(var attempt=0;attempt<3;attempt++){
+      var msg=attempt===0?null:'Retry '+(attempt+1)+'/3 - improving balance...';
+      showAIRotationModal(null,true,filtered,displayIdx,msg);
+      var prompt=(attempt===0?sharedCtx:retryPrompt)
+        +'\n\n=== TASK: Generate ONE rotation plan ===\n'+def.task
+        +'\n\nIf you cannot exactly hit time targets, adjust as needed - find the nearest valid rotation.\n\n'
+        +'Return ONLY a single JSON object (no markdown, no wrapper array):\n'
+        +schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
+      var raw;
+      try{raw=await callAI(prompt,5000);}
+      catch(err){
+        if(String(err.message).includes('429')&&attempt<2){await new Promise(function(r){setTimeout(r,15000);});continue;}
+        throw err;
+      }
+      var parsed;
+      try{var json=extractJSON(raw);parsed=JSON.parse(json);}
+      catch(e){if(attempt<2)continue;throw new Error('JSON parse failed');}
 
-  for(let i=0; i<planDefs.length; i++){
-    const def = planDefs[i];
-    // Update loading spinner with current plan
-    const spinner = document.querySelector('#ai-rot-modal .ai-rot-spinner');
-    if(spinner){
-      const dots = spinner.querySelectorAll('[data-plan]');
-      if(dots[i]) dots[i].style.background='var(--accent)';
-      const progEl = spinner.querySelector('.ai-prog-lbl');
-      if(progEl) progEl.textContent = 'Generating Plan '+def.id+': '+def.label+'… ('+(i+1)+'/'+planDefs.length+')';
+      var h1s=validateHalf(parsed.h1,filtered.slice(0,COURT_SIZE).map(function(_,i){return i;}),halfSecs);
+      parsed.h1=h1s.fixed;
+      var h2Ids=new Set(h1s.finalCourt);
+      if(h2PresetNames&&h2PresetNames.length===COURT_SIZE){h2Ids=new Set(h2PresetNames.map(function(n){return filtered.indexOf(n);}).filter(function(i){return i>=0;}));}
+      else if(parsed.h2Starting5&&parsed.h2Starting5.length===COURT_SIZE){var ids=parsed.h2Starting5.map(function(n){return filtered.indexOf(n);}).filter(function(i){return i>=0;});if(ids.length===COURT_SIZE)h2Ids=new Set(ids);}
+      var h2s=validateHalf(parsed.h2,[...h2Ids].map(function(i){return filtered[i];}),halfSecs);
+      parsed.h2=h2s.fixed;
+
+      var actual=calcPlanActualTimes(parsed,filtered);
+      var worst=Math.max.apply(null,filtered.map(function(n){return Math.abs((actual[n]||0)-(targets[n]||fair));}));
+      parsed.expectedTimes=Object.fromEntries(filtered.map(function(n){return[n,Math.floor((actual[n]||0)/60)+':'+(String((actual[n]||0)%60).padStart(2,'0'))];}));
+      if(worst<=180||attempt===2)return parsed;
+
+      var corrections=filtered.filter(function(n){return Math.abs((actual[n]||0)-(targets[n]||fair))>120;})
+        .map(function(n){var d=(actual[n]||0)-(targets[n]||fair);return n+': got '+fmt(actual[n]||0)+', need '+fmt(targets[n]||fair)+' ('+(d>0?'reduce by ':'add ')+Math.round(Math.abs(d)/60)+'m)';}).join('; ');
+      retryPrompt=sharedCtx+'\n\n=== CORRECTION NEEDED ===\nFix these players:\n'+corrections+'\n\nReturn corrected plan as JSON:\n'+schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
     }
-    try {
-      const plan = await fetchPlan(def, i);
-      plans.push(plan);
-      const spinner2 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
-      if(spinner2){
-        const dots = spinner2.querySelectorAll('[data-plan]');
-        if(dots[i]) dots[i].style.background='var(--green)';
-      }
-    } catch(err){
-      errors.push(def.label+': '+err.message);
-      const spinner3 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
-      if(spinner3){
-        const dots = spinner3.querySelectorAll('[data-plan]');
-        if(dots[i]) dots[i].style.background='var(--red)';
-      }
-
-      // ── Offer flash fallback on first 429 from 3.1 Pro ──
-      const is429 = err.message.includes('429') || err.message.toLowerCase().includes('quota') || err.message.toLowerCase().includes('rate');
-      if(is429 && CFG.geminiModel==='gemini-3.1-pro-preview' && !offeredFlashFallback){
-        offeredFlashFallback = true;
-        // Show confirmation UI inside the loading modal
-        const accepted = await new Promise(resolve=>{
-          const spinner4 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
-          if(!spinner4){ resolve(false); return; }
-          spinner4.innerHTML =
-            '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;">⚠ Gemini 3.1 Pro rate limited</div>' +
-            '<div style="font-size:12px;color:var(--dim);margin-bottom:16px;line-height:1.6;">Your paid quota is currently exhausted.<br>Would you like to retry using <strong style="color:var(--accent)">Gemini 2.5 Flash</strong> instead?<br><span style="font-size:10px;">(It\'s free, fast, and works well for rotation planning)</span></div>' +
-            '<div style="display:flex;gap:10px;">' +
-              '<button onclick="document.getElementById(\'_flashChoice\').resolve(true)" style="flex:1;background:var(--accent);color:#111;border:none;border-radius:9px;padding:11px;font-family:Impact,sans-serif;font-size:15px;letter-spacing:1px;cursor:pointer;">⚡ USE 2.5 FLASH</button>' +
-              '<button onclick="document.getElementById(\'_flashChoice\').resolve(false)" style="flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:11px;font-family:Impact,sans-serif;font-size:14px;cursor:pointer;">Cancel</button>' +
-            '</div>';
-          // Attach resolve to a hidden element so inline onclick can reach it
-          const proxy = document.createElement('div');
-          proxy.id = '_flashChoice';
-          proxy.resolve = resolve;
-          proxy.style.display = 'none';
-          spinner4.appendChild(proxy);
-        });
-
-        if(accepted){
-          CFG.geminiModel = 'gemini-2.5-flash';
-          saveSettings();
-          // Reset and restart all plans with flash
-          plans.length = 0;
-          errors.length = 0;
-          // Restore spinner
-          const spinner5 = document.querySelector('#ai-rot-modal .ai-rot-spinner');
-          if(spinner5){
-            spinner5.innerHTML =
-              '<div class="spin">⟳</div>' +
-              '<div class="ai-prog-lbl" style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:6px;">Retrying with Gemini 2.5 Flash…</div>' +
-              '<div style="font-size:12px;color:var(--dim);margin-bottom:10px;">Using Gemini 2.5 Flash</div>' +
-              ['A: Balanced','B: Block','C: Strength-first'].map(function(lbl,idx){
-                return '<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim);margin-bottom:6px;">' +
-                  '<div data-plan="'+idx+'" style="width:12px;height:12px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .3s;"></div>' +
-                  '<span>Plan '+lbl+'</span></div>';
-              }).join('');
-          }
-          i = -1; // restart loop (i++ will make it 0)
-          continue;
-        } else {
-          // User declined — stop trying AI plans, show what we have
-          break;
-        }
-      }
-    }
-    // Pause between requests to respect rate limits
-    if(i < planDefs.length-1) await new Promise(r=>setTimeout(r,3000));
   }
 
-  // ── Plan D: equal time (client-side, always succeeds) ──
-  (()=>{
-    const n = filtered.length;
-    const fairSecs = Math.round(totalSecs*COURT_SIZE/n);
-    if(n<=COURT_SIZE){
-      const t = Math.floor(totalSecs/60)+':'+String(totalSecs%60).padStart(2,'0');
-      const times={};filtered.forEach(nm=>{times[nm]=t;});
-      plans.push({id:'D',label:'Equal Time',rationale:'All players play the full game.',
-        starting5:filtered.slice(0,COURT_SIZE),h2Starting5:filtered.slice(0,COURT_SIZE),
-        finishing5:filtered.slice(0,COURT_SIZE),h1:[],h2:[],expectedTimes:times});
-      return;
-    }
-    function buildEqualHalf(halfSecs, startingIds){
-      const swapSize=Math.max(1,p.minSubsPerWindow||1);
-      const benchSize=n-COURT_SIZE;
-      const minGap=Math.max(p.minSubGap||60,60);
-      const maxByTime=Math.floor(halfSecs/minGap);
-      const rotationsNeeded=Math.ceil(benchSize/swapSize)*2;
-      const numSubs=Math.min(rotationsNeeded,maxByTime);
-      if(numSubs===0) return {subs:[],playTime:new Array(n).fill(0).map((_,i)=>startingIds.includes(i)?halfSecs:0),finalCourt:new Set(startingIds)};
-      const interval=Math.floor(halfSecs/(numSubs+1));
-      let onCourt=new Set(startingIds);
-      const playTime=new Array(n).fill(0);
-      const benchRest=new Array(n).fill(0);
-      const subs=[];
-      let prev=0;
-      for(let s=0;s<numSubs;s++){
-        const t=(s+1)*interval,elapsed=t-prev;
-        [...onCourt].forEach(id=>playTime[id]+=elapsed);
-        filtered.forEach((_,id)=>{if(!onCourt.has(id))benchRest[id]+=elapsed;});
-        prev=t;
-        const courtArr=[...onCourt].sort((a,b)=>{
-          const aPri=S.priorityPlayerIds&&S.priorityPlayerIds.has(a)?1:0;
-          const bPri=S.priorityPlayerIds&&S.priorityPlayerIds.has(b)?1:0;
-          if(aPri!==bPri) return bPri-aPri; // priority players come off last
-          return playTime[b]-playTime[a];
-        });
-        const maxRest=p.maxBenchRest||0;
-        const benchArr=filtered.map((_,id)=>id).filter(id=>!onCourt.has(id))
-          .sort((a,b)=>{
-            const am=maxRest>0&&benchRest[a]>=maxRest?1:0,bm=maxRest>0&&benchRest[b]>=maxRest?1:0;
-            if(am!==bm)return bm-am;
-            const aPri=S.priorityPlayerIds&&S.priorityPlayerIds.has(a)?1:0;
-            const bPri=S.priorityPlayerIds&&S.priorityPlayerIds.has(b)?1:0;
-            if(aPri!==bPri) return bPri-aPri; // priority players return first
-            return playTime[a]-playTime[b];
-          });
-        const swap=Math.min(swapSize,benchArr.length,courtArr.length);
-        if(swap>0){
-          const outs=courtArr.slice(0,swap),ins=benchArr.slice(0,swap);
-          outs.forEach(id=>{onCourt.delete(id);benchRest[id]=0;});
-          ins.forEach(id=>{onCourt.add(id);benchRest[id]=0;});
-          const mm=Math.floor(t/60),ss=String(t%60).padStart(2,'0');
-          subs.push({subNum:s+1,atTime:mm+':'+ss,off:outs.map(id=>filtered[id]),on:ins.map(id=>filtered[id]),note:'equal rotation'});
-        }
+  function buildPlanD(){
+    var plan={id:'D',label:'Equal time',rationale:'Equal playing time. Sub times on clean intervals (:00 :30 :20 :40) for easy clock observation.',h1:[],h2:[],h2Starting5:[],finishing5:[],expectedTimes:{}};
+    function buildHalf(halfDur,startNames){
+      var bench=filtered.filter(function(n){return!startNames.includes(n);});
+      if(!bench.length)return[];
+      var subSize=Math.min(2,Math.ceil(bench.length/Math.max(1,Math.ceil(bench.length/2))));
+      var intervals=Math.ceil(bench.length/subSize);
+      var gap=halfDur/(intervals+1);
+      var bQ=[].concat(bench),cQ=[].concat(startNames);var subs=[];
+      for(var i=1;i<=intervals;i++){
+        var raw=gap*i,clean=snapToCleanInterval(raw);
+        if(clean<=0||clean>=halfDur)continue;
+        var cnt=Math.min(subSize,bQ.length,cQ.length);if(!cnt)break;
+        var on=bQ.splice(0,cnt),off=cQ.splice(0,cnt);
+        subs.push({subNum:i,atTime:Math.floor(clean/60)+':'+(String(clean%60).padStart(2,'0')),off:off,on:on,note:'Clean interval'});
+        on.forEach(function(n){cQ.push(n);}); off.forEach(function(n){bQ.push(n);});
       }
-      [...onCourt].forEach(id=>playTime[id]+=(halfSecs-prev));
-      return{subs,playTime,finalCourt:onCourt};
+      return subs;
     }
-    const h1Res=buildEqualHalf(usesQuarters()?20*60:S.h1Dur*60,filtered.slice(0,COURT_SIZE).map((_,i)=>i));
-    const h2StartIds=filtered.map((_,i)=>({i,t:h1Res.playTime[i]})).sort((a,b)=>a.t-b.t).slice(0,COURT_SIZE).map(x=>x.i);
-    const h2Res=buildEqualHalf(usesQuarters()?20*60:S.h2Dur*60,h2StartIds);
-    const totalPlay=h1Res.playTime.map((t,i)=>t+(h2Res.playTime[i]||0));
-    const times={};
-    filtered.forEach((nm,i)=>{const t=totalPlay[i];times[nm]=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');});
-    const fairFmt2=Math.floor(fairShare/60)+':'+String(fairShare%60).padStart(2,'0');
-    // Apply priority player boost to equal time plan
-    const priorityNamesD = [...S.priorityPlayerIds].map(i=>filtered[i]).filter(Boolean);
-    const priorityNote = priorityNamesD.length ? ' Priority: '+priorityNamesD.join(', ')+' receive slight extra time.' : '';
-    plans.push({id:'D',label:'Equal Time',
-      rationale:'Greedy equal-time rotation (~'+fairFmt2+'/player). H2 starts with the 5 who played least in H1.'+priorityNote,
-      starting5:filtered.slice(0,COURT_SIZE),h2Starting5:h2StartIds.map(i=>filtered[i]),
-      finishing5:[...h2Res.finalCourt].map(i=>filtered[i]),
-      h1:h1Res.subs,h2:h2Res.subs,expectedTimes:times});
-  })();
-
-  if(errors.length>0){
-    console.warn('Some AI plans failed:', errors);
-    // Tag the result so the modal can show the error note
-    if(plans.length>0) plans[0]._errorNote = errors.join(' · ');
+    var h1Names=filtered.slice(0,COURT_SIZE);
+    plan.h1=buildHalf(halfSecs,h1Names);
+    var h2Names=h2PresetNames||h1Names;
+    plan.h2Starting5=[].concat(h2Names);
+    plan.h2=buildHalf(halfSecs,h2Names);
+    var actual=calcPlanActualTimes(plan,filtered);
+    plan.expectedTimes=Object.fromEntries(filtered.map(function(n){return[n,Math.floor((actual[n]||0)/60)+':'+(String((actual[n]||0)%60).padStart(2,'0'))];}));
+    return plan;
   }
 
-  // Sort plans by id to ensure consistent order A,B,C,D
-  plans.sort((a,b)=>a.id.localeCompare(b.id));
-  showAIRotationModal({plans}, false, filtered);
+  var results=[buildPlanD()];
+  showAIRotationModal({plans:results},true,filtered,1);
+  for(var i=0;i<planDefs.length;i++){
+    try{var plan=await fetchWithRetry(planDefs[i],i+2);if(plan)results.push(plan);}
+    catch(err){console.warn('Plan '+planDefs[i].id+' failed:',err.message);}
+    if(i<planDefs.length-1)await new Promise(function(r){setTimeout(r,1000);});
+  }
+  window._lastAIResult={plans:results};
+  window._lastAIFiltered=filtered;
+  showAIRotationModal({plans:results},false,filtered);
 }
+
 
 
 function applyAIRotation(plan, filtered){
@@ -4275,7 +4098,7 @@ function renderSetup(restoreScroll){
         <button onclick="window._lastAIResult?reOpenAIPlans():generateAIRotation()" style="background:var(--purple);color:#fff;border:none;border-radius:7px;padding:4px 10px;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">${window._lastAIResult?'↩ Plans':'🤖 AI Plan'}</button>
       </div>
     </div>
-    ${S.aiParamsOpen ? renderAIParams(filtered) : ''}
+    ${S.aiParamsOpen ? aiRotationSetupHTML(filtered) : ''}
     <div class="toggle-row">
       <button class="tog${S.useSubPlan?' on':''}" onclick="toggleSubPlan()"></button>
       <span class="tog-lbl">Pre-plan substitutions</span>
