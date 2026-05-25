@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.25.2';
+const APP_VERSION = '2026.05.25.3';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -3368,6 +3368,40 @@ function aiRotationSetupHTML(filtered){
 }
 
 
+function extractJSON(str){
+  str=(str||'').replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
+  let start=str.indexOf('{"');
+  if(start===-1)start=str.indexOf('{');
+  if(start===-1)return null;
+  let depth=0,inStr=false,esc=false;
+  for(let i=start;i<str.length;i++){
+    const ch=str[i];
+    if(esc){esc=false;continue;}
+    if(ch==='\\'&&inStr){esc=true;continue;}
+    if(ch==='"'&&!esc){inStr=!inStr;continue;}
+    if(inStr)continue;
+    if(ch==='{')depth++;
+    else if(ch==='}'){depth--;if(depth===0)return str.slice(start,i+1);}
+  }
+  let partial=str.slice(start).replace(/,\s*$/,'').replace(/"[^\n"]*$/,'"').replace(/,\s*"[^"]*$/,'');
+  let d=0,a=0;inStr=false;esc=false;
+  for(let i=0;i<partial.length;i++){
+    const ch=partial[i];
+    if(esc){esc=false;continue;}
+    if(ch==='\\'&&inStr){esc=true;continue;}
+    if(ch==='"'&&!esc){inStr=!inStr;continue;}
+    if(inStr)continue;
+    if(ch==='{')d++;else if(ch==='}')d--;
+    else if(ch==='[')a++;else if(ch===']')a--;
+  }
+  let rep=partial;
+  while(a-->0)rep+=']';
+  while(d-->0)rep+='}';
+  try{JSON.parse(rep);return rep;}catch(_){}
+  return null;
+}
+
+
 // Global parseAtTime (also defined locally in sub plan functions)
 function parseAtTime(t){
   if(!t) return 0;
@@ -3577,19 +3611,33 @@ async function generateAIRotation(){
   function buildPlanD(){
     var plan={id:'D',label:'Equal time',rationale:'Equal playing time. Sub times on clean intervals (:00 :30 :20 :40) for easy clock observation.',h1:[],h2:[],h2Starting5:[],finishing5:[],expectedTimes:{}};
     function buildHalf(halfDur,startNames){
-      var bench=filtered.filter(function(n){return!startNames.includes(n);});
-      if(!bench.length)return[];
-      var subSize=Math.min(2,Math.ceil(bench.length/Math.max(1,Math.ceil(bench.length/2))));
-      var intervals=Math.ceil(bench.length/subSize);
-      var gap=halfDur/(intervals+1);
-      var bQ=[].concat(bench),cQ=[].concat(startNames);var subs=[];
-      for(var i=1;i<=intervals;i++){
-        var raw=gap*i,clean=snapToCleanInterval(raw);
-        if(clean<=0||clean>=halfDur)continue;
-        var cnt=Math.min(subSize,bQ.length,cQ.length);if(!cnt)break;
-        var on=bQ.splice(0,cnt),off=cQ.splice(0,cnt);
-        subs.push({subNum:i,atTime:Math.floor(clean/60)+':'+(String(clean%60).padStart(2,'0')),off:off,on:on,note:'Clean interval'});
-        on.forEach(function(n){cQ.push(n);}); off.forEach(function(n){bQ.push(n);});
+      var n=filtered.length;
+      if(n<=COURT_SIZE)return[];
+      // Provably equal-time algorithm:
+      // Do n-1 single-player subs at halfDur/n intervals (snapped to clean times).
+      // At each interval, sub the player with most court time for the one with most bench time.
+      // This guarantees every player gets exactly (halfDur*COURT_SIZE/n) seconds.
+      var slotDur=halfDur/n;
+      var timeOn=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
+      var timeBench=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
+      var onCourt=new Set(startNames);
+      var last=0,subNum=0,subs=[];
+      for(var slot=1;slot<n;slot++){
+        var rawT=slotDur*slot;
+        var cleanT=snapToCleanInterval(rawT);
+        if(cleanT<=last)continue;
+        var dt=cleanT-last;
+        onCourt.forEach(function(nm){timeOn[nm]+=dt;});
+        filtered.filter(function(nm){return!onCourt.has(nm);}).forEach(function(nm){timeBench[nm]+=dt;});
+        last=cleanT;
+        var courtArr=[...onCourt].sort(function(a,b){return timeOn[b]-timeOn[a];});
+        var benchArr=filtered.filter(function(nm){return!onCourt.has(nm);}).sort(function(a,b){return timeBench[b]-timeBench[a];});
+        if(!benchArr.length)continue;
+        var off=courtArr[0],on=benchArr[0];
+        onCourt.delete(off); onCourt.add(on);
+        subs.push({subNum:++subNum,
+          atTime:Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0')),
+          off:[off],on:[on],note:'Clean interval'});
       }
       return subs;
     }
@@ -3607,7 +3655,12 @@ async function generateAIRotation(){
   showAIRotationModal({plans:results},true,filtered,1);
   for(var i=0;i<planDefs.length;i++){
     try{var plan=await fetchWithRetry(planDefs[i],i+2);if(plan)results.push(plan);}
-    catch(err){console.warn('Plan '+planDefs[i].id+' failed:',err.message);}
+    catch(err){
+      console.warn('Plan '+planDefs[i].id+' failed:',err.message);
+      results.push({id:planDefs[i].id,label:planDefs[i].label,
+        rationale:'Could not generate: '+err.message,
+        h1:[],h2:[],h2Starting5:[],finishing5:[],expectedTimes:{},_failed:true});
+    }
     if(i<planDefs.length-1)await new Promise(function(r){setTimeout(r,1000);});
   }
   window._lastAIResult={plans:results};
@@ -3753,6 +3806,13 @@ function regenerateAIPlans(){
 }
 
 function renderPlanBody(plan){
+  if(plan._failed){
+    return '<div style="padding:20px;text-align:center;color:var(--warn);font-size:12px;line-height:1.6">'
+      +'<div style="font-size:16px;margin-bottom:8px">Plan '+plan.id+' failed to generate</div>'
+      +'<div style="font-size:11px;color:var(--dim)">'+plan.rationale+'</div>'
+      +'<div style="font-size:10px;color:var(--dim);margin-top:8px">Check your API key in ⚙ Settings and try regenerating.</div>'
+    +'</div>';
+  }
   let html = '';
   // Rationale
   if(plan.rationale){
