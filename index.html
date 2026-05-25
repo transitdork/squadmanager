@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.25.6';
+const APP_VERSION = '2026.05.25.7';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -3565,41 +3565,109 @@ function calcPlanActualTimes(plan,filtered){
   return times;
 }
 
+// ── Plan D: client-side equal time with 2-player preferred subs ──
+function buildPlanD(){
+  var filtered=S.names.filter(function(n){return n.trim();});
+  var halfSecs=usesQuarters()?20*60:S.h1Dur*60;
+  var h2PresetNames=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE
+    ?[...S.h2PresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
+
+  var plan={id:'D',label:'Equal time',
+    rationale:'Equal playing time. Sub times at clean :00 :30 :20 :40 intervals. Prefers 2-player subs.',
+    h1:[],h2:[],h2Starting5:[],finishing5:[],expectedTimes:{}};
+
+  function buildHalf(halfDur,startNames){
+    var n=filtered.length;
+    if(n<=COURT_SIZE)return[];
+    var slotDur=halfDur/n;
+    var timeOn=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
+    var timeBench=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
+    var onCourt=new Set(startNames);
+    var last=0;
+    var rawSubs=[];
+    for(var slot=1;slot<n;slot++){
+      var rawT=slotDur*slot;
+      var dt=rawT-last;
+      onCourt.forEach(function(nm){timeOn[nm]+=dt;});
+      filtered.filter(function(nm){return!onCourt.has(nm);}).forEach(function(nm){timeBench[nm]+=dt;});
+      last=rawT;
+      var courtArr=[...onCourt].sort(function(a,b){return timeOn[b]-timeOn[a];});
+      var benchArr=filtered.filter(function(nm){return!onCourt.has(nm);})
+        .sort(function(a,b){return timeBench[b]-timeBench[a];});
+      if(!benchArr.length)continue;
+      var off=courtArr[0],on=benchArr[0];
+      onCourt.delete(off);onCourt.add(on);
+      rawSubs.push({t:rawT,off:off,on:on});
+      timeOn[off]=0;timeBench[on]=0;
+    }
+    // Merge adjacent pairs → 2-player subs
+    var merged=[];
+    var i=0;
+    while(i<rawSubs.length){
+      var cleanT,off,on;
+      if(i+1<rawSubs.length){
+        var mid=(rawSubs[i].t+rawSubs[i+1].t)/2;
+        cleanT=snapToCleanInterval(mid);
+        off=[rawSubs[i].off,rawSubs[i+1].off];
+        on=[rawSubs[i].on,rawSubs[i+1].on];
+        i+=2;
+      } else {
+        cleanT=snapToCleanInterval(rawSubs[i].t);
+        off=[rawSubs[i].off];
+        on=[rawSubs[i].on];
+        i+=1;
+      }
+      if(merged.length){
+        var prevT=parseAtTime(merged[merged.length-1].atTime);
+        if(cleanT<=prevT+60)cleanT=snapToCleanInterval(prevT+90);
+      }
+      cleanT=Math.max(60,Math.min(halfDur-60,cleanT));
+      merged.push({subNum:merged.length+1,
+        atTime:Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0')),
+        off:off,on:on,note:'Clean interval'});
+    }
+    return merged;
+  }
+
+  var h1Names=filtered.slice(0,COURT_SIZE);
+  plan.h1=buildHalf(halfSecs,h1Names);
+  var h2Names=h2PresetNames||h1Names;
+  plan.h2Starting5=[].concat(h2Names);
+  plan.h2=buildHalf(halfSecs,h2Names);
+
+  var actual=calcPlanActualTimes(plan,filtered);
+  plan.expectedTimes=Object.fromEntries(filtered.map(function(n){
+    var t=actual[n]||0;
+    return[n,Math.floor(t/60)+':'+(String(t%60).padStart(2,'0'))];
+  }));
+  return plan;
+}
+
+
 async function generateAIRotation(){
   if(CFG.aiProvider==='gemini'&&!CFG.geminiKey){alert('Add Gemini API key in Settings.');return;}
   if(CFG.aiProvider==='claude'&&!CFG.apiKey){alert('Add Anthropic API key in Settings.');return;}
   var filtered=S.names.filter(function(n){return n.trim();});
   if(filtered.length<COURT_SIZE){alert('Add at least '+COURT_SIZE+' players first.');return;}
+
+  // Null-safety
+  if(!S.aiParams)S.aiParams={};
+  if(!S.aiParams.playerDeltas)S.aiParams.playerDeltas={};
+  if(!S.aiParams.benchConflicts)S.aiParams.benchConflicts=[];
+  if(S.aiParams.minBenchDuration===undefined)S.aiParams.minBenchDuration=3;
+  if(S.aiParams.maxBenchDuration===undefined)S.aiParams.maxBenchDuration=12;
+
   showAIRotationModal(null,true,filtered,0);
 
-  var p=S.aiParams,total=gameTotalSecs();
+  var p=S.aiParams;
+  var total=gameTotalSecs();
   var fair=Math.round(total*COURT_SIZE/filtered.length);
   var halfSecs=usesQuarters()?20*60:S.h1Dur*60;
+  var nBench=filtered.length-COURT_SIZE;
   var targets=computePlayerTargets(filtered);
   var playerSummary=buildPlayerRatingSummary(filtered);
-  var hasRatings=filtered.some(function(name){
-    var team=T.teams.find(function(t){return t.id===T.activeTeamId;});
-    var pl=team&&team.players.find(function(q){return playerDisplayName(q)===name;});
-    return pl&&Object.keys(getPlayerRatings(T.activeTeamId,pl.id)).length>0;
-  });
 
-  var h2PresetNames=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE?[...S.h2PresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
-  var finalPresetNames=S.useFinalPreset&&S.finalPresetIds.size===COURT_SIZE?[...S.finalPresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
-  var priorityNames=[...S.priorityPlayerIds].map(function(i){return filtered[i];}).filter(Boolean);
-  var start5=filtered.slice(0,COURT_SIZE);
-  var startPos=assignPositionsToGroup(start5);
-  var posDesc=start5.map(function(n){return n+(startPos[n]?' (pos '+startPos[n]+')':'');}).join(', ');
-  var conflictsStr=(p.benchConflicts||[]).map(function(pair){return pair[0]+' and '+pair[1]+' should not bench together';}).join('; ');
-  var timingStr=p.aiTiming?'YOU decide when and how many to sub - optimise for the time targets.':('Sub '+p.minSubsPerSub+'-'+p.maxSubsPerSub+' players at a time. Min '+Math.round(p.minSubGap/60)+' min between subs.');
-  var coachRaw=((window._aiExtraPrompt||'')+' '+(window._aiRegenInstructions||'')).trim();
-  var coachInstr=coachRaw?'* COACH INSTRUCTION (HIGHEST PRIORITY - overrides everything below):\n  '+coachRaw+'\n\n':'';
-  window._aiRegenInstructions=''; // clear after use
-  var timeTargetsStr=filtered.map(function(n){
-    var t=targets[n]||fair,d=t-fair;
-    return '  '+n+': '+Math.floor(t/60)+':'+(String(t%60).padStart(2,'0'))+(d?(' ('+(d>0?'+':'')+Math.round(d/60)+'m)'):' (equal)');
-  }).join('\n');
-
-  // ── Build fatigue data per player ──
+  // ── Fatigue ratings per player ──
   var fatigueMap={};
   var team2=T.teams.find(function(t){return t.id===T.activeTeamId;});
   filtered.forEach(function(n){
@@ -3608,351 +3676,368 @@ async function generateAIRotation(){
     fatigueMap[n]=r.fatigue||'Normal';
   });
 
-  // ── Minimum subs: max(benchCount, 3) ──
-  var nBench=filtered.length-COURT_SIZE;
-  var minSubsPerHalf=Math.max(nBench,3);
-
-  // ── Reference Plan D sub schedule ──
-  var planDRef=buildPlanD();
-
-  // ── Per-player time targets with fatigue adjustments ──
-  // Managed Minutes → cap at 75% of fair share; Injury Return/Illness → cap at 60%
-  var fatigueAdjTargets=Object.assign({},targets);
+  // ── Fatigue-adjusted targets ──
+  var adjTargets=Object.assign({},targets);
   filtered.forEach(function(n){
     var fat=fatigueMap[n];
-    if(fat==='Managed Minutes') fatigueAdjTargets[n]=Math.min(fatigueAdjTargets[n],Math.round(fair*0.75));
-    if(fat==='Injury Return/Illness') fatigueAdjTargets[n]=Math.min(fatigueAdjTargets[n],Math.round(fair*0.60));
+    if(fat==='Managed Minutes')adjTargets[n]=Math.min(adjTargets[n],Math.round(fair*0.75));
+    if(fat==='Injury Return/Illness')adjTargets[n]=Math.min(adjTargets[n],Math.round(fair*0.60));
   });
-  // Re-normalise
-  var fatCourtTime=total*COURT_SIZE;
-  var fatSum=Object.values(fatigueAdjTargets).reduce(function(a,b){return a+b;},0);
-  if(fatSum>0&&Math.abs(fatSum-fatCourtTime)>60){
-    var fatScale=fatCourtTime/fatSum;
-    Object.keys(fatigueAdjTargets).forEach(function(n){fatigueAdjTargets[n]=Math.round(fatigueAdjTargets[n]*fatScale);});
+  var fatSum=Object.values(adjTargets).reduce(function(a,b){return a+b;},0);
+  var courtTime=total*COURT_SIZE;
+  if(fatSum>0&&Math.abs(fatSum-courtTime)>60){
+    var sc=courtTime/fatSum;
+    Object.keys(adjTargets).forEach(function(n){adjTargets[n]=Math.round(adjTargets[n]*sc);});
   }
 
-  var timeTargetsStr=filtered.map(function(n){
-    var t=fatigueAdjTargets[n]||fair, d=t-fair;
-    var fat=fatigueMap[n];
-    return '  '+n+': '+Math.floor(t/60)+'m'+(t%60?String(t%60).padStart(2,'0')+'s':'')
-      +' total'+(d?(' ('+(d>0?'+':'')+Math.round(d/60)+'m)'):' (equal)')
-      +(fat!=='Normal'?' ['+fat+']':'');
-  }).join('\n');
+  // ── Presets ──
+  var h2PresetNames=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE
+    ?[...S.h2PresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
+  var finalPresetNames=S.useFinalPreset&&S.finalPresetIds.size===COURT_SIZE
+    ?[...S.finalPresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
+  var priorityNames=[...S.priorityPlayerIds].map(function(i){return filtered[i];}).filter(Boolean);
+  var start5=filtered.slice(0,COURT_SIZE);
+  var startPos=assignPositionsToGroup(start5);
+  var posDesc=start5.map(function(n){return n+(startPos[n]?' (pos '+startPos[n]+')':'');}).join(', ');
+  var conflictsStr=(p.benchConflicts||[]).map(function(pair){return pair[0]+' and '+pair[1]+' should not bench together';}).join('; ');
+  var hasRatings=filtered.some(function(name){
+    var pl=team2&&team2.players.find(function(q){return playerDisplayName(q)===name;});
+    return pl&&Object.keys(getPlayerRatings(T.activeTeamId,pl.id)).length>0;
+  });
 
-  var minBench=S.aiParams.minBenchDuration||3;
-  var maxBench=S.aiParams.maxBenchDuration||12;
+  // ── Coach instructions ──
+  var coachRaw=((window._aiExtraPrompt||'')+' '+(window._aiRegenInstructions||'')).trim();
+  var coachInstr=coachRaw?'COACH OVERRIDE (highest priority):\n'+coachRaw+'\n\n':'';
+  window._aiRegenInstructions='';
 
-  // ── Overarching system context (sent as opening to every plan call) ──
-  var systemPrompt='You are an expert basketball rotation planner for junior domestic and representative basketball.\n'
-    +'Your task is to generate ONE valid substitution rotation plan following the specified strategy mode.\n\n'
-    +'GENERAL RULES\n'
-    +'- A basketball team has exactly '+COURT_SIZE+' players on court at all times.\n'
-    +'- Rotations must cover the full game duration.\n'
-    +'- Sub times must align to :00 or :30 where practical, :20 or :40 where needed.\n'
-    +'- PREFER 2-PLAYER SUBSTITUTIONS. Use 1-player or 3-player subs only when needed to rebalance time, maintain positions or satisfy constraints.\n'
-    +'- Minimum bench duration: '+minBench+' minutes (a player must rest at least this long before returning).\n'
-    +'- Maximum bench duration: '+(maxBench>0?maxBench+' minutes':'no limit')+'.\n'
-    +'- Avoid excessive consecutive bench periods or excessive consecutive on-court runs.\n\n'
-    +'FATIGUE RULES (HARD constraints for Managed Minutes and Injury Return/Illness)\n'
-    +'- High Endurance: may play longer runs; suitable for extended court time.\n'
-    +'- Normal: standard rotation; no special adjustments needed.\n'
-    +'- Managed Minutes: shorten shifts; avoid runs longer than 6-8 consecutive minutes; must have regular rest.\n'
-    +'- Injury Return/Illness: maximum 4-5 consecutive minutes; bench time must equal or exceed court time; do NOT play final 5 minutes unless no alternative.\n\n'
-    +'POSITION RULES\n'
-    +'- Each player has: primary position, first alternate position, second alternate position.\n'
-    +'- Prefer primary position, then first alternate, then second alternate only if required.\n'
-    +'- Positions: 1=PG (ball handler), 2=SG (perimeter), 3=SF (wing), 4=PF (forward/interior), 5=C (centre/interior).\n'
-    +'- Aim for lineups with at least one ball-handler (pos 1 or 2) and one interior player (pos 4 or 5).\n\n'
-    +'CONSTRAINTS\n'
-    +'HARD (never violate):\n'
-    +'  - Exactly '+COURT_SIZE+' players on court at all times\n'
-    +'  - "off" players must be currently ON COURT; "on" players must be currently ON BENCH\n'
-    +'  - off and on lists must always be the same length\n'
-    +'  - Mandatory presets must be honoured (Starting 5, H2 Starting 5, Finishing 5)\n'
-    +'  - Fatigue limits for Managed Minutes and Injury Return/Illness players\n'
-    +'  - Use EXACT player names as supplied\n'
-    +'SOFT (optimise where practical):\n'
-    +'  - Preferred positions\n'
-    +'  - Bench conflict preferences\n'
-    +'  - Lineup positional balance\n'
-    +'  - Timing alignment\n\n'
-    +'PLAYING TIME\n'
-    +'- No player may receive less than 10 minutes total game time unless fatigue constraints make it impossible.\n'
-    +'- No player under 4 minutes in any single half.\n'
-    +(S.finalsMode?'- FINALS MODE ACTIVE: higher-rated players receive proportionally more time.\n':'')
-    +coachInstr;
+  // ── Pre-compute sub windows client-side ──
+  // KEY ARCHITECTURE: we compute WHEN and HOW MANY; AI decides WHO.
+  // This prevents the AI getting arithmetic wrong.
+  function computeWindows(halfDur,startNames,nWindows){
+    // Build raw single-player schedule from Plan D greedy algorithm
+    var n=filtered.length;
+    var slotDur=halfDur/n;
+    var timeOn=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
+    var timeBench=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
+    var onCourt=new Set(startNames);
+    var last=0;
+    var rawTimes=[];
+    for(var slot=1;slot<n;slot++){
+      var rawT=slotDur*slot;
+      var dt=rawT-last;
+      onCourt.forEach(function(nm){timeOn[nm]+=dt;});
+      filtered.filter(function(nm){return!onCourt.has(nm);}).forEach(function(nm){timeBench[nm]+=dt;});
+      last=rawT;
+      var courtArr=[...onCourt].sort(function(a,b){return timeOn[b]-timeOn[a];});
+      var benchArr=filtered.filter(function(nm){return!onCourt.has(nm);}).sort(function(a,b){return timeBench[b]-timeBench[a];});
+      if(!benchArr.length)continue;
+      var off=courtArr[0],on=benchArr[0];
+      onCourt.delete(off);onCourt.add(on);
+      rawTimes.push(rawT);
+      timeOn[off]=0;timeBench[on]=0;
+    }
+    // Merge adjacent pairs into 2-player windows, snap to clean interval
+    var windows=[];
+    var usedTimes=new Set();
+    var i=0;
+    while(i<rawTimes.length){
+      var subSize,cleanT;
+      if(i+1<rawTimes.length){
+        var mid=(rawTimes[i]+rawTimes[i+1])/2;
+        cleanT=snapToCleanInterval(mid);
+        subSize=2; i+=2;
+      } else {
+        cleanT=snapToCleanInterval(rawTimes[i]);
+        subSize=1; i+=1;
+      }
+      // Enforce minimum gap of 60s between windows
+      if(windows.length){
+        var prevT=parseAtTime(windows[windows.length-1].atTime);
+        if(cleanT<=prevT+60)cleanT=snapToCleanInterval(prevT+90);
+      }
+      cleanT=Math.max(60,Math.min(halfDur-60,cleanT));
+      var atStr=Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0'));
+      if(!usedTimes.has(atStr)){
+        windows.push({atTime:atStr,subSize:subSize});
+        usedTimes.add(atStr);
+      }
+    }
+    return windows;
+  }
 
-  // ── Game data block (injected for every call) ──
-  var gameDataBlock='GAME DATA\n'
-    +'- Format: '+(S.h1Dur+S.h2Dur)+' min ('+(usesQuarters()?'4 x '+Math.round(S.h1Dur/2)+' min quarters':'2 x '+S.h1Dur+' min halves')+')\n'
-    +'- Court size: '+COURT_SIZE+' players on court\n'
-    +'- Active squad: '+filtered.length+' players | Bench size: '+nBench+'\n'
-    +'- Minimum subs per half: '+minSubsPerHalf+' (prefer 2-player subs = ~'+Math.ceil(minSubsPerHalf/2)+' windows per half)\n'
-    +'- Minimum bench rest: '+minBench+' min | Maximum bench duration: '+(maxBench>0?maxBench+' min':'no limit')+'\n'
-    +(conflictsStr?'- Bench conflicts (soft): '+conflictsStr+'\n':'')
-    +'\n'
-    +'PLAYERS (Name | Pos1 | Pos2 | Pos3 | Rating | Fatigue | Target | Priority)\n'
+  var h1Start=filtered.slice(0,COURT_SIZE);
+  var h2Start=h2PresetNames||h1Start;
+
+  // Standard windows (Plans A, C, E, balanced block)
+  var stdH1Windows=computeWindows(halfSecs,h1Start);
+  var stdH2Windows=computeWindows(halfSecs,h2Start);
+
+  // Block windows: half as many, larger subs (merge groups of 4 raw into 2-player windows with bigger gaps)
+  function computeBlockWindows(halfDur){
+    var n=filtered.length;
+    var nW=Math.max(2,Math.ceil(nBench/2));
+    var gap=halfDur/(nW+1);
+    var windows=[];
+    for(var i=1;i<=nW;i++){
+      var t=snapToCleanInterval(gap*i);
+      t=Math.max(60,Math.min(halfDur-60,t));
+      if(windows.length&&t<=parseAtTime(windows[windows.length-1].atTime)+120)continue;
+      windows.push({atTime:Math.floor(t/60)+':'+(String(t%60).padStart(2,'0')),subSize:2});
+    }
+    return windows;
+  }
+  var blockH1Windows=computeBlockWindows(halfSecs);
+  var blockH2Windows=computeBlockWindows(halfSecs);
+
+  // ── Format windows as instruction string for AI ──
+  function windowsToStr(windows,halfLabel){
+    return windows.map(function(w,i){
+      return '  Window '+(i+1)+' at '+w.atTime+' into '+halfLabel
+        +': swap exactly '+w.subSize+' player'+(w.subSize>1?'s':'')
+        +' ('+w.subSize+' off, '+w.subSize+' on)';
+    }).join('\n');
+  }
+
+  // ── Player target table ──
+  var playerTableStr='Name      | Pos1 | Pos2 | Rating | Fatigue             | Target | Half-target | Priority\n'
     +filtered.map(function(n){
       var pl=team2&&team2.players.find(function(p){return playerDisplayName(p)===n;});
       var r=pl?getPlayerRatings(T.activeTeamId,pl.id):{};
-      var pos1=r.position?r.position+' ('+['','PG','SG','SF','PF','C'][+r.position]+')':'-';
-      var pos2=r.position2&&r.position2!='0'?r.position2+' ('+['','PG','SG','SF','PF','C'][+r.position2]+')':'-';
-      var pos3=r.position3&&r.position3!='0'?r.position3+' ('+['','PG','SG','SF','PF','C'][+r.position3]+')':'-';
+      var pos1=r.position?r.position+'('+(['','PG','SG','SF','PF','C'][+r.position]||'?')+')':'-';
+      var pos2=r.position2&&r.position2!='0'?r.position2+'('+(['','PG','SG','SF','PF','C'][+r.position2]||'?')+')':'-';
       var ovr=0,cnt=0;
       ['layup','jumpshot','three','passing','dribble','sharing','defplayer','defset',
        'offdef','reboff','rebdef','setplays','composure','speed','energy'].forEach(function(k){
         if(r[k]!==undefined){ovr+=Number(r[k]);cnt++;}
       });
-      var rating=cnt>0?Math.round(ovr/cnt*10)/10:'-';
+      var rat=cnt>0?(Math.round(ovr/cnt*10)/10).toFixed(1):'-';
+      var tgt=adjTargets[n]||fair;
+      var htgt=Math.round(tgt/2);
       var fat=fatigueMap[n];
-      var tgt=fatigueAdjTargets[n]||fair;
-      var isPriority=priorityNames.includes(n);
-      return '  '+n+' | '+pos1+' | '+pos2+' | '+pos3+' | '+rating+' | '+fat+' | '
-        +Math.floor(tgt/60)+'m'+(tgt%60?String(tgt%60).padStart(2,'0')+'s':'')
-        +' | '+(isPriority?'PRIORITY':'Standard');
-    }).join('\n')
-    +'\n\n'
-    +'PRESETS\n'
-    +'- Starting 5 (MANDATORY): '+posDesc+'\n'
-    +(h2PresetNames&&S.aiAdheresToPresets?'- H2 Starting 5 (MANDATORY): '+h2PresetNames.join(', ')+'\n':'- H2 Starting 5: AI chooses best lineup\n')
-    +(finalPresetNames&&S.aiAdheresToPresets?'- Finishing 5 (MANDATORY): '+finalPresetNames.join(', ')+'\n':'- Finishing 5: AI chooses best lineup\n')
-    +(priorityNames.length?'- Priority players (extra time where possible): '+priorityNames.join(', ')+'\n':'')
-    +'\n'
-    +(hasRatings?'PLAYER RATINGS SUMMARY\n'+playerSummary+'\n\n':'No ratings stored — treat all players as equal.\n\n')
-    +'REFERENCE: Plan D (equal time) uses these sub windows — your plan should have a SIMILAR number of sub events:\n'
-    +'  H1: '+planDRef.h1.map(function(s){return s.atTime+' off=['+s.off.join(',')+'] on=['+s.on.join(',')+']';}).join(' | ')+'\n'
-    +'  H2: '+planDRef.h2.map(function(s){return s.atTime+' off=['+s.off.join(',')+'] on=['+s.on.join(',')+']';}).join(' | ')+'\n';
+      var isPri=priorityNames.includes(n);
+      return (n+'          ').slice(0,10)
+        +'| '+pos1+'  | '+pos2+'  | '+rat
+        +' | '+(fat+' '.repeat(20)).slice(0,20)
+        +' | '+Math.floor(tgt/60)+'m'+(tgt%60?String(tgt%60).padStart(2,'0')+'s':'   ')
+        +' | '+Math.floor(htgt/60)+'m'+(htgt%60?String(htgt%60).padStart(2,'0')+'s':'   ')
+        +' | '+(isPri?'PRIORITY':'Standard');
+    }).join('\n');
 
-  // ── JSON schema ──
-  var schema='{"id":"X","label":"Name",'
-    +'"rationale":"1-2 sentences explaining strategy",'
+  var minBench=p.minBenchDuration||3;
+  var maxBench=p.maxBenchDuration||12;
+
+  // ── Shared system context ──
+  var systemCtx=coachInstr
+    +'You are an expert basketball rotation planner.\n'
+    +'Your ONLY task is to decide WHICH PLAYERS swap at each pre-scheduled substitution window.\n'
+    +'The substitution TIMES and COUNTS are already fixed — do not change them.\n\n'
+    +'HARD RULES (never violate):\n'
+    +'- Exactly '+COURT_SIZE+' players on court at all times.\n'
+    +'- "off" players MUST be currently ON COURT at that window; "on" players MUST be ON BENCH.\n'
+    +'- off and on lists must be exactly the same length as subSize for that window.\n'
+    +'- Use EXACT player names from this list: '+filtered.join(', ')+'.\n'
+    +'- Respect fatigue: Managed Minutes = max 6-8 min continuous; Injury Return = max 4-5 min continuous.\n'
+    +'- Minimum bench rest before returning: '+minBench+' minutes.\n'
+    +(maxBench>0?'- Maximum bench duration: '+maxBench+' minutes.\n':'')
+    +(conflictsStr?'- Bench preferences (soft): '+conflictsStr+'.\n':'')
+    +'\n'
+    +'GAME: '+(S.h1Dur+S.h2Dur)+' min ('+(usesQuarters()?'4x10 min quarters':'2x20 min halves')+'), '
+    +filtered.length+' players.\n'
+    +'Starting 5 (MANDATORY, already on court at game start): '+posDesc+'.\n'
+    +(h2PresetNames&&S.aiAdheresToPresets?'H2 Starting 5 (MANDATORY): '+h2PresetNames.join(', ')+'.\n':'')
+    +(finalPresetNames&&S.aiAdheresToPresets?'Finishing 5 (MANDATORY — these players must be on court at the final window and stay on): '+finalPresetNames.join(', ')+'.\n':'')
+    +'\nPLAYER TABLE:\n'+playerTableStr+'\n\n'
+    +(hasRatings?'RATINGS SUMMARY:\n'+playerSummary+'\n\n':'')
+    +'IMPORTANT — PLAYING TIME TARGETS:\n'
+    +'You must distribute playing time so each player is within 2 minutes of their target.\n'
+    +'Track cumulative court time mentally as you assign each window.\n'
+    +'Players with higher targets should stay on court longer before rotating off.\n'
+    +'Players with lower targets should rotate off sooner and return later.\n\n';
+
+  // ── Schema ──
+  var schema='{"id":"X","label":"Name","rationale":"1-2 sentences",'
     +'"h2Starting5":["p1","p2","p3","p4","p5"],'
     +'"finishing5":["p1","p2","p3","p4","p5"],'
-    +'"h1":[{"subNum":1,"atTime":"5:00","off":["PlayerA","PlayerB"],"on":["PlayerC","PlayerD"],"note":"brief reason"}],'
-    +'"h2":[{"subNum":1,"atTime":"5:00","off":["PlayerA","PlayerB"],"on":["PlayerC","PlayerD"],"note":"brief reason"}]}';
+    +'"h1":[{"subNum":1,"atTime":"EXACT_TIME_FROM_WINDOWS","off":["PlayerA","PlayerB"],"on":["PlayerC","PlayerD"],"note":"brief reason"}],'
+    +'"h2":[{"subNum":1,"atTime":"EXACT_TIME_FROM_WINDOWS","off":["PlayerA"],"on":["PlayerB"],"note":""}]}';
 
-  // ── Plan definitions with per-plan strategy mode text ──
+  // ── Format windows for prompt ──
+  function promptWindows(h1w,h2w){
+    return 'SUBSTITUTION WINDOWS — USE THESE EXACT TIMES (do not add or remove windows):\n\n'
+      +'First half windows:\n'+windowsToStr(h1w,'H1')+'\n\n'
+      +'Second half windows:\n'+windowsToStr(h2w,'H2')+'\n\n'
+      +'For each window, fill in which players come off and which come on.\n'
+      +'The atTime in your JSON must exactly match the window time above.\n';
+  }
+
+  // ── Plan definitions — strategy only, no scheduling ──
   var planDefs=[
-    {id:'A',label:'Balanced',strategyMode:
-      'STRATEGY MODE: BALANCED\n'
-      +'Objective: Create approximately even playing time while slightly favouring stronger or priority players.\n'
-      +'Rules:\n'
-      +'- Playing time should appear generally equal to spectators.\n'
-      +'- Stronger players receive modestly increased minutes.\n'
-      +'- Maintain competitive lineups throughout the game.\n'
-      +'- Avoid obvious overplaying of key players.\n'
-      +'- Preserve player energy and engagement.\n'
-      +'- Minimum '+minSubsPerHalf+' substitution events per half. Prefer 2-player subs.\n'
-      +'- No player under 10 minutes total. No player under 4 minutes in any half.\n'
-      +'- Time targets per player are listed in GAME DATA above — achieve within 2 minutes per player.'},
-    {id:'B',label:'Block',strategyMode:
-      'STRATEGY MODE: BLOCK\n'
-      +'Objective: Create the strongest combined team performance while managing fatigue.\n'
-      +'Rules:\n'
-      +'- Keep cohesive 5-player units together for 7-10 minute blocks.\n'
-      +'- Swap 2-3 players at once to maintain unit chemistry.\n'
-      +'- Avoid stacking all strongest players together for extended periods.\n'
-      +'- Distribute stronger players across rotations to prevent drop-offs.\n'
-      +'- Minimum '+Math.max(2,Math.ceil(minSubsPerHalf/2))+' 2-player substitution windows per half.\n'
-      +'- No player under 10 minutes total. No player under 4 minutes in any half.\n'
-      +'- Time targets per player: see GAME DATA. Accept up to 4 minutes variance per player.'},
-    {id:'C',label:'Strength-first',strategyMode:
-      'STRATEGY MODE: STRENGTH FIRST\n'
-      +'Objective: Maximise team competitiveness and on-court strength.\n'
-      +'Rules:\n'
-      +'- Strongest players (CORE tier) receive significantly higher playing time.\n'
-      +'- Weaker players rotate through shorter supporting minutes.\n'
-      +'- Prioritise strongest possible lineups in key periods: opening, late-game, momentum shifts.\n'
-      +'- Still provide rest for core players to avoid fatigue.\n'
-      +'- Minimum '+minSubsPerHalf+' substitution events per half.\n'
-      +'- EVERY bench player must come on court every half.\n'
-      +'- HARD FLOOR: no player under 10 minutes total, no player under 5 minutes in any single half.\n'
-      +'- State in rationale which players get more/less time and why.'},
-    {id:'E',label:'Position-balanced',strategyMode:
-      'STRATEGY MODE: POSITIONS BALANCED\n'
-      +'Objective: Create balanced lineups with proper positional coverage while maintaining reasonably even playing time.\n'
-      +'Rules:\n'
-      +'- PRIMARY GOAL: Ensure all 5 court positions are covered at all times.\n'
-      +'- Each lineup must have at least one pos-1/2 (ball handler) and one pos-4/5 (interior).\n'
-      +'- Prioritise primary positions, then first alternate, then second alternate only if needed.\n'
-      +'- Avoid positionally unbalanced lineups.\n'
-      +'- Minimum '+minSubsPerHalf+' substitution events per half. Prefer 2-player subs.\n'
-      +'- SECONDARY GOAL: Achieve time targets within 3 minutes per player. No player under 10 minutes total.\n'
-      +'- State in rationale which positions were hardest to cover.'},
+    {id:'A',label:'Balanced',h1w:stdH1Windows,h2w:stdH2Windows,
+     strategy:'STRATEGY: BALANCED\n'
+      +'- Distribute playing time as evenly as possible across all players.\n'
+      +'- Keep each player within 2 minutes of their target time.\n'
+      +'- Use player ratings to form competitive lineups at each window.\n'
+      +'- Ensure every lineup has at least one ball-handler (pos 1/2) and one interior (pos 4/5).\n'
+      +'- Avoid having your weakest players on court together.\n'},
+    {id:'B',label:'Block',h1w:blockH1Windows,h2w:blockH2Windows,
+     strategy:'STRATEGY: BLOCK\n'
+      +'- Keep cohesive 5-player units together for longer stretches.\n'
+      +'- Swap 2 players at a time to maintain unit chemistry.\n'
+      +'- Form 2-3 distinct units and rotate between them.\n'
+      +'- Still keep each player within 4 minutes of their target time.\n'
+      +'- Prioritise lineup cohesion and familiarity over strict equality.\n'},
+    {id:'C',label:'Strength-first',h1w:stdH1Windows,h2w:stdH2Windows,
+     strategy:'STRATEGY: STRENGTH FIRST\n'
+      +'- Give higher-rated players more continuous court time.\n'
+      +'- Rotate lower-rated players off first at each window where possible.\n'
+      +'- Prioritise strong opening lineup and strong closing lineup.\n'
+      +'- Every player must still come on in every half — no one sits the whole half.\n'
+      +'- Minimum 10 minutes total, minimum 4 minutes per half for every player.\n'},
+    {id:'E',label:'Position-balanced',h1w:stdH1Windows,h2w:stdH2Windows,
+     strategy:'STRATEGY: POSITION BALANCED\n'
+      +'- PRIMARY GOAL: Every lineup must have positional coverage.\n'
+      +'- Each lineup must include at least one pos-1/2 (ball handler) and one pos-4/5 (interior).\n'
+      +'- Use primary positions first, then first alternate, then second alternate.\n'
+      +'- When choosing who to rotate off, prefer keeping good positional balance on court.\n'
+      +'- SECONDARY GOAL: Keep each player within 3 minutes of their target time.\n'},
   ];
 
-  function validateHalf(subs,startIds,halfDur){
-    var court=new Set(startIds);var fixed=[];
+  // ── Validate AI response — court state only ──
+  function validateAndFixHalf(subs,startNames,halfDur,windows){
+    var court=new Set(startNames);
+    var fixed=[];
+    // Merge AI subs onto pre-computed window times
+    var windowMap={};
+    windows.forEach(function(w){windowMap[w.atTime]=w.subSize;});
     function resolve(name){
-      var i=filtered.indexOf(name);if(i>=0)return i;
-      var low=name.toLowerCase();
-      for(var j=0;j<filtered.length;j++){if(filtered[j].toLowerCase().startsWith(low.split(' ')[0]))return j;}
-      return -1;
+      if(filtered.indexOf(name)>=0)return name;
+      var low=name.toLowerCase().trim();
+      for(var j=0;j<filtered.length;j++){
+        if(filtered[j].toLowerCase().startsWith(low.split(' ')[0]))return filtered[j];
+      }
+      return null;
     }
-    (subs||[]).forEach(function(sub){
-      var vOff=(sub.off||[]).map(resolve).filter(function(i){return i>=0&&court.has(i);});
-      var vOn=(sub.on||[]).map(resolve).filter(function(i){return i>=0&&!court.has(i);});
-      var cnt=Math.min(vOff.length,vOn.length);if(!cnt)return;
-      var fOff=vOff.slice(0,cnt).map(function(i){return filtered[i];});
-      var fOn=vOn.slice(0,cnt).map(function(i){return filtered[i];});
-      fOff.forEach(function(n){court.delete(filtered.indexOf(n));});
-      fOn.forEach(function(n){court.add(filtered.indexOf(n));});
-      fixed.push(Object.assign({},sub,{off:fOff,on:fOn}));
+    // Process subs in window order
+    windows.forEach(function(w,wi){
+      // Find matching AI sub (by atTime, fuzzy)
+      var aiSub=null;
+      for(var j=0;j<subs.length;j++){
+        if(subs[j].atTime===w.atTime||Math.abs(parseAtTime(subs[j].atTime)-parseAtTime(w.atTime))<=10){
+          aiSub=subs[j]; break;
+        }
+      }
+      var wantSize=w.subSize;
+      var validOff=[], validOn=[];
+      if(aiSub){
+        validOff=(aiSub.off||[]).map(resolve).filter(function(n){return n&&court.has(n);});
+        validOn=(aiSub.on||[]).map(resolve).filter(function(n){return n&&!court.has(n);});
+      }
+      var cnt=Math.min(validOff.length,validOn.length,wantSize);
+      // If AI didn't give us enough valid players, fill with best candidates
+      if(cnt<wantSize){
+        var extraOff=[...court].filter(function(n){return validOff.indexOf(n)<0;});
+        var extraOn=filtered.filter(function(n){return!court.has(n)&&validOn.indexOf(n)<0;});
+        while(cnt<wantSize&&extraOff.length&&extraOn.length){
+          validOff.push(extraOff.shift());
+          validOn.push(extraOn.shift());
+          cnt++;
+        }
+      }
+      cnt=Math.min(validOff.length,validOn.length);
+      if(!cnt)return;
+      var fOff=validOff.slice(0,cnt);
+      var fOn=validOn.slice(0,cnt);
+      fOff.forEach(function(n){court.delete(n);});
+      fOn.forEach(function(n){court.add(n);});
+      fixed.push({subNum:wi+1,atTime:w.atTime,off:fOff,on:fOn,note:(aiSub&&aiSub.note)||''});
     });
     return{fixed:fixed,finalCourt:new Set(court)};
   }
 
-  async function fetchWithRetry(def,displayIdx){
-    var retryPrompt='';
+  // ── Per-plan AI call ──
+  async function fetchPlan(def,displayIdx){
+    var h1wStr=promptWindows(def.h1w,def.h2w);
+    var basePrompt=systemCtx+h1wStr+def.strategy
+      +'\nOUTPUT: Return ONLY a single valid JSON object. No markdown, no extra text.\n'
+      +'Schema: '+schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"')+'\n'
+      +'The atTime values in h1 and h2 arrays MUST exactly match the window times listed above.\n'
+      +'h2Starting5 and finishing5 are required fields.\n';
+
+    var lastErr='';
     for(var attempt=0;attempt<3;attempt++){
-      var msg=attempt===0?null:'Retry '+(attempt+1)+'/3 - improving balance...';
-      showAIRotationModal(null,true,filtered,displayIdx,msg);
-      var basePrompt=attempt===0
-        ?(systemPrompt+'\n'+gameDataBlock+'\n'+def.strategyMode+'\n\n'
-          +'OUTPUT FORMAT\n'
-          +'Return ONLY a single valid JSON object — no markdown, no explanation text.\n'
-          +'Schema:\n'+schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"')+'\n\n'
-          +'atTime values: M:SS format within each half (e.g. "5:00" = 5 min into that half).\n'
-          +'h2Starting5 and finishing5 are mandatory fields — include even if unchanged from starting 5.\n'
-          +'Prefer 2-player substitutions (same length off and on lists).')
-        :retryPrompt;
-      var prompt=basePrompt;
+      showAIRotationModal(null,true,filtered,displayIdx,
+        attempt>0?'Retry '+(attempt+1)+'/3 — fixing player selection…':null);
+      var prompt=attempt===0?basePrompt
+        :(systemCtx+h1wStr+def.strategy
+          +'\nCORRECTION NEEDED from previous attempt:\n'+lastErr+'\n'
+          +'Fix the issues above and return corrected JSON.\n'
+          +'Schema: '+schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"')+'\n');
       var raw;
-      try{raw=await callAI(prompt,5000);}
+      try{raw=await callAI(prompt,4000);}
       catch(err){
-        if(String(err.message).includes('429')&&attempt<2){await new Promise(function(r){setTimeout(r,15000);});continue;}
+        if(String(err.message).includes('429')&&attempt<2){
+          await new Promise(function(r){setTimeout(r,15000);});continue;
+        }
         throw err;
       }
       var parsed;
-      try{var json=extractJSON(raw);parsed=JSON.parse(json);}
-      catch(e){if(attempt<2)continue;throw new Error('JSON parse failed');}
+      try{parsed=JSON.parse(extractJSON(raw));}
+      catch(e){lastErr='JSON parse failed: '+e.message;if(attempt<2)continue;throw new Error(lastErr);}
 
-      var h1s=validateHalf(parsed.h1,filtered.slice(0,COURT_SIZE).map(function(_,i){return i;}),halfSecs);
-      parsed.h1=h1s.fixed;
-      var h2Ids=new Set(h1s.finalCourt);
-      if(h2PresetNames&&h2PresetNames.length===COURT_SIZE){h2Ids=new Set(h2PresetNames.map(function(n){return filtered.indexOf(n);}).filter(function(i){return i>=0;}));}
-      else if(parsed.h2Starting5&&parsed.h2Starting5.length===COURT_SIZE){var ids=parsed.h2Starting5.map(function(n){return filtered.indexOf(n);}).filter(function(i){return i>=0;});if(ids.length===COURT_SIZE)h2Ids=new Set(ids);}
-      var h2s=validateHalf(parsed.h2,[...h2Ids].map(function(i){return filtered[i];}),halfSecs);
-      parsed.h2=h2s.fixed;
+      // Validate and fix court state
+      var h1v=validateAndFixHalf(parsed.h1,h1Start,halfSecs,def.h1w);
+      parsed.h1=h1v.fixed;
+      var h2StartNow=h2PresetNames&&S.aiAdheresToPresets?h2PresetNames
+        :(parsed.h2Starting5&&parsed.h2Starting5.length===COURT_SIZE?parsed.h2Starting5:h1Start);
+      var h2v=validateAndFixHalf(parsed.h2,h2StartNow,halfSecs,def.h2w);
+      parsed.h2=h2v.fixed;
 
+      // Check actual times vs targets
       var actual=calcPlanActualTimes(parsed,filtered);
-      var worst=Math.max.apply(null,filtered.map(function(n){return Math.abs((actual[n]||0)-(targets[n]||fair));}));
-      parsed.expectedTimes=Object.fromEntries(filtered.map(function(n){return[n,Math.floor((actual[n]||0)/60)+':'+(String((actual[n]||0)%60).padStart(2,'0'))];}));
-      // Accept if within 2 min per player, or on final attempt
-      if(worst<=120||attempt===2)return parsed;
+      var badPlayers=filtered.filter(function(n){
+        return Math.abs((actual[n]||0)-(adjTargets[n]||fair))>150;
+      });
+      parsed.expectedTimes=Object.fromEntries(filtered.map(function(n){
+        var t=actual[n]||0;
+        return[n,Math.floor(t/60)+':'+(String(t%60).padStart(2,'0'))];
+      }));
 
-      var corrections=filtered.filter(function(n){return Math.abs((actual[n]||0)-(targets[n]||fair))>90;})
-        .map(function(n){
-          var d=(actual[n]||0)-(targets[n]||fair);
-          return n+': currently '+Math.floor((actual[n]||0)/60)+'m, target '+Math.floor((targets[n]||fair)/60)+'m — '
-            +(d>0?'REDUCE by '+Math.round(Math.abs(d)/60)+'m (sub them off sooner)':'ADD '+Math.round(Math.abs(d)/60)+'m (keep them on longer or bring back on)');
+      if(!badPlayers.length||attempt===2)return parsed;
+
+      // Build specific correction
+      lastErr='Time target misses (fix by choosing different players at the windows):\n'
+        +badPlayers.map(function(n){
+          var got=actual[n]||0,need=adjTargets[n]||fair,diff=got-need;
+          return '  '+n+': got '+Math.floor(got/60)+'m, needs '+Math.floor(need/60)+'m'
+            +' → '+(diff>0?'rotate off SOONER / bring back LATER':'keep on LONGER / bring back SOONER');
         }).join('\n');
-      retryPrompt=systemPrompt+'\n'+gameDataBlock+'\n'+def.strategyMode+'\n\n'
-        +'=== TIME BALANCE CORRECTION NEEDED ===\n'
-        +'Your previous plan had these time imbalances that must be fixed:\n'+corrections+'\n\n'
-        +'Rewrite the complete plan fixing these players. You need at least '+minSubsPerHalf+' substitution events per half.\n'
-        +'Prefer 2-player substitutions. Return corrected plan as JSON:\n'
-        +schema.replace('"X"','"'+def.id+'"').replace('"Name"','"'+def.label+'"');
     }
   }
 
-  function buildPlanD(){
-    var plan={id:'D',label:'Equal time',
-      rationale:'Equal playing time for all players. Preferred 2-player subs at clean :00 :30 :20 :40 intervals.',
-      h1:[],h2:[],h2Starting5:[],finishing5:[],expectedTimes:{}};
-
-    function buildHalf(halfDur,startNames){
-      var n=filtered.length;
-      if(n<=COURT_SIZE)return[];
-      // EQUAL TIME with 2-player preferred subs:
-      // 1. Generate n-1 single-player sub times using greedy equal-time algorithm
-      // 2. Merge adjacent pairs into 2-player windows (snap to clean interval)
-      // 3. Odd remainder (if n-1 is odd) stays as 1-player sub
-      var slotDur=halfDur/n;
-      // Step 1: compute ideal sub times and player order
-      var timeOn=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
-      var timeBench=Object.fromEntries(filtered.map(function(nm){return[nm,0];}));
-      var onCourt=new Set(startNames);
-      var last=0;
-      var rawSubs=[];
-      for(var slot=1;slot<n;slot++){
-        var rawT=slotDur*slot;
-        var dt=rawT-last;
-        onCourt.forEach(function(nm){timeOn[nm]+=dt;});
-        filtered.filter(function(nm){return!onCourt.has(nm);}).forEach(function(nm){timeBench[nm]+=dt;});
-        last=rawT;
-        var courtArr=[...onCourt].sort(function(a,b){return timeOn[b]-timeOn[a];});
-        var benchArr=filtered.filter(function(nm){return!onCourt.has(nm);}).sort(function(a,b){return timeBench[b]-timeBench[a];});
-        if(!benchArr.length)continue;
-        var off=courtArr[0],on=benchArr[0];
-        onCourt.delete(off); onCourt.add(on);
-        rawSubs.push({t:rawT,off:off,on:on});
-        timeOn[off]=0; timeBench[on]=0;
-      }
-      // Step 2: merge adjacent pairs into 2-player subs
-      var merged=[];
-      var i=0;
-      while(i<rawSubs.length){
-        if(i+1<rawSubs.length){
-          // Pair sub i and i+1 at the midpoint of their times, snapped to clean interval
-          var midT=(rawSubs[i].t+rawSubs[i+1].t)/2;
-          var cleanT=snapToCleanInterval(midT);
-          cleanT=Math.max(cleanT, merged.length?parseAtTime(merged[merged.length-1].atTime)+60:60);
-          cleanT=Math.min(cleanT, halfDur-30);
-          merged.push({
-            subNum:merged.length+1,
-            atTime:Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0')),
-            off:[rawSubs[i].off,rawSubs[i+1].off],
-            on:[rawSubs[i].on,rawSubs[i+1].on],
-            note:'2-player clean interval'
-          });
-          i+=2;
-        } else {
-          // Odd remainder — single player sub
-          var cleanT=snapToCleanInterval(rawSubs[i].t);
-          cleanT=Math.max(cleanT, merged.length?parseAtTime(merged[merged.length-1].atTime)+60:60);
-          cleanT=Math.min(cleanT, halfDur-30);
-          merged.push({
-            subNum:merged.length+1,
-            atTime:Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0')),
-            off:[rawSubs[i].off],
-            on:[rawSubs[i].on],
-            note:'1-player (odd remainder)'
-          });
-          i+=1;
-        }
-      }
-      return merged;
-    }
-
-    var h1Names=filtered.slice(0,COURT_SIZE);
-    plan.h1=buildHalf(halfSecs,h1Names);
-    var h2Names=h2PresetNames||h1Names;
-    plan.h2Starting5=[].concat(h2Names);
-    plan.h2=buildHalf(halfSecs,h2Names);
-    var actual=calcPlanActualTimes(plan,filtered);
-    plan.expectedTimes=Object.fromEntries(filtered.map(function(n){
-      return[n,Math.floor((actual[n]||0)/60)+':'+(String((actual[n]||0)%60).padStart(2,'0'))];
-    }));
-    return plan;
-  }
-
-  var results=[buildPlanD()];
+  // ── Build Plan D (client-side, no AI) ──
+  var planD=buildPlanD();
+  var results=[planD];
   showAIRotationModal({plans:results},true,filtered,1);
-  for(var i=0;i<planDefs.length;i++){
-    try{var plan=await fetchWithRetry(planDefs[i],i+2);if(plan)results.push(plan);}
-    catch(err){
-      console.warn('Plan '+planDefs[i].id+' failed:',err.message);
-      results.push({id:planDefs[i].id,label:planDefs[i].label,
-        rationale:'Could not generate: '+err.message,
-        h1:[],h2:[],h2Starting5:[],finishing5:[],expectedTimes:{},_failed:true});
+
+  // ── Generate AI plans ──
+  for(var pi=0;pi<planDefs.length;pi++){
+    try{
+      var plan=await fetchPlan(planDefs[pi],pi+2);
+      if(plan)results.push(plan);
+    }catch(err){
+      console.warn('Plan '+planDefs[pi].id+' failed:',err.message);
+      results.push({id:planDefs[pi].id,label:planDefs[pi].label,
+        rationale:'Failed: '+err.message,h1:[],h2:[],expectedTimes:{},_failed:true});
     }
-    if(i<planDefs.length-1)await new Promise(function(r){setTimeout(r,1000);});
+    if(pi<planDefs.length-1)await new Promise(function(r){setTimeout(r,800);});
   }
+
   window._lastAIResult={plans:results};
   window._lastAIFiltered=filtered;
   showAIRotationModal({plans:results},false,filtered);
 }
+
+
 
 
 
