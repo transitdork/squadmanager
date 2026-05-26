@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.26.2';
+const APP_VERSION = '2026.05.26.3';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -3719,9 +3719,10 @@ function generateAIRotation(){
   // ── Min bench rest (seconds) ──
   var minBenchSecs=(p.minBenchDuration||3)*60;
   var maxBenchSecs=(p.maxBenchDuration||12)*60;
+  // Preferred sub size from "I SPECIFY" settings (Plan D always uses individual subs)
+  var preferPaired=(!p.aiTiming)&&(p.minSubsPerSub||1)>=2;
 
   // ── Core half-builder ──
-  // tgts = per-game targets; windowFn returns [{t,size}]; posCheck optional
   function buildHalf(halfDur,startNames,tgts,windowFn,posCheck){
     var halfTgt={};filtered.forEach(function(nm){halfTgt[nm]=(tgts[nm]||fair)/2;});
     var timeOn={};filtered.forEach(function(nm){timeOn[nm]=0;});
@@ -3737,13 +3738,10 @@ function generateAIRotation(){
       filtered.filter(function(nm){return!onCourt.has(nm);}).forEach(function(nm){timeBench[nm]+=dt;});
       last=ev.t;
       var size=ev.size||1;
-      // Off candidates: must be on court, respect min bench rest already served
-      var offCands=[...onCourt].filter(function(nm){
-        // Don't pull off someone who just came on (respect min bench idea)
-        return lastOnAt[nm]<0||ev.t-lastOnAt[nm]>minBenchSecs;
-      });
-      if(offCands.length<size)offCands=[...onCourt]; // fallback
-      // Position filter
+
+      // Off candidates: any court player — NO time-based blocking
+      // (ratio sort naturally handles rotation order without forced minimums)
+      var offCands=[...onCourt];
       if(posCheck&&offCands.length>size){
         var posFiltered=offCands.filter(function(nm){
           var remaining=new Set(onCourt);remaining.delete(nm);
@@ -3751,39 +3749,39 @@ function generateAIRotation(){
         });
         if(posFiltered.length>=size)offCands=posFiltered;
       }
-      // On candidates: must be on bench, respect max bench duration
+
+      // On candidates: bench players who have rested >= minBenchSecs since coming OFF
       var onCands=filtered.filter(function(nm){
         if(onCourt.has(nm))return false;
-        if(maxBenchSecs>0&&timeBench[nm]>maxBenchSecs)return true; // must come on
+        if(lastOffAt[nm]>=0&&ev.t-lastOffAt[nm]<minBenchSecs)return false;
         return true;
       });
-      // Sort by target ratio
+      if(onCands.length<size)onCands=filtered.filter(function(nm){return!onCourt.has(nm);});
+
+      // Sort off: highest timeOn/halfTarget ratio (most ahead of target) comes off first
       offCands.sort(function(a,b){
         var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:timeOn[a];
         var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:timeOn[b];
-        return rb-ra; // highest first → comes off
+        return rb-ra;
       });
+      // Sort on: lowest ratio comes on; overdue players (exceed maxBench) get top priority
       onCands.sort(function(a,b){
+        var aOverdue=maxBenchSecs>0&&timeBench[a]>=maxBenchSecs;
+        var bOverdue=maxBenchSecs>0&&timeBench[b]>=maxBenchSecs;
+        if(aOverdue&&!bOverdue)return -1;
+        if(bOverdue&&!aOverdue)return 1;
         var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:0;
         var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:0;
-        return ra-rb; // lowest first → comes on
+        return ra-rb;
       });
-      // For 2-player block subs: pick 2nd off as 2nd-highest ratio OR longest-on bench player
+
       var cnt=Math.min(size,offCands.length,onCands.length);
       if(!cnt)return;
       var fOff=offCands.slice(0,cnt);
       var fOn=onCands.slice(0,cnt);
-      fOff.forEach(function(nm){
-        onCourt.delete(nm);
-        timeBench[nm]=0;
-        lastOffAt[nm]=ev.t;
-      });
-      fOn.forEach(function(nm){
-        onCourt.add(nm);
-        lastOnAt[nm]=ev.t;
-        timeBench[nm]=0;
-        // No timeOn reset — cumulative tracking gives accurate target ratios
-      });
+      fOff.forEach(function(nm){onCourt.delete(nm);timeBench[nm]=0;lastOffAt[nm]=ev.t;});
+      fOn.forEach(function(nm){onCourt.add(nm);lastOnAt[nm]=ev.t;timeBench[nm]=0;});
+
       var cleanT=snapToCleanInterval(ev.t);
       if(subs.length){
         var prev=parseAtTime(subs[subs.length-1].atTime);
@@ -3794,7 +3792,7 @@ function generateAIRotation(){
         atTime:Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0')),
         off:fOff,on:fOn,note:ev.note||''});
     });
-    // Post: if finishing5 set, ensure they're on court at end
+    // Post: enforce finishing5 preset
     if(finalPresetNames&&finalPresetNames.length===COURT_SIZE){
       var finalSet=new Set(finalPresetNames);
       var wrongOff=[...onCourt].filter(function(nm){return!finalSet.has(nm);});
@@ -3814,27 +3812,41 @@ function generateAIRotation(){
 
   // ── Window generators ──
   var n=filtered.length;
-  // Standard: n-1 individual 1-player windows
+  // stdW: n-1 individual 1-player windows (required for equal time precision)
   function stdW(halfDur){
     var ev=[];var sl=halfDur/n;
     for(var i=1;i<n;i++)ev.push({t:sl*i,size:1});
     return ev;
   }
-  // Block: merge pairs → prefer 2-player windows at wider intervals
+  // pairedW / blockW: merge adjacent pairs → 2-player windows
+  function pairedW(halfDur){
+    var raw=[];var sl=halfDur/n;
+    for(var i=1;i<n;i++)raw.push(sl*i);
+    var ev=[];var i=0;
+    while(i<raw.length){
+      if(i+1<raw.length){ev.push({t:(raw[i]+raw[i+1])/2,size:2,note:'2-player sub'});i+=2;}
+      else{ev.push({t:raw[i],size:1,note:'Sub'});i++;}
+    }
+    return ev;
+  }
   function blockW(halfDur){
     var raw=[];var sl=halfDur/n;
     for(var i=1;i<n;i++)raw.push(sl*i);
     var ev=[];var i=0;
     while(i<raw.length){
-      if(i+1<raw.length){
-        ev.push({t:(raw[i]+raw[i+1])/2,size:2,note:'Block swap'});i+=2;
-      } else {
-        ev.push({t:raw[i],size:1,note:'Block swap'});i+=1;
-      }
+      if(i+1<raw.length){ev.push({t:(raw[i]+raw[i+1])/2,size:2,note:'Block swap'});i+=2;}
+      else{ev.push({t:raw[i],size:1,note:'Block swap'});i++;}
     }
     return ev;
   }
-
+  // wFnFor: choose window function per plan
+  // Plan D MUST use individual subs (2-player subs cannot achieve equal time mathematically)
+  // Plans A/C/E honour user's sub-size preference; Plan B always uses paired
+  function wFnFor(planId){
+    if(planId==='D')return stdW;
+    if(planId==='B')return blockW;
+    return preferPaired?pairedW:stdW;
+  }
   // ── Position check ──
   function posOK(remaining,all,posMap){
     var hasBH=false,hasIn=false;
@@ -3892,20 +3904,20 @@ function generateAIRotation(){
   var at=aTgts(), ct=cTgts();
   var results=[
     makePlan('D','Equal time',
-      'Target-based equal time. Each player achieves their time target within ~2 min. Clean sub intervals.',
-      baseTgts,stdW,null),
+      'Individual 1-player subs for mathematically precise equal time. 2-player subs cannot achieve equal time for this squad size.',
+      baseTgts,wFnFor('D'),null),
     makePlan('A','Balanced',
-      'Even time with a small boost for higher-rated players. Competitive lineups throughout.',
-      at,stdW,null),
+      'Even time with a small boost for higher-rated players. '+(preferPaired?'2-player subs as specified.':''),
+      at,wFnFor('A'),null),
     makePlan('B','Block',
       '2-player unit swaps keep lineup cohesion. Fewer but larger substitutions.',
-      baseTgts,blockW,null),
+      baseTgts,wFnFor('B'),null),
     makePlan('C','Strength-first',
-      'Higher-rated players get significantly more time. Every player still gets minimum 10 minutes.',
-      ct,stdW,null),
+      'Higher-rated players get significantly more time. Every player still gets minimum 10 minutes. '+(preferPaired?'2-player subs as specified.':''),
+      ct,wFnFor('C'),null),
     makePlan('E','Position-balanced',
-      'Substitutions maintain positional coverage at all times — always a ball-handler and interior player on court.',
-      baseTgts,stdW,function(rem){return posOK(rem,filtered,posMap);}),
+      'Substitutions maintain positional coverage — always a ball-handler and interior player on court. '+(preferPaired?'2-player subs as specified.':''),
+      baseTgts,wFnFor('E'),function(rem){return posOK(rem,filtered,posMap);}),
   ];
 
   window._lastAIResult={plans:results};
