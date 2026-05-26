@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.26.1';
+const APP_VERSION = '2026.05.26.2';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -3727,6 +3727,7 @@ function generateAIRotation(){
     var timeOn={};filtered.forEach(function(nm){timeOn[nm]=0;});
     var timeBench={};filtered.forEach(function(nm){timeBench[nm]=0;});
     var lastOnAt={};filtered.forEach(function(nm){lastOnAt[nm]=startNames.indexOf(nm)>=0?0:-1;});
+    var lastOffAt={};filtered.forEach(function(nm){lastOffAt[nm]=-1;});
     var onCourt=new Set(startNames);
     var subs=[];var last=0;
     var events=windowFn(halfDur);
@@ -3775,12 +3776,13 @@ function generateAIRotation(){
       fOff.forEach(function(nm){
         onCourt.delete(nm);
         timeBench[nm]=0;
+        lastOffAt[nm]=ev.t;
       });
       fOn.forEach(function(nm){
         onCourt.add(nm);
-        timeOn[nm]=0; // reset so next sort uses fresh
         lastOnAt[nm]=ev.t;
         timeBench[nm]=0;
+        // No timeOn reset — cumulative tracking gives accurate target ratios
       });
       var cleanT=snapToCleanInterval(ev.t);
       if(subs.length){
