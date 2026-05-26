@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.26.3';
+const APP_VERSION = '2026.05.26.4';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -3819,6 +3819,8 @@ function generateAIRotation(){
     return ev;
   }
   // pairedW / blockW: merge adjacent pairs → 2-player windows
+  // For odd squad sizes (7, 9, 11): n-1 is even → all pairs → insufficient transitions.
+  // Add one extra single-player window so total transitions = n (enables near-equal time).
   function pairedW(halfDur){
     var raw=[];var sl=halfDur/n;
     for(var i=1;i<n;i++)raw.push(sl*i);
@@ -3826,6 +3828,13 @@ function generateAIRotation(){
     while(i<raw.length){
       if(i+1<raw.length){ev.push({t:(raw[i]+raw[i+1])/2,size:2,note:'2-player sub'});i+=2;}
       else{ev.push({t:raw[i],size:1,note:'Sub'});i++;}
+    }
+    // Odd squad: n-1 is even so no natural remainder above.
+    // Add a corrective single-player window at the n/(n+1) point to get n total transitions.
+    if(n%2===1){
+      var extraT=halfDur*(n)/(n+1);
+      ev.push({t:extraT,size:1,note:'Balance sub'});
+      ev.sort(function(a,b){return a.t-b.t;});
     }
     return ev;
   }
@@ -3840,10 +3849,10 @@ function generateAIRotation(){
     return ev;
   }
   // wFnFor: choose window function per plan
-  // Plan D MUST use individual subs (2-player subs cannot achieve equal time mathematically)
-  // Plans A/C/E honour user's sub-size preference; Plan B always uses paired
+  // All plans honour user's sub-size preference.
+  // Plan D uses pairedW when preferPaired=true; any rounding excess goes to top-ranked players via targets.
+  // Plan B always uses paired subs for block strategy.
   function wFnFor(planId){
-    if(planId==='D')return stdW;
     if(planId==='B')return blockW;
     return preferPaired?pairedW:stdW;
   }
@@ -3867,7 +3876,21 @@ function generateAIRotation(){
   var minR=Math.min.apply(null,ratings.concat([5]));
   var rRange=maxR-minR||1;
 
-  // Plan A: ±8% rating nudge on top of base targets
+  // Plan D targets: equal time by default.
+  // When using 2-player subs (preferPaired), paired windows can't achieve perfect equality —
+  // any rounding excess goes to the top-ranked players rather than being arbitrary.
+  function dTgts(){
+    var t={};filtered.forEach(function(n){t[n]=baseTgts[n]||fair;});
+    if(preferPaired){
+      // Sort players by rating descending
+      var ranked=[].concat(filtered).sort(function(a,b){return (ratingMap[b]||5)-(ratingMap[a]||5);});
+      // Top 2-3 get a small nudge (+60s) to absorb rounding; bottom players get correspondingly less
+      var nBoost=Math.min(3,Math.ceil(filtered.length/4));
+      ranked.slice(0,nBoost).forEach(function(n){t[n]+=60;});
+      ranked.slice(-nBoost).forEach(function(n){t[n]-=60;});
+    }
+    return normTgts(t);
+  }
   function aTgts(){
     var t={};filtered.forEach(function(n){
       var normR=(ratingMap[n]-minR)/rRange;
@@ -3901,11 +3924,13 @@ function generateAIRotation(){
     return plan;
   }
 
-  var at=aTgts(), ct=cTgts();
+  var at=aTgts(), ct=cTgts(), dt=dTgts();
   var results=[
     makePlan('D','Equal time',
-      'Individual 1-player subs for mathematically precise equal time. 2-player subs cannot achieve equal time for this squad size.',
-      baseTgts,wFnFor('D'),null),
+      preferPaired
+        ?'2-player subs throughout. As equal as possible — unavoidable extra time goes to highest-rated players.'
+        :'Individual subs for mathematically precise equal time. All players within ~1 minute of target.',
+      dt,wFnFor('D'),null),
     makePlan('A','Balanced',
       'Even time with a small boost for higher-rated players. '+(preferPaired?'2-player subs as specified.':''),
       at,wFnFor('A'),null),
