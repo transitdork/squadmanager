@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.26.6';
+const APP_VERSION = '2026.05.28.1';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -991,6 +991,7 @@ const S = {
   scoreLog: [],           // [{t, who:'us'|'them', pts}] — scoring events
   scoreBarExpanded: false, // score bar toggle
   gamePositions: {},      // playerId→activePosition ('1'-'5') for current game only
+  subPlanPositions: {},   // {h1:{0:{name:pos,...},...}, h2:{...}} — per-sub lineup positions
   q1BreakDone: false,     // quarter break between Q1 and Q2 already shown
   q3BreakDone: false,     // quarter break between Q3 and Q4 already shown
   isClockRunning: false,  // game clock running (may differ from isRunning for EDJBL timeout)
@@ -1405,6 +1406,90 @@ function posLabelForName(name){
   const r = getPlayerRatings(T.activeTeamId, player.id);
   if(r.position === undefined) return null;
   return POS_SHORT[parseInt(r.position)] || null;
+}
+
+// Get position for a player in a specific sub-plan lineup (with override support)
+function subPlanPosForName(name, halfKey, subIdx){
+  const overrides = (S.subPlanPositions[halfKey]||{})[subIdx]||{};
+  if(overrides[name]) return POS_SHORT[parseInt(overrides[name])] || null;
+  return posLabelForName(name);
+}
+
+// Set position override for a player in a specific sub-plan lineup
+function setSubPlanPos(halfKey, subIdx, name, posNum){
+  if(!S.subPlanPositions[halfKey]) S.subPlanPositions[halfKey] = {};
+  if(!S.subPlanPositions[halfKey][subIdx]) S.subPlanPositions[halfKey][subIdx] = {};
+  S.subPlanPositions[halfKey][subIdx][name] = String(posNum);
+  saveState();
+  renderSetup(true);
+}
+
+// Open a position picker for a sub-plan player
+function openSubPlanPosPicker(halfKey, subIdx, name){
+  const POS_LABELS_MAP = {1:'1 · PG',2:'2 · SG',3:'3 · SF',4:'4 · PF',5:'5 · C'};
+  const team = T.teams.find(t=>t.id===T.activeTeamId);
+  const player = team&&team.players.find(p=>playerDisplayName(p)===name);
+  const r = player?getPlayerRatings(T.activeTeamId, player.id):{};
+  const overrides = (S.subPlanPositions[halfKey]||{})[subIdx]||{};
+  const currentPos = parseInt(overrides[name]||r.position)||0;
+  const ratedPos = parseInt(r.position)||0;
+  const ratedPos2 = parseInt(r.position2)||0;
+
+  // Remove any existing picker
+  const existing = document.getElementById('subplan-pos-picker');
+  if(existing) existing.remove();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'subplan-pos-picker';
+  backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:5000;display:flex;align-items:flex-end;justify-content:center;';
+  backdrop.onclick = function(e){ if(e.target===backdrop) backdrop.remove(); };
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--surface);border-radius:16px 16px 0 0;padding:16px;width:100%;max-width:480px;padding-bottom:calc(env(safe-area-inset-bottom,0px)+16px);';
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-family:Impact,sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:4px;';
+  title.textContent = name.toUpperCase() + ' — SELECT POSITION';
+
+  const subtitle = document.createElement('div');
+  subtitle.style.cssText = 'font-size:10px;color:var(--dim);margin-bottom:12px;';
+  subtitle.textContent = 'For this lineup only. Rated: '+(POS_LABELS_MAP[ratedPos]||'unset')+(ratedPos2?' / '+POS_LABELS_MAP[ratedPos2]:'');
+
+  const opts = document.createElement('div');
+  opts.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+
+  [1,2,3,4,5].forEach(function(pos){
+    const btn = document.createElement('button');
+    btn.style.cssText = 'flex:1;min-width:50px;padding:12px 6px;border-radius:10px;'
+      +'border:2px solid;font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;'
+      +'background:'+(pos===currentPos?'rgba(62,207,110,.2)':'rgba(255,255,255,.04)')+';'
+      +'border-color:'+(pos===currentPos?'var(--green)':pos===ratedPos?'var(--accent)':'var(--border)')+';'
+      +'color:'+(pos===currentPos?'var(--green)':pos===ratedPos||pos===ratedPos2?'var(--text)':'var(--dim)');
+    btn.innerHTML = '<div style="font-size:16px">'+pos+'</div><div style="font-size:9px;opacity:.7">'+POS_LABELS_MAP[pos].split(' · ')[1]+'</div>';
+    if(pos===ratedPos) btn.innerHTML += '<div style="font-size:8px;color:var(--accent)">★ rated</div>';
+    btn.onclick = function(){
+      setSubPlanPos(halfKey, subIdx, name, pos);
+      backdrop.remove();
+    };
+    opts.appendChild(btn);
+  });
+
+  // Clear override button
+  if(overrides[name]){
+    const clearBtn = document.createElement('button');
+    clearBtn.style.cssText = 'width:100%;margin-top:10px;padding:8px;background:none;border:1px solid var(--border);color:var(--dim);border-radius:8px;font-size:11px;cursor:pointer;';
+    clearBtn.textContent = 'Clear override (use rated position)';
+    clearBtn.onclick = function(){
+      delete S.subPlanPositions[halfKey][subIdx][name];
+      saveState(); renderSetup(true); backdrop.remove();
+    };
+    box.appendChild(title); box.appendChild(subtitle); box.appendChild(opts); box.appendChild(clearBtn);
+  } else {
+    box.appendChild(title); box.appendChild(subtitle); box.appendChild(opts);
+  }
+
+  backdrop.appendChild(box);
+  document.body.appendChild(backdrop);
 }
 
 // Get all positions (primary + alts) for a player name
@@ -1838,16 +1923,25 @@ function buildSubPlanHTML(){
       const afterCourtHTML = isValid ? (()=>{
         const names = [...afterCourtIds].map(id=>filtered[id]).filter(Boolean);
         const posLine = names.map(nm=>{
-          const pos = posLabelForName(nm);
-          const pb = pos?`<span style="font-size:7px;font-weight:700;padding:1px 3px;border-radius:3px;background:rgba(62,207,110,.18);color:var(--green)">${pos}</span>`:'';
-          return `<span style="font-size:10px;color:var(--text);font-weight:600">${nm.split(' ')[0]}</span>${pb}`;
-        }).join('<span style="color:var(--dim);margin:0 3px;font-size:9px">·</span>');
+          const pos = subPlanPosForName(nm, halfKey, i);
+          const overridden = !!(S.subPlanPositions[halfKey]&&S.subPlanPositions[halfKey][i]&&S.subPlanPositions[halfKey][i][nm]);
+          const pb = pos
+            ? `<span style="font-size:7px;font-weight:700;padding:1px 3px;border-radius:3px;background:${overridden?'rgba(250,204,21,.25)':'rgba(62,207,110,.18)'};color:${overridden?'#facc15':'var(--green)'}">${pos}</span>`
+            : `<span style="font-size:7px;padding:1px 3px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--dim)">?</span>`;
+          return `<button onclick="event.stopPropagation();openSubPlanPosPicker('${halfKey}',${i},'${nm.replace(/'/g,"\\'")}')"
+            style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text);font-weight:600">
+            ${nm.split(' ')[0]}${pb}
+          </button>`;
+        }).join('<span style="color:var(--dim);margin:0 1px;font-size:9px">·</span>');
         const covered=coveredPositions(names);
         const missing=['1','2','3','4','5'].filter(p=>!covered.has(p));
         const missingBit=missing.length&&names.some(n=>allPositionsForName(n).length>0)
           ?`<span style="font-size:9px;color:var(--warn);margin-left:6px">missing ${missing.join(',')}</span>`:'';
         return `<div style="background:rgba(62,207,110,.07);border-radius:6px;padding:5px 8px;margin-top:6px;">
-          <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:3px;font-weight:700">On court after ▶</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+            <div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--green);font-weight:700">On court after ▶</div>
+            <div style="font-size:8px;color:var(--dim)">tap player to set position</div>
+          </div>
           <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;">${posLine}${missingBit}</div>
         </div>`;
       })() : '';
