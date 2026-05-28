@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.28.2';
+const APP_VERSION = '2026.05.28.3';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -992,6 +992,7 @@ const S = {
   scoreBarExpanded: false, // score bar toggle
   gamePositions: {},      // playerId→activePosition ('1'-'5') for current game only
   subPlanPositions: {},   // {h1:{0:{name:pos,...},...}, h2:{...}} — per-sub lineup positions
+  presetPositions: {},    // {h1start:{name:pos}, h2start:{name:pos}, finish:{name:pos}} — preset lineup positions
   q1BreakDone: false,     // quarter break between Q1 and Q2 already shown
   q3BreakDone: false,     // quarter break between Q3 and Q4 already shown
   isClockRunning: false,  // game clock running (may differ from isRunning for EDJBL timeout)
@@ -1424,6 +1425,81 @@ function setSubPlanPos(halfKey, subIdx, name, posNum){
   renderSetup(true);
 }
 
+// Get position label for a player in a preset lineup (h1start/h2start/finish)
+function presetPosForName(name, presetKey){
+  const overrides = S.presetPositions[presetKey]||{};
+  if(overrides[name]) return POS_SHORT[parseInt(overrides[name])-1] || null;
+  return posLabelForName(name);
+}
+
+// Open position picker for a preset lineup player
+function openPresetPosPicker(presetKey, name){
+  const POS_LABELS_MAP = {1:'1 · PG',2:'2 · SG',3:'3 · SF',4:'4 · PF',5:'5 · C'};
+  const team = T.teams.find(t=>t.id===T.activeTeamId);
+  const player = team&&team.players.find(p=>playerDisplayName(p)===name);
+  const r = player?getPlayerRatings(T.activeTeamId, player.id):{};
+  const overrides = S.presetPositions[presetKey]||{};
+  const currentPos = parseInt(overrides[name]||r.position)||0;
+  const ratedPos = parseInt(r.position)||0;
+  const ratedPos2 = parseInt(r.position2)||0;
+
+  const existing = document.getElementById('preset-pos-picker');
+  if(existing) existing.remove();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'preset-pos-picker';
+  backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:5000;display:flex;align-items:flex-end;justify-content:center;';
+  backdrop.onclick = function(e){ if(e.target===backdrop) backdrop.remove(); };
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--surface);border-radius:16px 16px 0 0;padding:16px;width:100%;max-width:480px;padding-bottom:calc(env(safe-area-inset-bottom,0px)+16px);';
+
+  const presetLabel = {h1start:'Starting 5',h2start:'H2 Starting 5',finish:'Finishing 5'}[presetKey]||presetKey;
+  const title = document.createElement('div');
+  title.style.cssText = 'font-family:Impact,sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:4px;';
+  title.textContent = name.toUpperCase() + ' — ' + presetLabel.toUpperCase();
+
+  const subtitle = document.createElement('div');
+  subtitle.style.cssText = 'font-size:10px;color:var(--dim);margin-bottom:12px;';
+  subtitle.textContent = 'Rated: '+(POS_LABELS_MAP[ratedPos]||'unset')+(ratedPos2?' / '+POS_LABELS_MAP[ratedPos2]:'');
+
+  const opts = document.createElement('div');
+  opts.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+
+  [1,2,3,4,5].forEach(function(pos){
+    const btn = document.createElement('button');
+    btn.style.cssText = 'flex:1;min-width:50px;padding:12px 6px;border-radius:10px;'
+      +'border:2px solid;font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;'
+      +'background:'+(pos===currentPos?'rgba(62,207,110,.2)':'rgba(255,255,255,.04)')+';'
+      +'border-color:'+(pos===currentPos?'var(--green)':pos===ratedPos?'var(--accent)':'var(--border)')+';'
+      +'color:'+(pos===currentPos?'var(--green)':pos===ratedPos||pos===ratedPos2?'var(--text)':'var(--dim)');
+    btn.innerHTML = '<div style="font-size:16px">'+pos+'</div><div style="font-size:9px;opacity:.7">'+POS_LABELS_MAP[pos].split(' · ')[1]+'</div>';
+    if(pos===ratedPos) btn.innerHTML += '<div style="font-size:8px;color:var(--accent)">★ rated</div>';
+    btn.onclick = function(){
+      if(!S.presetPositions[presetKey]) S.presetPositions[presetKey]={};
+      S.presetPositions[presetKey][name] = String(pos);
+      saveState(); renderSetup(true); backdrop.remove();
+    };
+    opts.appendChild(btn);
+  });
+
+  box.appendChild(title); box.appendChild(subtitle); box.appendChild(opts);
+
+  if(overrides[name]){
+    const clearBtn = document.createElement('button');
+    clearBtn.style.cssText = 'width:100%;margin-top:10px;padding:8px;background:none;border:1px solid var(--border);color:var(--dim);border-radius:8px;font-size:11px;cursor:pointer;';
+    clearBtn.textContent = 'Clear override (use rated position)';
+    clearBtn.onclick = function(){
+      delete S.presetPositions[presetKey][name];
+      saveState(); renderSetup(true); backdrop.remove();
+    };
+    box.appendChild(clearBtn);
+  }
+
+  backdrop.appendChild(box);
+  document.body.appendChild(backdrop);
+}
+
 // Open a position picker for a sub-plan player
 function openSubPlanPosPicker(halfKey, subIdx, name){
   const POS_LABELS_MAP = {1:'1 · PG',2:'2 · SG',3:'3 · SF',4:'4 · PF',5:'5 · C'};
@@ -1824,12 +1900,21 @@ function posBadgeHTML(label, style){
   return '<span style="font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 5px;border-radius:4px;background:rgba(74,158,255,.18);color:#7ab8ff;'+(style||'')+'">'+label+'</span>';
 }
 
-function lineupCardHTML(names, bgColor, borderColor, labelColor, label){
+function lineupCardHTML(names, bgColor, borderColor, labelColor, label, presetKey){
   // Compact lineup display card used for starting/finishing 5
   if(!names||!names.length) return '';
   const chips = names.map(nm=>{
-    const pos = posLabelForName(nm);
-    const pb = pos?`<span style="font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;background:rgba(255,255,255,.12);color:${labelColor}">${pos}</span>`:'';
+    const pos = presetKey ? presetPosForName(nm, presetKey) : posLabelForName(nm);
+    const overridden = presetKey && !!(S.presetPositions[presetKey]&&S.presetPositions[presetKey][nm]);
+    const pb = pos
+      ? `<span style="font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;background:${overridden?'rgba(250,204,21,.25)':'rgba(255,255,255,.12)'};color:${overridden?'#facc15':labelColor}">${pos}</span>`
+      : `<span style="font-size:7px;padding:1px 3px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--dim)">?</span>`;
+    if(presetKey){
+      return `<button onclick="event.stopPropagation();openPresetPosPicker('${presetKey}','${nm.replace(/'/g,"\\'")}')"
+        style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--text)">
+        ${nm.split(' ')[0]}${pb}
+      </button>`;
+    }
     return `<div style="font-size:11px;font-weight:700;color:var(--text);padding:3px 7px;background:rgba(255,255,255,.06);border-radius:6px;display:flex;align-items:center;gap:4px;">${nm.split(' ')[0]}${pb}</div>`;
   }).join('');
   const covered = coveredPositions(names);
@@ -1838,8 +1923,12 @@ function lineupCardHTML(names, bgColor, borderColor, labelColor, label){
   const posNote = anyRatings
     ? (missing.length ? `<span style="font-size:9px;color:var(--warn)">Missing: ${missing.join(', ')}</span>` : `<span style="font-size:9px;color:var(--green)">✓ All positions covered</span>`)
     : '';
+  const tapHint = presetKey ? `<div style="font-size:8px;color:var(--dim)">tap to set position</div>` : '';
   return `<div style="background:${bgColor};border:1.5px solid ${borderColor};border-radius:9px;padding:8px 10px;margin-bottom:8px;">
-    <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:${labelColor};margin-bottom:6px;">${label}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:${labelColor};">${label}</div>
+      ${tapHint}
+    </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${posNote?'5':'0'}px;">${chips}</div>
     ${posNote?`<div>${posNote}</div>`:''}
   </div>`;
@@ -1877,16 +1966,16 @@ function buildSubPlanHTML(){
     const startIds = getCourtAtPlanPoint(halfKey, 0);
     const startNames = [...startIds].map(id=>filtered[id]).filter(Boolean);
     if(halfKey==='h1'){
-      h += lineupCardHTML(startNames,'rgba(62,207,110,.07)','rgba(62,207,110,.3)','var(--green)','▶ STARTING 5 — 1ST HALF');
+      h += lineupCardHTML(startNames,'rgba(62,207,110,.07)','rgba(62,207,110,.3)','var(--green)','▶ STARTING 5 — 1ST HALF','h1start');
     } else {
       const h2Label = S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE ? '▶ STARTING 5 — 2ND HALF (Preset)' : '▶ STARTING 5 — 2ND HALF';
-      h += lineupCardHTML(startNames,'rgba(74,158,255,.07)','rgba(74,158,255,.3)','var(--blue)', h2Label);
+      h += lineupCardHTML(startNames,'rgba(74,158,255,.07)','rgba(74,158,255,.3)','var(--blue)', h2Label,'h2start');
     }
 
     if(!numSubs){
       // No subs — just show finishing 5 = starting 5
       const finishNames = [...getCourtAtPlanPoint(halfKey, 9999)].map(id=>filtered[id]).filter(Boolean);
-      if(halfKey==='h2') h += lineupCardHTML(finishNames,'rgba(250,204,21,.07)','rgba(250,204,21,.3)','#facc15','🏁 FINISHING 5');
+      if(halfKey==='h2') h += lineupCardHTML(finishNames,'rgba(250,204,21,.07)','rgba(250,204,21,.3)','#facc15','🏁 FINISHING 5','finish');
       return h;
     }
 
@@ -1966,7 +2055,7 @@ function buildSubPlanHTML(){
     if(halfKey==='h2'){
       const finishIds = getCourtAtPlanPoint('h2', (S.subPlan.h2||[]).length);
       const finishNames = [...finishIds].map(id=>filtered[id]).filter(Boolean);
-      h += lineupCardHTML(finishNames,'rgba(250,204,21,.07)','rgba(250,204,21,.3)','#facc15','🏁 FINISHING 5 (after last sub)');
+      h += lineupCardHTML(finishNames,'rgba(250,204,21,.07)','rgba(250,204,21,.3)','#facc15','🏁 FINISHING 5 (after last sub)','finish');
     }
 
     return h;
