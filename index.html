@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.28.1';
+const APP_VERSION = '2026.05.28.2';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -1405,13 +1405,13 @@ function posLabelForName(name){
   if(!player) return null;
   const r = getPlayerRatings(T.activeTeamId, player.id);
   if(r.position === undefined) return null;
-  return POS_SHORT[parseInt(r.position)] || null;
+  return POS_SHORT[parseInt(r.position)-1] || null;
 }
 
 // Get position for a player in a specific sub-plan lineup (with override support)
 function subPlanPosForName(name, halfKey, subIdx){
   const overrides = (S.subPlanPositions[halfKey]||{})[subIdx]||{};
-  if(overrides[name]) return POS_SHORT[parseInt(overrides[name])] || null;
+  if(overrides[name]) return POS_SHORT[parseInt(overrides[name])-1] || null;
   return posLabelForName(name);
 }
 
