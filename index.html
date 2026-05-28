@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.28.3';
+const APP_VERSION = '2026.05.28.4';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -1621,6 +1621,50 @@ function courtCoverage(){
 // Update coverage row in header without full re-render
 
 
+// Apply preset position overrides to S.gamePositions for a given preset key
+// presetKey: 'h1start' | 'h2start' | 'finish'
+// playerNames: array of names for the lineup
+function applyPresetPositions(presetKey, playerNames){
+  const overrides = S.presetPositions&&S.presetPositions[presetKey]||{};
+  const filtered = S.names.filter(n=>n.trim());
+  playerNames.forEach(function(name){
+    const pid = filtered.indexOf(name);
+    if(pid<0) return;
+    if(overrides[name]){
+      // Explicit override set in sub plan
+      S.gamePositions[pid] = String(parseInt(overrides[name]));
+    }
+    // (if no override, computeOptimalPositions already handled it)
+  });
+}
+
+// Get the next planned position for a player (what they'll play after the upcoming sub)
+// Returns a position string ('1'-'5') or null
+function getNextPosForPlayer(pid){
+  if(!S.useSubPlan) return null;
+  const filtered = S.names.filter(n=>n.trim());
+  const name = filtered[pid];
+  if(!name) return null;
+  const halfKey = S.phase==='h2'?'h2':'h1';
+  const subIdx = S.planSubIdx; // upcoming sub index
+
+  // Check subPlanPositions for this sub's resulting lineup
+  const posOverrides = (S.subPlanPositions[halfKey]&&S.subPlanPositions[halfKey][subIdx])||{};
+  if(posOverrides[name]) return String(parseInt(posOverrides[name]));
+
+  // Fall back: if this player is coming ON in the next sub, what will their position be?
+  const plan = S.subPlan&&S.subPlan[halfKey]&&S.subPlan[halfKey][subIdx];
+  if(!plan) return null;
+  const comingOn = plan.on instanceof Set ? [...plan.on] : (Array.isArray(plan.on)?plan.on:[]);
+  const isComingOn = comingOn.includes(pid)||comingOn.includes(name);
+  if(isComingOn){
+    // Use their rated position as fallback
+    return posLabelForName(name);
+  }
+  return null;
+}
+
+
 // Open position picker for a player
 function openPosPicker(pid, role){
   event.stopPropagation();
@@ -1739,12 +1783,18 @@ function posBadgeForCard(pid, role, isPlannedOn){
   }
 
   if(role === 'bench'){
+    // Show next planned position if set in sub plan
+    var nextPos = getNextPosForPlayer(pid);
+    if(nextPos){
+      var cls3 = POS_COLOURS[+nextPos]||'';
+      return '<span class="pos-badge '+cls3+'" style="font-size:11px;padding:2px 6px;margin-left:2px;cursor:pointer;" onclick="openPosPicker('+pid+',\'bench\')">'+nextPos+'→</span>';
+    }
     var covered2 = courtCoverage();
     var gaps2 = ['1','2','3','4','5'].filter(function(n){ return !covered2[n]; });
     return allPos.map(function(p){
       var isGap = gaps2.includes(p);
       var cls2 = POS_COLOURS[+p]||'';
-      return '<span class="pos-badge '+cls2+'" style="font-size:'+(isGap?'11':'9')+'px;padding:'+(isGap?'2px 6px':'1px 4px')+';margin-left:2px;'+(isGap?'':'opacity:.45;')+'">'+p+(isGap?'↑':'')+'</span>';
+      return '<span class="pos-badge '+cls2+'" style="font-size:'+(isGap?'11':'9')+'px;padding:'+(isGap?'2px 6px':'1px 4px')+';margin-left:2px;'+(isGap?'':'opacity:.45;')+';cursor:pointer;" onclick="openPosPicker('+pid+',\'bench\')">'+p+(isGap?'↑':'')+'</span>';
     }).join('');
   }
 
@@ -2078,10 +2128,12 @@ function startGame(){
   S.gamePositions = {};
   S.q1BreakDone = false; S.q3BreakDone = false;
   S.manualPositions = {};
-  // Assign optimal positions to starting 5
+  // Assign optimal positions to starting 5, then apply any preset overrides
   const startIds = filtered.slice(0, COURT_SIZE).map((_, i) => i);
   const optimal = computeOptimalPositions(startIds);
   startIds.forEach(pid => { if(optimal[pid]) S.gamePositions[pid] = optimal[pid]; });
+  // Apply h1start preset position overrides (from sub plan position picker)
+  applyPresetPositions('h1start', filtered.slice(0, COURT_SIZE));
   S.players=filtered.map((name,i)=>({
     id:i, name, onCourt:i<COURT_SIZE,
     playTime:0, h1PlayTime:0, h2PlayTime:0,
@@ -2332,6 +2384,12 @@ function startSecondHalf(){
   S.halfTime=0; S.subCountdown=S.h2Int;
   S.alertState=null; prevAlert=null; S.planSubIdx=0;
   S.selCourt=new Set(); S.selBench=new Set();
+  // Apply h2start preset positions then re-optimise for new lineup
+  const filtered2=S.names.filter(n=>n.trim());
+  const h2CourtIds=[...S.htOnCourt];
+  const h2Optimal=computeOptimalPositions(h2CourtIds);
+  h2CourtIds.forEach(pid=>{ if(!S.manualPositions[pid]&&h2Optimal[pid]) S.gamePositions[pid]=h2Optimal[pid]; });
+  applyPresetPositions('h2start', h2CourtIds.map(id=>filtered2[id]).filter(Boolean));
   S.phase='h2'; S.isRunning=true; S.isClockRunning=true;
   render();
   startTick();
@@ -2450,16 +2508,30 @@ function postSubPositionBoard(stayOn, nextOff, nextOn){
   const anyRatings = newCourt.some(p=>allPositionsForPlayer(p.id).length>0);
   if(!anyRatings) return '';
 
+  // Use subPlanPositions for the upcoming sub's lineup if available
+  const halfKey = S.phase==='h2'?'h2':'h1';
+  const subIdx = S.planSubIdx;
+  const planPosOverrides = (S.subPlanPositions[halfKey]&&S.subPlanPositions[halfKey][subIdx])||{};
+  const filtered = S.names.filter(n=>n.trim());
+
   const coveredAfter = new Set();
-  newCourt.forEach(p=>{ const pos=getGamePos(p.id); if(pos) coveredAfter.add(pos); });
+  newCourt.forEach(p=>{
+    const name = filtered[p.id];
+    const planPos = name&&planPosOverrides[name];
+    const pos = planPos ? String(parseInt(planPos)) : getGamePos(p.id);
+    if(pos) coveredAfter.add(pos);
+  });
   const missing = ['1','2','3','4','5'].filter(n=>!coveredAfter.has(n));
 
   const tiles = newCourt.map(p=>{
-    const pos = getGamePos(p.id);
+    const name = filtered[p.id];
+    const planPos = name&&planPosOverrides[name] ? String(parseInt(planPosOverrides[name])) : null;
+    const pos = planPos || getGamePos(p.id);
     const allPos = allPositionsForPlayer(p.id);
     const isComingOn = nextOn.some(q=>q.id===p.id);
     const posClass = pos ? 'pos-'+pos : '';
     const firstName = (S.names[p.id]||p.name||'').split(' ')[0];
+    const hasPlanPos = !!planPos;
     // Recommend a move if player can fill a missing position
     const canFill = allPos.filter(ap=>missing.includes(ap) && ap!==pos);
     const recBit = canFill.length
@@ -2471,7 +2543,7 @@ function postSubPositionBoard(stayOn, nextOff, nextOn){
       'display:flex;flex-direction:column;align-items:center;justify-content:center;" '+
       'class="'+posClass+'">'+
       '<div style="font-family:Impact,sans-serif;font-size:28px;line-height:1;">'+(pos||'?')+'</div>'+
-      '<div style="font-size:10px;margin-top:4px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 4px;">'+(isComingOn?'▲ ':'')+firstName+'</div>'+
+      '<div style="font-size:10px;margin-top:4px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 4px;">'+(isComingOn?'▲ ':'')+firstName+(hasPlanPos?'<span style="font-size:7px;color:var(--warn);margin-left:2px;">✎</span>':'')+'</div>'+
       recBit+
       '</button>';
   }).join('');
@@ -5395,14 +5467,21 @@ function renderHalftime(){
   const sortedCourt=[...court].sort((a,b)=>b.playTime-a.playTime);
   const sortedBench=[...bench].sort((a,b)=>a.playTime-b.playTime);
 
+  const filtered3=S.names.filter(n=>n.trim());
+  const h2PosOverrides=S.presetPositions&&S.presetPositions.h2start||{};
+
   const cCards=sortedCourt.map(p=>{
     const heavy=p.playTime>=h1Secs*0.7;
-    const pos=getGamePos(p.id);
+    const name3=filtered3[p.id];
+    // Use h2start preset position if set, otherwise current game position
+    const presetPos=name3&&h2PosOverrides[name3]?String(parseInt(h2PosOverrides[name3])):null;
+    const pos=presetPos||getGamePos(p.id);
     const cls=pos?(POS_COLOURS[+pos]||''):'';
+    const isPreset=!!presetPos;
     return `<div class="ht-card court" onclick="toggleHtPlayer(${p.id})">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:6px;">
-          ${pos?`<span class="pos-badge ${cls}" style="font-size:16px;padding:4px 10px;min-width:36px;text-align:center;cursor:pointer;" onclick="event.stopPropagation();openPosPicker(${p.id},'court')">${pos}</span>`:''}
+          ${pos?`<span class="pos-badge ${cls}" style="font-size:16px;padding:4px 10px;min-width:36px;text-align:center;cursor:pointer;${isPreset?'box-shadow:0 0 0 1.5px var(--warn);':''}" onclick="event.stopPropagation();openPosPicker(${p.id},'court')">${pos}${isPreset?'<span style="font-size:7px;color:var(--warn)">✎</span>':''}</span>`:''}
           <div class="ht-name">${p.name}</div>
         </div>
         ${heavy?`<span style="font-size:9px;background:rgba(255,140,0,.2);color:var(--amber);padding:1px 6px;border-radius:4px;font-family:Impact,sans-serif;letter-spacing:1px">HEAVY</span>`:''}
@@ -5413,16 +5492,19 @@ function renderHalftime(){
 
   const bCards=sortedBench.map(p=>{
     const light=p.playTime<h1Secs*0.3;
-    const pos=getGamePos(p.id);
+    const name4=filtered3[p.id];
+    const presetPos2=name4&&h2PosOverrides[name4]?String(parseInt(h2PosOverrides[name4])):null;
+    const pos=presetPos2||getGamePos(p.id);
     const allPos=allPositionsForPlayer(p.id);
     const courtIds=sortedCourt.map(q=>q.id);
     const covered=new Set(courtIds.map(id=>getGamePos(id)).filter(Boolean));
-    const fills=allPos.filter(pp=>!covered.has(pp));
+    const fills=presetPos2?[presetPos2]:allPos.filter(pp=>!covered.has(pp));
     const cls=pos?(POS_COLOURS[+pos]||''):'';
+    const isPreset2=!!presetPos2;
     return `<div class="ht-card bench" onclick="toggleHtPlayer(${p.id})">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:6px;">
-          ${pos?`<span class="pos-badge ${fills.length?(POS_COLOURS[+fills[0]]||cls):cls}" style="font-size:16px;padding:4px 10px;min-width:36px;text-align:center;${fills.length?'':'opacity:.5;'}">${fills.length?fills[0]:pos}${fills.length?'↑':''}</span>`:''}
+          ${pos?`<span class="pos-badge ${fills.length?(POS_COLOURS[+fills[0]]||cls):cls}" style="font-size:16px;padding:4px 10px;min-width:36px;text-align:center;${fills.length&&!isPreset2?'':'opacity:.8;'}${isPreset2?'box-shadow:0 0 0 1.5px var(--warn);':''}" onclick="event.stopPropagation();openPosPicker(${p.id},'bench')">${fills.length?fills[0]:pos}${fills.length&&!isPreset2?'↑':''}${isPreset2?'<span style="font-size:7px;color:var(--warn)">✎</span>':''}</span>`:''}
           <div class="ht-name">${p.name}</div>
         </div>
         ${light?`<span style="font-size:9px;background:rgba(62,207,110,.2);color:var(--green);padding:1px 6px;border-radius:4px;font-family:Impact,sans-serif;letter-spacing:1px">NEEDS TIME</span>`:''}
