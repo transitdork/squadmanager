@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.31.3';
+const APP_VERSION = '2026.05.31.4';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -6865,127 +6865,199 @@ function viewSavedReport(idx){
     const existing=document.getElementById('saved-report-modal');
     if(existing) existing.remove();
 
-    // Reconstruct display objects
-    const rPlayers=r.players||[];
+    // ── Normalise report data (handles old + new save formats) ──
+    const rPlayers=(r.players||[]).map(function(p,i){
+      return {id:i, name:p.name||'?', onCourt:!!p.onCourt,
+              playTime:p.playTime||0, h1PlayTime:p.h1PlayTime||0,
+              h2PlayTime:p.h2PlayTime||0, fouls:p.fouls||0};
+    });
+    const rSubLog=(r.subLog||[]).map(function(e){
+      return {gameTime:e.gameTime||0, halfTime:e.halfTime||0,
+              half:e.half||1, isHalftime:!!e.isHalftime,
+              on:Array.isArray(e.on)?e.on:[], off:Array.isArray(e.off)?e.off:[]};
+    });
     const rScoreLog=r.scoreLog||[];
-    const rTotal=(r.gameSecs>0?r.gameSecs:((r.h1Dur||20)+(r.h2Dur||20))*60);
+    const rTotal=r.gameSecs>0?r.gameSecs:((r.h1Dur||20)+(r.h2Dur||20))*60;
     const rFairShare=Math.round(rTotal*COURT_SIZE/Math.max(rPlayers.length,COURT_SIZE));
     const isQ=(r.league||'').toUpperCase().includes('VJBL')||
-              ((r.league||'').toUpperCase().includes('EDL')&&!(r.league||'').toUpperCase().includes('EDJBL'));
+               ((r.league||'').toUpperCase().includes('EDL')&&
+               !(r.league||'').toUpperCase().includes('EDJBL'));
     const h1Label=isQ?'Q1+Q2':'H1', h2Label=isQ?'Q3+Q4':'H2';
-    const sorted=[...rPlayers].sort((a,b)=>b.playTime-a.playTime);
+    const sorted=[...rPlayers].sort(function(a,b){return b.playTime-a.playTime;});
+    const h1Secs=(r.h1Dur||20)*60;
+    const CW=320, LP=58, RP=0, cw=CW-LP-RP;
+    function xf(t){return LP+(Math.min(t,rTotal)/rTotal)*cw;}
 
+    // Score
     let scoreUs=r.score&&r.score.us!=null?r.score.us:null;
     let scoreThem=r.score&&r.score.them!=null?r.score.them:null;
     let trackedUs=0,trackedThem=0;
-    rScoreLog.forEach(e=>{if(e.who==='us')trackedUs+=e.pts;else trackedThem+=e.pts;});
-    if(rScoreLog.length){ if(scoreUs===null)scoreUs=trackedUs; if(scoreThem===null)scoreThem=trackedThem; }
-    const hasTracked=rScoreLog.length>0;
+    rScoreLog.forEach(function(e){if(e.who==='us')trackedUs+=e.pts;else trackedThem+=e.pts;});
+    if(rScoreLog.length){if(scoreUs===null)scoreUs=trackedUs;if(scoreThem===null)scoreThem=trackedThem;}
 
-    // Temporarily swap S state to reuse chart generators
-    const sv={players:S.players,scoreLog:S.scoreLog,subLog:S.subLog,
-      gameTime:S.gameTime,h1Dur:S.h1Dur,h2Dur:S.h2Dur,finalScore:S.finalScore,names:S.names};
-    S.players=rPlayers.map((p,i)=>Object.assign({id:i},p));
-    S.scoreLog=rScoreLog;
-    S.subLog=r.subLog||[];
-    S.gameTime=r.gameSecs||0;
-    S.h1Dur=r.h1Dur||20; S.h2Dur=r.h2Dur||20;
-    S.finalScore={us:scoreUs,them:scoreThem};
-    S.names=rPlayers.map(p=>p.name);
-
-    const markers=goGetMarkers();
-    const diffChartHTML=rScoreLog.length?goScoreChartHTML(markers):'';
-    const rotChartHTML=goRotationChartHTML(markers);
-    const barChartHTML=goPlayingTimeBarsHTML(markers);
-    const logHTML=goSubLogHTML();
-    Object.assign(S,sv); // restore immediately
-
-    // Stats table rows
-    const rows=sorted.map(p=>{
+    // ── Stats table ──
+    const rows=sorted.map(function(p){
       const fc=p.fouls>=5?'#ff5555':p.fouls>=3?'#ffcc00':'#eef0f8';
       const diff=p.playTime-rFairShare;
       const diffStr=(diff>=0?'+':'')+Math.floor(Math.abs(diff)/60)+':'+(String(Math.abs(diff)%60).padStart(2,'0'));
       const diffC=diff>=0?'var(--green)':Math.abs(diff)>60?'var(--red)':'var(--warn)';
       return '<tr><td style="font-weight:700">'+p.name+'</td>'
-        +'<td><span class="pt">'+fmt(p.h1PlayTime||0)+'</span></td>'
-        +'<td><span class="pt">'+fmt(p.h2PlayTime||0)+'</span></td>'
+        +'<td><span class="pt">'+fmt(p.h1PlayTime)+'</span></td>'
+        +'<td><span class="pt">'+fmt(p.h2PlayTime)+'</span></td>'
         +'<td><span class="pt" style="color:#f08c00;font-size:15px">'+fmt(p.playTime)+'</span></td>'
         +'<td style="color:'+diffC+';font-size:11px">'+diffStr+'</td>'
         +'<td style="color:'+fc+';font-weight:'+(p.fouls>=3?700:400)+'">'+p.fouls+'</td></tr>';
     }).join('');
 
-    // Build modal
+    // ── Rotation chart (built directly from rSubLog + rPlayers) ──
+    function buildRotationChart(){
+      if(!rPlayers.length) return '';
+      const ROW_H=18;
+      const BH=rPlayers.length*ROW_H+4;
+      // Half marker
+      const halfX=xf(h1Secs);
+      let bgLines='<line x1="'+halfX.toFixed(1)+'" y1="0" x2="'+halfX.toFixed(1)+'" y2="'+BH+'" stroke="rgba(255,255,255,.25)" stroke-width="1.5" stroke-dasharray="4,3"/>';
+      // Time axis ticks every 2 minutes
+      let ticks='';
+      for(var t2=0;t2<=rTotal;t2+=120){
+        var xt=xf(t2);
+        ticks+='<line x1="'+xt.toFixed(1)+'" y1="'+(BH)+'" x2="'+xt.toFixed(1)+'" y2="'+(BH+4)+'" stroke="rgba(255,255,255,.2)" stroke-width="1"/>';
+        if(t2%300===0){
+          ticks+='<text x="'+xt.toFixed(1)+'" y="'+(BH+12)+'" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.35)">'+Math.floor(t2/60)+'</text>';
+        }
+      }
+      // Sub marker lines
+      let subLines=rSubLog.map(function(e){
+        const xs=xf(e.gameTime);
+        return '<line x1="'+xs.toFixed(1)+'" y1="0" x2="'+xs.toFixed(1)+'" y2="'+BH+'" stroke="rgba(255,255,255,.12)" stroke-width="1"/>';
+      }).join('');
+      // Player rows
+      const rows2=sorted.map(function(p,ri){
+        const y=ri*ROW_H+2;
+        // Determine stints from sub log
+        const name=p.name;
+        let firstSub=rSubLog.find(function(e){return e.on.includes(name)||e.off.includes(name);});
+        let startedOn=firstSub?(firstSub.on.includes(name)?false:true):true;
+        let cur=startedOn, curT=0, stints=[];
+        rSubLog.forEach(function(e){
+          const t=e.gameTime;
+          if(e.off.includes(name)&&cur){stints.push({s:curT,e:t,on:true});cur=false;curT=t;}
+          else if(e.on.includes(name)&&!cur){stints.push({s:curT,e:t,on:false});cur=true;curT=t;}
+        });
+        stints.push({s:curT,e:rTotal,on:cur});
+        const rects=stints.filter(function(st){return st.on;}).map(function(st){
+          const x1=xf(st.s),x2=xf(st.e);
+          return '<rect x="'+x1.toFixed(1)+'" y="'+y+'" width="'+Math.max(0,x2-x1).toFixed(1)+'" height="'+(ROW_H-3)+'" fill="var(--green)" opacity=".55" rx="2"/>';
+        }).join('');
+        const label='<text x="'+(LP-3)+'" y="'+(y+ROW_H-6)+'" text-anchor="end" font-size="9" fill="rgba(255,255,255,.55)">'+p.name.split(' ')[0]+'</text>';
+        return rects+label;
+      }).join('');
+      return '<div class="go-chart-wrap">'
+        +'<div style="font-family:Impact,sans-serif;font-size:9px;letter-spacing:2px;color:var(--dim);margin-bottom:4px;">ROTATION TIMELINE</div>'
+        +'<svg width="100%" viewBox="0 0 '+CW+' '+(BH+16)+'" xmlns="http://www.w3.org/2000/svg">'
+        +'<rect x="'+LP+'" y="0" width="'+cw+'" height="'+BH+'" fill="rgba(255,255,255,.03)" rx="2"/>'
+        +bgLines+subLines+rows2+ticks
+        +'</svg></div>';
+    }
+
+    // ── Playing time bars (built directly from rPlayers) ──
+    function buildBarsChart(){
+      if(!rPlayers.length) return '';
+      const targetPct=(rFairShare/rTotal)*100;
+      let bars='';
+      sorted.forEach(function(p){
+        const pct=Math.min(100,Math.round(p.playTime/rTotal*100));
+        const diff=p.playTime-rFairShare;
+        const col=p.playTime>=rFairShare*0.9?'var(--green)':p.playTime>=rFairShare*0.6?'var(--warn)':'var(--red)';
+        const diffStr=(diff>=0?'+':'')+Math.floor(Math.abs(diff)/60)+':'+(String(Math.abs(diff)%60).padStart(2,'0'));
+        bars+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+          +'<div style="width:70px;font-size:9px;color:var(--dim);text-align:right;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+p.name.split(' ')[0]+'</div>'
+          +'<div style="flex:1;position:relative;height:14px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;">'
+            +'<div style="position:absolute;left:'+targetPct.toFixed(1)+'%;top:0;bottom:0;width:1.5px;background:rgba(255,255,255,.3);"></div>'
+            +'<div style="position:absolute;left:0;top:0;height:100%;width:'+pct+'%;background:'+col+';border-radius:3px;opacity:.8;"></div>'
+          +'</div>'
+          +'<div style="width:34px;font-family:Impact,sans-serif;font-size:10px;color:'+col+';text-align:right;flex-shrink:0;">'+fmt(p.playTime)+'</div>'
+        +'</div>';
+      });
+      return '<div class="go-chart-wrap">'
+        +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">'
+        +'<div style="font-family:Impact,sans-serif;font-size:9px;letter-spacing:2px;color:var(--dim);">PLAYING TIME</div>'
+        +'<div style="font-size:9px;color:var(--dim);">┃ fair = '+fmt(rFairShare)+'</div>'
+        +'</div>'+bars+'</div>';
+    }
+
+    // ── Sub log (built directly from rSubLog) ──
+    function buildSubLog(){
+      if(!rSubLog.length) return '';
+      const entries=rSubLog.map(function(e){
+        const pl=e.isHalftime?'🏀 HALF TIME':('H'+e.half+' · '+fmt(e.halfTime));
+        const bg=e.isHalftime?'background:rgba(255,204,0,.08);border-left:2px solid var(--warn);':'';
+        return '<div class="log-entry" style="'+bg+'">'
+          +'<span class="log-time">'+fmt(e.gameTime)+'</span>'
+          +'<span style="color:#7a80a0;margin-left:7px;font-size:9px">'+pl+'</span>'
+          +'<div style="margin-top:2px;font-size:10px">'
+          +'<span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span>'
+          +'<span style="color:#7a80a0;margin:0 5px">←</span>'
+          +'<span style="color:#ff8c00">▼ '+e.off.join(', ')+'</span>'
+          +'</div></div>';
+      }).join('');
+      return '<div class="log-title">SUBSTITUTION LOG · '+rSubLog.length+' sub'+(rSubLog.length!==1?'s':'')+'</div>'+entries;
+    }
+
+    // ── Build modal ──
     const modal=document.createElement('div');
     modal.id='saved-report-modal';
     modal.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:9700;display:flex;flex-direction:column;overflow:hidden;';
 
     const hdr=document.createElement('div');
     hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px)+10px) 14px 10px;background:var(--surface);flex-shrink:0;border-bottom:1px solid var(--border);';
-
     const backBtn=document.createElement('button');
     backBtn.textContent='←';
     backBtn.style.cssText='background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:0 8px 0 0;flex-shrink:0;';
-    backBtn.onclick=()=>modal.remove();
-
+    backBtn.onclick=function(){modal.remove();};
     const titleEl=document.createElement('div');
     titleEl.style.cssText='font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;color:var(--accent);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    titleEl.textContent=r.teamName.toUpperCase()+' \u00b7 '+r.date;
-
-    const pdfBtn=document.createElement('button');
-    pdfBtn.textContent='PDF';
-    pdfBtn.style.cssText='background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.3);color:var(--blue);border-radius:7px;padding:6px 11px;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
-    pdfBtn.onclick=function(){
-      const sv2={players:S.players,scoreLog:S.scoreLog,subLog:S.subLog,
-        gameTime:S.gameTime,h1Dur:S.h1Dur,h2Dur:S.h2Dur,finalScore:S.finalScore,names:S.names};
-      S.players=rPlayers.map((p,i)=>Object.assign({id:i},p));
-      S.scoreLog=rScoreLog; S.subLog=r.subLog||[];
-      S.gameTime=r.gameSecs||0; S.h1Dur=r.h1Dur||20; S.h2Dur=r.h2Dur||20;
-      const curScoreUs=document.getElementById('rep-score-us');
-      const curScoreThem=document.getElementById('rep-score-them');
-      S.finalScore={
-        us: curScoreUs&&curScoreUs.value!==''?+curScoreUs.value:scoreUs,
-        them: curScoreThem&&curScoreThem.value!==''?+curScoreThem.value:scoreThem
-      };
-      S.names=rPlayers.map(p=>p.name);
-      exportGamePDF();
-      Object.assign(S,sv2);
-    };
-
-    hdr.appendChild(backBtn); hdr.appendChild(titleEl); hdr.appendChild(pdfBtn);
+    titleEl.textContent=(r.teamName||'').toUpperCase()+' \u00b7 '+(r.date||'');
+    hdr.appendChild(backBtn);
+    hdr.appendChild(titleEl);
 
     const body=document.createElement('div');
     body.style.cssText='flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;';
 
-    // Score header with editable inputs (uses gameover CSS classes)
+    // Score header
     const scoreDiv=document.createElement('div');
     scoreDiv.className='go-hdr';
-    scoreDiv.innerHTML='<div class="go-title">FULL TIME</div>'
-      +'<div class="go-sub">'+sorted.length+' players \u00b7 '+fmt(r.gameSecs||0)+' played</div>'
+    scoreDiv.innerHTML=
+      '<div class="go-title">FULL TIME</div>'
+      +'<div class="go-sub">'+sorted.length+' players \u00b7 '+fmt(rTotal)+' played</div>'
       +'<div style="display:flex;align-items:flex-start;justify-content:center;gap:10px;margin-top:12px;">'
         +'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
           +'<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Us</div>'
-          +'<input id="rep-score-us" type="number" min="0" max="999" value="'+(scoreUs!=null?scoreUs:'')+'" placeholder="\u2014"'
+          +'<input type="number" min="0" max="999" value="'+(scoreUs!=null?scoreUs:'')+'" placeholder="\u2014"'
             +' style="width:62px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--green);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"'
-            +' oninput="var rr=JSON.parse(localStorage.getItem(\''+REPORTS_KEY+'\')||\'[]\');if(rr['+idx+']){rr['+idx+'].score.us=this.value===\'\'?null:+this.value;localStorage.setItem(\''+REPORTS_KEY+'\',JSON.stringify(rr));}">'
-          +(hasTracked?'<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">'+trackedUs+'</span></div>':'')
+            +' oninput="(function(v){var rr=JSON.parse(localStorage.getItem(\''+REPORTS_KEY+'\')||\'[]\');if(rr['+idx+']){rr['+idx+'].score.us=v===\'\'?null:+v;localStorage.setItem(\''+REPORTS_KEY+'\',JSON.stringify(rr));}})(this.value)">'
+          +(rScoreLog.length?'<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">'+trackedUs+'</span></div>':'')
         +'</div>'
         +'<div style="font-family:Impact,sans-serif;font-size:24px;color:var(--dim);margin-top:14px;">:</div>'
         +'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
           +'<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Them</div>'
-          +'<input id="rep-score-them" type="number" min="0" max="999" value="'+(scoreThem!=null?scoreThem:'')+'" placeholder="\u2014"'
+          +'<input type="number" min="0" max="999" value="'+(scoreThem!=null?scoreThem:'')+'" placeholder="\u2014"'
             +' style="width:62px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--red);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"'
-            +' oninput="var rr=JSON.parse(localStorage.getItem(\''+REPORTS_KEY+'\')||\'[]\');if(rr['+idx+']){rr['+idx+'].score.them=this.value===\'\'?null:+this.value;localStorage.setItem(\''+REPORTS_KEY+'\',JSON.stringify(rr));}">'
-          +(hasTracked?'<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">'+trackedThem+'</span></div>':'')
+            +' oninput="(function(v){var rr=JSON.parse(localStorage.getItem(\''+REPORTS_KEY+'\')||\'[]\');if(rr['+idx+']){rr['+idx+'].score.them=v===\'\'?null:+v;localStorage.setItem(\''+REPORTS_KEY+'\',JSON.stringify(rr));}})(this.value)">'
+          +(rScoreLog.length?'<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">'+trackedThem+'</span></div>':'')
         +'</div>'
-      +'</div>'
-      +(hasTracked?'<div style="font-size:9px;color:#374151;margin-top:5px;text-align:center;">Edit score if tracker missed any points</div>':'');
+      +'</div>';
 
     const statsDiv=document.createElement('div');
     statsDiv.className='go-body';
-    statsDiv.innerHTML='<table class="stats-tbl">'
-      +'<thead><tr><th>Player</th><th>'+h1Label+'</th><th>'+h2Label+'</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead>'
-      +'<tbody>'+rows+'</tbody></table>'
-      +diffChartHTML+rotChartHTML+barChartHTML+logHTML;
+    statsDiv.innerHTML=
+      '<table class="stats-tbl">'
+        +'<thead><tr><th>Player</th><th>'+h1Label+'</th><th>'+h2Label+'</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead>'
+        +'<tbody>'+rows+'</tbody>'
+      +'</table>'
+      +buildRotationChart()
+      +buildBarsChart()
+      +buildSubLog();
 
     body.appendChild(scoreDiv);
     body.appendChild(statsDiv);
@@ -6993,8 +7065,9 @@ function viewSavedReport(idx){
     modal.appendChild(body);
     document.body.appendChild(modal);
 
-  }catch(e){ showToast('Error loading report: '+e.message); console.error(e); }
+  }catch(e){ showToast('Error loading report: '+e.message); console.error('viewSavedReport error:',e); }
 }
+
 
 
 function deleteSavedReport(idx){
