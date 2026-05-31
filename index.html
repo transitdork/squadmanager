@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.28.4';
+const APP_VERSION = '2026.05.31.1';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -6702,6 +6702,95 @@ function confirmEndGame(){
 }
 
 // ── Settings Screen ──
+function viewSavedReport(idx){
+  try{
+    const raw=localStorage.getItem(REPORTS_KEY);
+    const reports=raw?JSON.parse(raw):[];
+    const r=reports[idx];
+    if(!r){ showToast('Report not found'); return; }
+
+    const existing=document.getElementById('saved-report-modal');
+    if(existing) existing.remove();
+
+    const modal=document.createElement('div');
+    modal.id='saved-report-modal';
+    modal.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:9700;display:flex;flex-direction:column;overflow:hidden;';
+
+    const hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px)+10px) 14px 10px;background:var(--surface);flex-shrink:0;border-bottom:1px solid var(--border);';
+    const closeBtn=document.createElement('button');
+    closeBtn.textContent='←';
+    closeBtn.style.cssText='background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:0 8px 0 0;';
+    closeBtn.onclick=function(){ modal.remove(); };
+    const title=document.createElement('div');
+    title.style.cssText='font-family:Impact,sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);flex:1;';
+    title.textContent='GAME REPORT';
+    hdr.appendChild(closeBtn); hdr.appendChild(title);
+
+    const body=document.createElement('div');
+    body.style.cssText='flex:1;overflow-y:auto;padding:14px;';
+
+    const us=r.score&&r.score.us!=null?r.score.us:'?';
+    const them=r.score&&r.score.them!=null?r.score.them:'?';
+    const fairSecs=r.gameSecs&&r.players?Math.round(r.gameSecs*COURT_SIZE/r.players.length):0;
+
+    let html='<div style="margin-bottom:14px;">';
+    html+='<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">'+r.teamName+'</div>';
+    html+='<div style="font-size:12px;color:var(--dim);">'+r.date+(r.gameSecs?' · '+Math.round(r.gameSecs/60)+' min played':'')+'</div>';
+    if(r.score&&(r.score.us!=null||r.score.them!=null))
+      html+='<div style="font-family:Impact,sans-serif;font-size:28px;letter-spacing:4px;color:var(--text);margin-top:8px;">'+us+' – '+them+'</div>';
+    html+='</div>';
+
+    // Playing time table
+    if(r.players&&r.players.length){
+      html+='<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">PLAYING TIME</div>';
+      const sorted=[...r.players].sort((a,b)=>b.playTime-a.playTime);
+      sorted.forEach(function(p){
+        const pct=fairSecs>0?Math.min(100,p.playTime/fairSecs*100):100;
+        const col=p.playTime>=fairSecs*0.9?'var(--green)':p.playTime>=fairSecs*0.6?'var(--warn)':'var(--red)';
+        html+='<div style="margin-bottom:6px;">';
+        html+='<div style="display:flex;justify-content:space-between;margin-bottom:2px;">';
+        html+='<span style="font-size:12px;font-weight:700;color:var(--text);">'+p.name+'</span>';
+        html+='<span style="font-size:12px;font-family:Impact,sans-serif;color:'+col+';">'+fmt(p.playTime)+(p.fouls?' · '+p.fouls+'f':'')+'</span>';
+        html+='</div>';
+        html+='<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">';
+        html+='<div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:3px;"></div></div></div>';
+      });
+    }
+
+    // Sub log
+    if(r.subLog&&r.subLog.length){
+      html+='<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin:14px 0 8px;">SUBSTITUTIONS ('+r.subLog.length+')</div>';
+      r.subLog.forEach(function(s){
+        const ht=s.isHalftime;
+        html+='<div style="display:flex;gap:8px;padding:5px 8px;margin-bottom:3px;border-radius:6px;background:'+(ht?'rgba(250,204,21,.08)':'var(--card)')+';border:1px solid '+(ht?'rgba(250,204,21,.2)':'var(--border)')+';">';
+        html+='<div style="font-family:monospace;font-size:11px;font-weight:700;color:'+(ht?'#facc15':'var(--dim)')+';flex-shrink:0;width:34px;">'+fmt(s.gameTime||0)+'</div>';
+        html+='<div style="font-size:10px;color:var(--dim);flex-shrink:0;width:56px;">'+(ht?'HALF':'H'+(s.half||1)+' '+fmt(s.halfTime||0))+'</div>';
+        html+='<div style="font-size:11px;flex:1;">';
+        if(s.on&&s.on.length) html+='<span style="color:var(--green);font-weight:700;">▲ '+s.on.join(', ')+'</span>';
+        if(s.off&&s.off.length) html+='<span style="color:var(--dim);"> ← </span><span style="color:var(--warn);font-weight:700;">▼ '+s.off.join(', ')+'</span>';
+        html+='</div></div>';
+      });
+    }
+
+    body.innerHTML=html;
+    modal.appendChild(hdr); modal.appendChild(body);
+    document.body.appendChild(modal);
+  }catch(e){ showToast('Error loading report: '+e.message); }
+}
+
+function deleteSavedReport(idx){
+  if(!confirm('Delete this game report? This cannot be undone.')) return;
+  try{
+    const raw=localStorage.getItem(REPORTS_KEY);
+    const reports=raw?JSON.parse(raw):[];
+    reports.splice(idx,1);
+    localStorage.setItem(REPORTS_KEY,JSON.stringify(reports));
+    showToast('Report deleted');
+    renderSettings();
+  }catch(e){ showToast('Could not delete: '+e.message); }
+}
+
 function renderSettings(){
   const prevPhase = S._prevPhase || 'setup';
   const colorFields=[
@@ -6788,6 +6877,43 @@ function renderSettings(){
       <button onclick="applyUpdate()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:9px 18px;font-size:12px;cursor:pointer;" title="Force reload from server, clearing cache">⟳ Force Refresh / Check for Updates</button>
       <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.5;">If the app feels stale, tap above to force-reload<br>the latest version from the server.</div>
     </div>
+    ${(()=>{
+      try{
+        const raw=localStorage.getItem(REPORTS_KEY);
+        const reports=raw?JSON.parse(raw):[];
+        if(!reports.length) return `
+          <div class="s-sec">
+            <div class="s-hdr">GAME REPORTS</div>
+            <div style="font-size:12px;color:var(--dim);padding:12px 0;">No saved games yet. After a game, tap 💾 SAVE on the end-of-game screen.</div>
+          </div>`;
+        const rows=reports.map((r,i)=>{
+          const us=r.score&&r.score.us!=null?r.score.us:'?';
+          const them=r.score&&r.score.them!=null?r.score.them:'?';
+          const hasScore=r.score&&(r.score.us!=null||r.score.them!=null);
+          const scoreBit=hasScore?`<span style="font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;color:var(--text)">${us}–${them}</span>`:'';
+          const mins=r.gameSecs?Math.round(r.gameSecs/60)+'min':'';
+          const topPlayers=(r.players||[]).slice(0,3).map(p=>p.name.split(' ')[0]).join(', ');
+          return `<div style="background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:var(--text);">${r.teamName||'Unknown team'}</div>
+                <div style="font-size:11px;color:var(--dim);margin-top:2px;">${r.date||''}${mins?' · '+mins:''}</div>
+              </div>
+              ${scoreBit}
+            </div>
+            <div style="font-size:10px;color:var(--dim);margin-bottom:8px;">${topPlayers}${r.players&&r.players.length>3?' + '+(r.players.length-3)+' more':''}</div>
+            <div style="display:flex;gap:6px;">
+              <button onclick="viewSavedReport(${i})" style="flex:1;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);color:var(--blue);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">📋 VIEW</button>
+              <button onclick="deleteSavedReport(${i})" style="background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:7px 10px;font-size:13px;cursor:pointer;">🗑</button>
+            </div>
+          </div>`;
+        }).join('');
+        return `<div class="s-sec">
+          <div class="s-hdr">GAME REPORTS <span style="font-family:system-ui;font-size:11px;font-weight:400;color:var(--dim);letter-spacing:0;">${reports.length} saved</span></div>
+          ${rows}
+        </div>`;
+      }catch(e){ return ''; }
+    })()}
   </div>
 </div>`;
 }
