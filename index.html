@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.31.1';
+const APP_VERSION = '2026.05.31.2';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -6111,19 +6111,33 @@ function saveGameReport(){
     savedAt: Date.now(),
     teamId: T.activeTeamId,
     teamName: team?(team.club+' '+(team.ageBracket||'')).trim():'Unknown',
-    date: new Date().toLocaleDateString(),
-    score: S.finalScore||{us:null,them:null},
-    players: S.players.map(p=>({name:p.name,playTime:p.playTime,h1PlayTime:p.h1PlayTime,h2PlayTime:p.h2PlayTime,fouls:p.fouls})),
-    subLog: S.subLog,
+    league: team&&team.league||'',
+    date: new Date().toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',year:'numeric'}),
+    score: {us: S.finalScore&&S.finalScore.us!==null ? S.finalScore.us : null,
+            them: S.finalScore&&S.finalScore.them!==null ? S.finalScore.them : null},
+    // Full player data for charts
+    players: S.players.map(p=>({
+      id:p.id, name:p.name, onCourt:p.onCourt,
+      playTime:p.playTime, h1PlayTime:p.h1PlayTime, h2PlayTime:p.h2PlayTime,
+      fouls:p.fouls
+    })),
+    // Substitution and scoring logs for chart reconstruction
+    subLog: S.subLog||[],
+    scoreLog: S.scoreLog||[],
+    // Game format
     gameSecs: S.gameTime,
     h1Dur: S.h1Dur, h2Dur: S.h2Dur,
+    h1Int: S.h1Int, h2Int: S.h2Int,
+    h1Sps: S.h1Sps, h2Sps: S.h2Sps,
     notes: ''
   };
   try{
     const raw=localStorage.getItem(REPORTS_KEY);
     const reports=raw?JSON.parse(raw):[];
+    // Replace existing report for same game if re-saving
+    const existingIdx=reports.findIndex(r=>Math.abs(r.savedAt-report.savedAt)<5000&&r.teamId===report.teamId);
+    if(existingIdx>=0) reports.splice(existingIdx,1);
     reports.unshift(report);
-    // Keep last 20 reports
     if(reports.length>20) reports.length=20;
     localStorage.setItem(REPORTS_KEY,JSON.stringify(reports));
     showToast('Game report saved ✓ — view in ⚙ Settings → Game Reports');
@@ -6712,72 +6726,137 @@ function viewSavedReport(idx){
     const existing=document.getElementById('saved-report-modal');
     if(existing) existing.remove();
 
+    // Reconstruct display objects
+    const rPlayers=r.players||[];
+    const rScoreLog=r.scoreLog||[];
+    const rTotal=(r.gameSecs>0?r.gameSecs:((r.h1Dur||20)+(r.h2Dur||20))*60);
+    const rFairShare=Math.round(rTotal*COURT_SIZE/Math.max(rPlayers.length,COURT_SIZE));
+    const isQ=(r.league||'').toUpperCase().includes('VJBL')||
+              ((r.league||'').toUpperCase().includes('EDL')&&!(r.league||'').toUpperCase().includes('EDJBL'));
+    const h1Label=isQ?'Q1+Q2':'H1', h2Label=isQ?'Q3+Q4':'H2';
+    const sorted=[...rPlayers].sort((a,b)=>b.playTime-a.playTime);
+
+    let scoreUs=r.score&&r.score.us!=null?r.score.us:null;
+    let scoreThem=r.score&&r.score.them!=null?r.score.them:null;
+    let trackedUs=0,trackedThem=0;
+    rScoreLog.forEach(e=>{if(e.who==='us')trackedUs+=e.pts;else trackedThem+=e.pts;});
+    if(rScoreLog.length){ if(scoreUs===null)scoreUs=trackedUs; if(scoreThem===null)scoreThem=trackedThem; }
+    const hasTracked=rScoreLog.length>0;
+
+    // Temporarily swap S state to reuse chart generators
+    const sv={players:S.players,scoreLog:S.scoreLog,subLog:S.subLog,
+      gameTime:S.gameTime,h1Dur:S.h1Dur,h2Dur:S.h2Dur,finalScore:S.finalScore,names:S.names};
+    S.players=rPlayers.map((p,i)=>Object.assign({id:i},p));
+    S.scoreLog=rScoreLog;
+    S.subLog=r.subLog||[];
+    S.gameTime=r.gameSecs||0;
+    S.h1Dur=r.h1Dur||20; S.h2Dur=r.h2Dur||20;
+    S.finalScore={us:scoreUs,them:scoreThem};
+    S.names=rPlayers.map(p=>p.name);
+
+    const markers=goGetMarkers();
+    const diffChartHTML=rScoreLog.length?goScoreChartHTML(markers):'';
+    const rotChartHTML=goRotationChartHTML(markers);
+    const barChartHTML=goPlayingTimeBarsHTML(markers);
+    const logHTML=goSubLogHTML();
+    Object.assign(S,sv); // restore immediately
+
+    // Stats table rows
+    const rows=sorted.map(p=>{
+      const fc=p.fouls>=5?'#ff5555':p.fouls>=3?'#ffcc00':'#eef0f8';
+      const diff=p.playTime-rFairShare;
+      const diffStr=(diff>=0?'+':'')+Math.floor(Math.abs(diff)/60)+':'+(String(Math.abs(diff)%60).padStart(2,'0'));
+      const diffC=diff>=0?'var(--green)':Math.abs(diff)>60?'var(--red)':'var(--warn)';
+      return '<tr><td style="font-weight:700">'+p.name+'</td>'
+        +'<td><span class="pt">'+fmt(p.h1PlayTime||0)+'</span></td>'
+        +'<td><span class="pt">'+fmt(p.h2PlayTime||0)+'</span></td>'
+        +'<td><span class="pt" style="color:#f08c00;font-size:15px">'+fmt(p.playTime)+'</span></td>'
+        +'<td style="color:'+diffC+';font-size:11px">'+diffStr+'</td>'
+        +'<td style="color:'+fc+';font-weight:'+(p.fouls>=3?700:400)+'">'+p.fouls+'</td></tr>';
+    }).join('');
+
+    // Build modal
     const modal=document.createElement('div');
     modal.id='saved-report-modal';
     modal.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:9700;display:flex;flex-direction:column;overflow:hidden;';
 
     const hdr=document.createElement('div');
     hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px)+10px) 14px 10px;background:var(--surface);flex-shrink:0;border-bottom:1px solid var(--border);';
-    const closeBtn=document.createElement('button');
-    closeBtn.textContent='←';
-    closeBtn.style.cssText='background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:0 8px 0 0;';
-    closeBtn.onclick=function(){ modal.remove(); };
-    const title=document.createElement('div');
-    title.style.cssText='font-family:Impact,sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);flex:1;';
-    title.textContent='GAME REPORT';
-    hdr.appendChild(closeBtn); hdr.appendChild(title);
+
+    const backBtn=document.createElement('button');
+    backBtn.textContent='←';
+    backBtn.style.cssText='background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:0 8px 0 0;flex-shrink:0;';
+    backBtn.onclick=()=>modal.remove();
+
+    const titleEl=document.createElement('div');
+    titleEl.style.cssText='font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;color:var(--accent);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    titleEl.textContent=r.teamName.toUpperCase()+' \u00b7 '+r.date;
+
+    const pdfBtn=document.createElement('button');
+    pdfBtn.textContent='PDF';
+    pdfBtn.style.cssText='background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.3);color:var(--blue);border-radius:7px;padding:6px 11px;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
+    pdfBtn.onclick=function(){
+      const sv2={players:S.players,scoreLog:S.scoreLog,subLog:S.subLog,
+        gameTime:S.gameTime,h1Dur:S.h1Dur,h2Dur:S.h2Dur,finalScore:S.finalScore,names:S.names};
+      S.players=rPlayers.map((p,i)=>Object.assign({id:i},p));
+      S.scoreLog=rScoreLog; S.subLog=r.subLog||[];
+      S.gameTime=r.gameSecs||0; S.h1Dur=r.h1Dur||20; S.h2Dur=r.h2Dur||20;
+      const curScoreUs=document.getElementById('rep-score-us');
+      const curScoreThem=document.getElementById('rep-score-them');
+      S.finalScore={
+        us: curScoreUs&&curScoreUs.value!==''?+curScoreUs.value:scoreUs,
+        them: curScoreThem&&curScoreThem.value!==''?+curScoreThem.value:scoreThem
+      };
+      S.names=rPlayers.map(p=>p.name);
+      exportGamePDF();
+      Object.assign(S,sv2);
+    };
+
+    hdr.appendChild(backBtn); hdr.appendChild(titleEl); hdr.appendChild(pdfBtn);
 
     const body=document.createElement('div');
-    body.style.cssText='flex:1;overflow-y:auto;padding:14px;';
+    body.style.cssText='flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;';
 
-    const us=r.score&&r.score.us!=null?r.score.us:'?';
-    const them=r.score&&r.score.them!=null?r.score.them:'?';
-    const fairSecs=r.gameSecs&&r.players?Math.round(r.gameSecs*COURT_SIZE/r.players.length):0;
+    // Score header with editable inputs (uses gameover CSS classes)
+    const scoreDiv=document.createElement('div');
+    scoreDiv.className='go-hdr';
+    scoreDiv.innerHTML='<div class="go-title">FULL TIME</div>'
+      +'<div class="go-sub">'+sorted.length+' players \u00b7 '+fmt(r.gameSecs||0)+' played</div>'
+      +'<div style="display:flex;align-items:flex-start;justify-content:center;gap:10px;margin-top:12px;">'
+        +'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
+          +'<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Us</div>'
+          +'<input id="rep-score-us" type="number" min="0" max="999" value="'+(scoreUs!=null?scoreUs:'')+'" placeholder="\u2014"'
+            +' style="width:62px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--green);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"'
+            +' oninput="var rr=JSON.parse(localStorage.getItem(\''+REPORTS_KEY+'\')||\'[]\');if(rr['+idx+']){rr['+idx+'].score.us=this.value===\'\'?null:+this.value;localStorage.setItem(\''+REPORTS_KEY+'\',JSON.stringify(rr));}">'
+          +(hasTracked?'<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">'+trackedUs+'</span></div>':'')
+        +'</div>'
+        +'<div style="font-family:Impact,sans-serif;font-size:24px;color:var(--dim);margin-top:14px;">:</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
+          +'<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Them</div>'
+          +'<input id="rep-score-them" type="number" min="0" max="999" value="'+(scoreThem!=null?scoreThem:'')+'" placeholder="\u2014"'
+            +' style="width:62px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--red);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"'
+            +' oninput="var rr=JSON.parse(localStorage.getItem(\''+REPORTS_KEY+'\')||\'[]\');if(rr['+idx+']){rr['+idx+'].score.them=this.value===\'\'?null:+this.value;localStorage.setItem(\''+REPORTS_KEY+'\',JSON.stringify(rr));}">'
+          +(hasTracked?'<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">'+trackedThem+'</span></div>':'')
+        +'</div>'
+      +'</div>'
+      +(hasTracked?'<div style="font-size:9px;color:#374151;margin-top:5px;text-align:center;">Edit score if tracker missed any points</div>':'');
 
-    let html='<div style="margin-bottom:14px;">';
-    html+='<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">'+r.teamName+'</div>';
-    html+='<div style="font-size:12px;color:var(--dim);">'+r.date+(r.gameSecs?' · '+Math.round(r.gameSecs/60)+' min played':'')+'</div>';
-    if(r.score&&(r.score.us!=null||r.score.them!=null))
-      html+='<div style="font-family:Impact,sans-serif;font-size:28px;letter-spacing:4px;color:var(--text);margin-top:8px;">'+us+' – '+them+'</div>';
-    html+='</div>';
+    const statsDiv=document.createElement('div');
+    statsDiv.className='go-body';
+    statsDiv.innerHTML='<table class="stats-tbl">'
+      +'<thead><tr><th>Player</th><th>'+h1Label+'</th><th>'+h2Label+'</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table>'
+      +diffChartHTML+rotChartHTML+barChartHTML+logHTML;
 
-    // Playing time table
-    if(r.players&&r.players.length){
-      html+='<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">PLAYING TIME</div>';
-      const sorted=[...r.players].sort((a,b)=>b.playTime-a.playTime);
-      sorted.forEach(function(p){
-        const pct=fairSecs>0?Math.min(100,p.playTime/fairSecs*100):100;
-        const col=p.playTime>=fairSecs*0.9?'var(--green)':p.playTime>=fairSecs*0.6?'var(--warn)':'var(--red)';
-        html+='<div style="margin-bottom:6px;">';
-        html+='<div style="display:flex;justify-content:space-between;margin-bottom:2px;">';
-        html+='<span style="font-size:12px;font-weight:700;color:var(--text);">'+p.name+'</span>';
-        html+='<span style="font-size:12px;font-family:Impact,sans-serif;color:'+col+';">'+fmt(p.playTime)+(p.fouls?' · '+p.fouls+'f':'')+'</span>';
-        html+='</div>';
-        html+='<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">';
-        html+='<div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:3px;"></div></div></div>';
-      });
-    }
-
-    // Sub log
-    if(r.subLog&&r.subLog.length){
-      html+='<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin:14px 0 8px;">SUBSTITUTIONS ('+r.subLog.length+')</div>';
-      r.subLog.forEach(function(s){
-        const ht=s.isHalftime;
-        html+='<div style="display:flex;gap:8px;padding:5px 8px;margin-bottom:3px;border-radius:6px;background:'+(ht?'rgba(250,204,21,.08)':'var(--card)')+';border:1px solid '+(ht?'rgba(250,204,21,.2)':'var(--border)')+';">';
-        html+='<div style="font-family:monospace;font-size:11px;font-weight:700;color:'+(ht?'#facc15':'var(--dim)')+';flex-shrink:0;width:34px;">'+fmt(s.gameTime||0)+'</div>';
-        html+='<div style="font-size:10px;color:var(--dim);flex-shrink:0;width:56px;">'+(ht?'HALF':'H'+(s.half||1)+' '+fmt(s.halfTime||0))+'</div>';
-        html+='<div style="font-size:11px;flex:1;">';
-        if(s.on&&s.on.length) html+='<span style="color:var(--green);font-weight:700;">▲ '+s.on.join(', ')+'</span>';
-        if(s.off&&s.off.length) html+='<span style="color:var(--dim);"> ← </span><span style="color:var(--warn);font-weight:700;">▼ '+s.off.join(', ')+'</span>';
-        html+='</div></div>';
-      });
-    }
-
-    body.innerHTML=html;
-    modal.appendChild(hdr); modal.appendChild(body);
+    body.appendChild(scoreDiv);
+    body.appendChild(statsDiv);
+    modal.appendChild(hdr);
+    modal.appendChild(body);
     document.body.appendChild(modal);
-  }catch(e){ showToast('Error loading report: '+e.message); }
+
+  }catch(e){ showToast('Error loading report: '+e.message); console.error(e); }
 }
+
 
 function deleteSavedReport(idx){
   if(!confirm('Delete this game report? This cannot be undone.')) return;
