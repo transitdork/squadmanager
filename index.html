@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.05.31.6';
+const APP_VERSION = '2026.06.09.2';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -1160,27 +1160,93 @@ function stopTick(){
   if(tickInterval){ clearInterval(tickInterval); tickInterval=null; }
 }
 
+
+// ── Screen Wake Lock: keep display on during live game ────────
+let _wakeLock=null;
+async function acquireWakeLock(){
+  try{
+    if('wakeLock' in navigator && (S.phase==='h1'||S.phase==='h2')){
+      _wakeLock=await navigator.wakeLock.request('screen');
+    }
+  }catch(_){}
+}
+function releaseWakeLock(){
+  try{ if(_wakeLock){_wakeLock.release();_wakeLock=null;} }catch(_){}
+}
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&(S.phase==='h1'||S.phase==='h2')){
+    acquireWakeLock();
+    // Run an immediate tick so the catch-up applies right away (not after 1s)
+    if(S.isRunning||S.isClockRunning){ doTick(); showCatchUpBanner(); }
+  }
+});
+
+let _lastTickWall=null;
 function doTick(){
-  if(!S.isRunning && !S.isClockRunning) return;
+  if(!S.isRunning && !S.isClockRunning){ _lastTickWall=Date.now(); return; }
   const isH2=S.phase==='h2';
+
+  // ── Wall-clock anchored delta: immune to background suspension ──
+  const _now=Date.now();
+  let delta=1;
+  if(_lastTickWall){
+    delta=Math.round((_now-_lastTickWall)/1000);
+    if(delta<1)delta=1;
+  }
+  _lastTickWall=_now;
+
+  // Background catch-up handling
+  let autoStopped=false;
+  if(S.isClockRunning){
+    // Record the half-time at the moment the app was suspended — used as the TRIM recommendation
+    if(delta>60&&(S.bgSuspendHalfTime===undefined||S.bgSuspendHalfTime===null)){
+      S.bgSuspendHalfTime=S.halfTime;
+    }
+    // Auto-stop ONLY at end of game (2nd half / Q4) — never mid-game or at halftime.
+    // H1 catch-up is uncapped; the coach uses TRIM to correct if needed.
+    if(S.phase==='h2'){
+      const halfDur=getHalfDur();
+      const remaining=Math.max(0,halfDur-S.halfTime);
+      if(delta>=remaining&&delta>1){
+        S.bgCatchUpTrimmed=(S.bgCatchUpTrimmed||0)+(delta-remaining);
+        delta=remaining;
+        autoStopped=true;
+      }
+    }
+    if(delta>2){
+      S.bgCatchUp=(S.bgCatchUp||0)+delta; // track applied background time for TRIM banner
+    }
+  }
 
   // Game clock and sub countdown tick if isClockRunning
   if(S.isClockRunning){
-    S.gameTime++;
-    S.halfTime++;
-    S.subCountdown--;
+    S.gameTime+=delta;
+    S.halfTime+=delta;
+    S.subCountdown-=delta;
   }
 
   // Player timers only tick if isRunning (player clocks stop on EDJBL timeout)
   if(S.isRunning){
     S.players.forEach(p=>{
       if(p.onCourt){
-        p.playTime++; p.benchStint=0;
-        if(!isH2) p.h1PlayTime++; else p.h2PlayTime++;
+        p.playTime+=delta; p.benchStint=0;
+        if(!isH2) p.h1PlayTime+=delta; else p.h2PlayTime+=delta;
       } else {
-        p.benchTime++; p.benchStint++;
+        p.benchTime+=delta; p.benchStint+=delta;
       }
     });
+  }
+
+  // Auto-stop at end of GAME if we hit it during catch-up (H2 only)
+  if(autoStopped&&S.phase==='h2'&&S.halfTime>=getHalfDur()){
+    S.halfTime=getHalfDur();
+    S.isClockRunning=false;
+    S.isRunning=false;
+    setAlert('halfend');
+    writeCrashSnapshot();
+    renderGame();
+    showCatchUpBanner();
+    return;
   }
 
   // Sub countdown (only when clock is running)
@@ -1198,14 +1264,97 @@ function doTick(){
   // Quarter time alert (VJBL/EDL) — signal coach to end quarter manually
   if(usesQuarters()){
     const qbTime = getQuarterBreakTime();
-    if(S.phase==='h1' && !S.q1BreakDone && S.halfTime===qbTime) setAlert('quartend');
-    if(S.phase==='h2' && !S.q3BreakDone && S.halfTime===qbTime) setAlert('quartend');
+    if(S.phase==='h1' && !S.q1BreakDone && S.halfTime>=qbTime && S.halfTime<qbTime+5) setAlert('quartend');
+    if(S.phase==='h2' && !S.q3BreakDone && S.halfTime>=qbTime && S.halfTime<qbTime+5) setAlert('quartend');
   }
 
   // Half / game end
-  if(S.halfTime===getHalfDur()) setAlert('halfend');
+  if(S.halfTime>=getHalfDur()) setAlert('halfend');
 
   updateTimerDOM();
+}
+
+// ── Background catch-up banner + trim dialog ──────────────────
+function showCatchUpBanner(){
+  if(!S.bgCatchUp||S.bgCatchUp<60) return;
+  var ex=document.getElementById('catchup-banner');
+  if(ex) ex.remove();
+  var b=document.createElement('div');
+  b.id='catchup-banner';
+  b.style.cssText='position:fixed;top:calc(env(safe-area-inset-top,0px)+8px);left:50%;transform:translateX(-50%);z-index:9800;background:#2a1f00;border:1.5px solid var(--warn);border-radius:12px;padding:10px 14px;max-width:92%;box-shadow:0 4px 20px rgba(0,0,0,.5);';
+  b.innerHTML='<div style="font-size:11px;color:var(--warn);font-weight:700;margin-bottom:6px;">⏱ Clock advanced '+fmt(S.bgCatchUp)+' while the app was closed'+(S.phase==='h2'&&S.halfTime>=getHalfDur()?' — auto-stopped at end of game':'')+(S.bgSuspendHalfTime!=null?'<br><span style="font-weight:400;color:var(--dim);">Clock read '+fmt(S.bgSuspendHalfTime)+' when closed</span>':'')+'</div>'
+    +'<div style="display:flex;gap:6px;">'
+    +'<button onclick="openTrimDialog()" style="flex:1;background:var(--warn);color:#111;border:none;border-radius:7px;padding:7px;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">✂ TRIM END TIME</button>'
+    +'<button onclick="S.bgCatchUp=0;S.bgSuspendHalfTime=null;saveState();document.getElementById(\'catchup-banner\').remove();" style="background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:7px 12px;font-size:11px;cursor:pointer;">KEEP</button>'
+    +'</div>';
+  document.body.appendChild(b);
+}
+
+function openTrimDialog(){
+  var ex=document.getElementById('trim-dialog');
+  if(ex) ex.remove();
+  var rec=S.bgSuspendHalfTime!==undefined&&S.bgSuspendHalfTime!==null?S.bgSuspendHalfTime:null;
+  var bd=document.createElement('div');
+  bd.id='trim-dialog';
+  bd.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9900;display:flex;align-items:center;justify-content:center;padding:20px;';
+  bd.onclick=function(e){if(e.target===bd)bd.remove();};
+  var box=document.createElement('div');
+  box.style.cssText='background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:20px 18px;max-width:360px;width:100%;';
+  box.onclick=function(e){e.stopPropagation();};
+  box.innerHTML='<div style="font-family:Impact,sans-serif;font-size:14px;letter-spacing:2px;color:var(--warn);margin-bottom:8px;">✂ TRIM GAME END</div>'
+    +'<div style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px;">Half clock reads <strong style="color:var(--text)">'+fmt(S.halfTime)+'</strong>.'
+      +(rec!==null?' The clock read <strong style="color:var(--warn)">'+fmt(rec)+'</strong> when the app was closed — recommended end time below. Adjust if play continued after you closed it.':'')
+    +'</div>'
+    +'<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:4px;">OPTION A — Game ended at (half time)</div>'
+    +'<input id="trim-time" type="text" value="'+(rec!==null?fmt(rec):'')+'" placeholder="e.g. 17:30" style="width:100%;box-sizing:border-box;background:var(--card);border:1.5px solid '+(rec!==null?'var(--warn)':'var(--border)')+';border-radius:10px;color:var(--text);font-family:Impact,sans-serif;font-size:24px;text-align:center;padding:10px;outline:none;margin-bottom:12px;">'
+    +'<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:4px;">OPTION B — or trim this much off the end</div>'
+    +'<input id="trim-length" type="text" placeholder="e.g. 2:00" style="width:100%;box-sizing:border-box;background:var(--card);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:Impact,sans-serif;font-size:24px;text-align:center;padding:10px;outline:none;margin-bottom:6px;">'
+    +'<div style="font-size:10px;color:var(--dim);margin-bottom:12px;">If both are filled, Option A is used. Trimmed time is removed from the clock and every on-court player.</div>'
+    +'<div style="display:flex;gap:8px;">'
+    +'<button onclick="applyGameTrim()" style="flex:1;background:var(--warn);color:#111;border:none;border-radius:10px;padding:11px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">APPLY TRIM</button>'
+    +'<button onclick="document.getElementById(\'trim-dialog\').remove()" style="background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:10px;padding:11px 14px;font-size:12px;cursor:pointer;">CANCEL</button>'
+    +'</div>';
+  bd.appendChild(box);
+  document.body.appendChild(bd);
+  setTimeout(function(){var i=document.getElementById('trim-time');if(i)i.focus();},100);
+}
+
+function applyGameTrim(){
+  function parseTime(v){
+    v=String(v||'').trim();
+    if(!v) return null;
+    var s;
+    if(v.includes(':')){var pp=v.split(':');s=parseInt(pp[0])*60+(parseInt(pp[1])||0);}
+    else s=parseInt(v)*60;
+    return isNaN(s)?null:s;
+  }
+  var endAt=parseTime((document.getElementById('trim-time')||{}).value);
+  var trimLen=parseTime((document.getElementById('trim-length')||{}).value);
+  var secs;
+  if(endAt!==null){ secs=endAt; }
+  else if(trimLen!==null){ secs=S.halfTime-trimLen; }
+  else { alert('Enter an end time (Option A) or a trim length (Option B)'); return; }
+  if(secs<0){alert('Trim amount is larger than the half clock');return;}
+  if(secs>=S.halfTime){alert('End time must be earlier than current half clock ('+fmt(S.halfTime)+')');return;}
+  var trim=S.halfTime-secs;
+  var isH2=S.phase==='h2';
+  // Remove trimmed time from game clock and all on-court players
+  S.gameTime=Math.max(0,S.gameTime-trim);
+  S.halfTime=secs;
+  S.players.forEach(function(p){
+    if(p.onCourt){
+      p.playTime=Math.max(0,p.playTime-trim);
+      if(isH2)p.h2PlayTime=Math.max(0,p.h2PlayTime-trim);
+      else p.h1PlayTime=Math.max(0,p.h1PlayTime-trim);
+    }
+  });
+  S.bgCatchUp=0;
+  S.bgSuspendHalfTime=null;
+  saveState(); writeCrashSnapshot();
+  var b=document.getElementById('catchup-banner'); if(b)b.remove();
+  var d=document.getElementById('trim-dialog'); if(d)d.remove();
+  showToast('Trimmed '+fmt(trim)+' from game end ✓');
+  renderGame();
 }
 
 function calcForecast(){
@@ -2143,6 +2292,7 @@ function startGame(){
   S.subCountdown=S.h1Int;  // already in seconds
   S.alertState=null; prevAlert=null;
   S.isRunning=false; S.planSubIdx=0;
+  acquireWakeLock();
   S.subLog=[]; S.savedGame=null;
   S.selCourt=new Set(); S.selBench=new Set();
   S.phase='h1';
@@ -2174,6 +2324,21 @@ function continueGame(){
   S.phase=sg.phase; render();
 }
 
+
+// ── One-tap game clock stop/start (injury, held ball) ──────────
+function toggleGameClock(){
+  unlockAudio();
+  if(S.isClockRunning||S.isRunning){
+    S.isClockRunning=false; S.isRunning=false;
+  } else {
+    S.isClockRunning=true; S.isRunning=true;
+    _lastTickWall=Date.now();
+    startTick();
+  }
+  saveState();
+  renderGame();
+}
+
 function togglePause(){
   unlockAudio();
   const wasRunning = S.isRunning;
@@ -2182,6 +2347,7 @@ function togglePause(){
   if(S.isRunning){
     // Resuming: both clocks run
     S.isClockRunning = true;
+    _lastTickWall=Date.now();
     startTick();
   } else {
     // Timeout: check league rules
@@ -2206,6 +2372,36 @@ function togglePause(){
   if(clockNote) clockNote.style.display=(!S.isRunning&&S.isClockRunning)?'block':'none';
 }
 
+
+// ── Undo last substitution ─────────────────────────────────────
+function undoLastSub(){
+  const snap=window._undoSubSnap;
+  if(!snap){ showToast('Nothing to undo'); return; }
+  if(Date.now()-snap.at>120000){ showToast('Undo expired (2 min limit)'); window._undoSubSnap=null; renderGame(); return; }
+  // Restore players but keep time accrued since the sub (court state reverts; clocks keep truth)
+  const accrued={};
+  S.players.forEach(function(p){
+    const old=snap.players.find(function(q){return q.id===p.id;});
+    if(old) accrued[p.id]={play:p.playTime-old.playTime,h1:p.h1PlayTime-old.h1PlayTime,h2:p.h2PlayTime-old.h2PlayTime,bench:p.benchTime-old.benchTime};
+  });
+  S.players=snap.players.map(function(p){
+    // The time since the sub was spent in the WRONG state — reassign it to the restored state
+    const a=accrued[p.id]||{play:0,h1:0,h2:0,bench:0};
+    const elapsed=Math.max(a.play,a.bench,0);
+    if(p.onCourt){ p.playTime+=elapsed; if(S.phase==='h2')p.h2PlayTime+=elapsed; else p.h1PlayTime+=elapsed; }
+    else { p.benchTime+=elapsed; p.benchStint+=elapsed; }
+    return p;
+  });
+  S.subLog.length=snap.subLogLen;
+  S.planSubIdx=snap.planSubIdx;
+  S.subCountdown=snap.subCountdown;
+  S.gamePositions=snap.gamePositions;
+  window._undoSubSnap=null;
+  saveState(); writeCrashSnapshot();
+  showToast('↩ Sub undone — court restored');
+  renderGame();
+}
+
 function resumeFromOverlay(){
   // Auto-commit any pending sub selections before resuming
   if((S.selCourt.size>0||S.selBench.size>0)){
@@ -2214,7 +2410,7 @@ function resumeFromOverlay(){
     const canSub=S.selCourt.size>0&&S.selBench.size>0&&S.selCourt.size===S.selBench.size;
     if(canSub||fillingUp) commitSub();
   }
-  if(!S.isRunning){ S.isRunning=true; S.isClockRunning=true; startTick(); }
+  if(!S.isRunning){ S.isRunning=true; S.isClockRunning=true; _lastTickWall=Date.now(); startTick(); }
   const ovl=$('pause-ovl');
   if(ovl) ovl.style.display='none';
   const pbtn=$('pbtn');
@@ -2228,6 +2424,15 @@ function commitSub(){
   if(!S.selBench.size) return;
   if(!fillingUp&&!S.selCourt.size) return;
 
+  // Snapshot for UNDO before mutating anything
+  window._undoSubSnap={
+    at:Date.now(),
+    players:JSON.parse(JSON.stringify(S.players)),
+    subLogLen:S.subLog.length,
+    planSubIdx:S.planSubIdx,
+    subCountdown:S.subCountdown,
+    gamePositions:Object.assign({},S.gamePositions)
+  };
   const off=S.players.filter(p=>S.selCourt.has(p.id)).map(p=>p.name);
   const on =S.players.filter(p=>S.selBench.has(p.id)).map(p=>p.name);
   S.subLog.push({gameTime:S.gameTime, halfTime:S.halfTime, half:S.phase==='h2'?2:1, on, off});
@@ -2250,6 +2455,7 @@ function commitSub(){
   S.selCourt=new Set(); S.selBench=new Set();
   S.subCountdown=getSubInt(); S.alertState=null; prevAlert=null;
   S.planSubIdx++;
+  writeCrashSnapshot();
 
   // ── Auto-rebalance: if sub plan exists, patch next 2 subs based on actual court ──
   if(S.useSubPlan){
@@ -2391,11 +2597,13 @@ function startSecondHalf(){
   h2CourtIds.forEach(pid=>{ if(!S.manualPositions[pid]&&h2Optimal[pid]) S.gamePositions[pid]=h2Optimal[pid]; });
   applyPresetPositions('h2start', h2CourtIds.map(id=>filtered2[id]).filter(Boolean));
   S.phase='h2'; S.isRunning=true; S.isClockRunning=true;
+  _lastTickWall=Date.now();
+  acquireWakeLock();
   render();
   startTick();
 }
 
-function endGame(){ stopTick(); S.isRunning=false; S.isClockRunning=false; S.phase='gameover'; render(); }
+function endGame(){ stopTick(); releaseWakeLock(); S.isRunning=false; S.isClockRunning=false; S.phase='gameover'; clearCrashSnapshot(); render(); }
 
 function exportReport(){
   const now=new Date();
@@ -5062,6 +5270,7 @@ function addScoreEvent(who, pts){
   saveState();
   // Update DOM directly without full re-render
   updateScoreBarDOM();
+  writeCrashSnapshot();
 }
 
 function undoScoreEvent(){
@@ -5304,7 +5513,8 @@ function renderGame(){
     </div>
     <div class="ghctr">
       <div class="glbl">Half remaining</div>
-      <div id="hrem" class="hrem bb" style="color:${halfC}">${halfRem>=0?fmt(halfRem):'+'+fmt(-halfRem)}</div>
+      <div id="hrem" class="hrem bb" onclick="toggleGameClock()" style="color:${halfC};cursor:pointer;${!S.isClockRunning&&!S.isRunning?'opacity:.5;text-decoration:line-through;':''}" title="Tap to stop/start clock">${halfRem>=0?fmt(halfRem):'+'+fmt(-halfRem)}</div>
+      ${!S.isClockRunning&&!S.isRunning?'<div style="font-size:8px;color:var(--red);letter-spacing:1px;font-weight:700;">⏸ STOPPED — tap time to resume</div>':''}
       <div style="display:flex;align-items:center;gap:4px;margin-top:1px">
         <div class="glbl">Sub in</div>
         <div id="scdown" class="stimer bb" style="color:${subC}">${fmt(S.subCountdown)}</div>
@@ -5316,6 +5526,7 @@ function renderGame(){
       <div id="timeout-clock-note" style="display:${!S.isRunning&&S.isClockRunning?'block':'none'};font-size:9px;color:var(--warn);text-align:center;letter-spacing:.5px;margin-top:1px;">⏱ CLOCK RUNNING</div>
       <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
         <button class="${endCls}" onclick="${endAction}">${endLabel}</button>
+        ${window._undoSubSnap&&(Date.now()-window._undoSubSnap.at<120000)?`<button onclick="undoLastSub()" style="background:rgba(255,140,0,.15);border:1.5px solid rgba(255,140,0,.35);color:var(--warn);border-radius:8px;padding:5px 8px;font-size:14px;cursor:pointer;" title="Undo last sub">↩</button>`:''}
         <button onclick="openTimelineModal()" style="background:rgba(74,158,255,.15);border:1.5px solid rgba(74,158,255,.3);color:var(--blue);border-radius:8px;padding:5px 8px;font-size:14px;cursor:pointer;" title="Playing time timeline">📊</button>
         <button class="sgear" onclick="S._prevPhase='${S.phase}';S.phase='settings';render()" title="Settings">⚙</button>
       </div>
@@ -7343,6 +7554,13 @@ function renderSettings(){
     </div>
     <div class="s-sec">
       <div class="s-hdr">APPEARANCE</div>
+      <div style="font-size:11px;color:var(--dim);margin:8px 0 6px;">TEXT SIZE</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;">
+        ${[['0.9','S'],['1','M'],['1.15','L'],['1.3','XL']].map(([v,l])=>`
+          <button onclick="CFG.uiScale=${v};saveSettings();applyUiScale();renderSettings()"
+            style="flex:1;background:${(CFG.uiScale||1)==v?'rgba(62,207,110,.2)':'rgba(255,255,255,.04)'};border:1.5px solid ${(CFG.uiScale||1)==v?'var(--green)':'var(--border)'};color:${(CFG.uiScale||1)==v?'var(--green)':'var(--dim)'};border-radius:8px;padding:10px 0;font-family:Impact,sans-serif;font-size:13px;cursor:pointer;">${l}</button>
+        `).join('')}
+      </div>
       <div class="s-lbl">Theme</div>
       <div class="theme-btns">
         ${[['dark','🌙','Dark'],['light','☀️','Light'],['system','📱','System']].map(([val,icon,lbl])=>`
@@ -7551,7 +7769,7 @@ function importSubPlan(){
   inp.click();
 }
 
-function newGame(){ S.savedGame=null; S.phase='setup'; render(); }
+function newGame(){ releaseWakeLock(); S.savedGame=null; S.phase='setup'; render(); }
 
 function resetAll(){
   if(!confirm('Reset everything? This clears the current game, roster and all pre-planned subs. Teams and ratings are kept.')) return;
@@ -7624,8 +7842,20 @@ function stateToJSON(){
   });
 }
 
+let _quotaWarned=false;
+
+function applyUiScale(){
+  try{ document.documentElement.style.zoom=String(CFG.uiScale||1); }catch(_){}
+}
+
 function saveState(){
-  try { localStorage.setItem(SAVE_KEY, stateToJSON()); } catch(_){}
+  try { localStorage.setItem(SAVE_KEY, stateToJSON()); }
+  catch(e){
+    if(!_quotaWarned&&e&&(e.name==='QuotaExceededError'||String(e).includes('uota'))){
+      _quotaWarned=true;
+      try{ showToast('⚠ Storage full — delete old Game Reports in Settings'); }catch(_){}
+    }
+  }
 }
 
 function loadStateFromData(d){
@@ -8029,6 +8259,7 @@ function recoverClearAll(){
 // INIT
 // ═══════════════════════════════════════════
 loadSettings();
+applyUiScale();
 loadTeams();
 loadPlans();
 loadRatings();
@@ -8044,6 +8275,22 @@ setTimeout(checkForUpdate, 3000);
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible') setTimeout(checkForUpdate, 1000);
 });
+// Guard against accidental refresh/close during a live game
+window.addEventListener('beforeunload', function(e){
+  if(S.phase==='h1'||S.phase==='h2'){
+    writeCrashSnapshot();
+    e.preventDefault();
+    e.returnValue='Game in progress — your live game will be interrupted.';
+    return e.returnValue;
+  }
+});
+// Global error handler — soft recovery instead of white screen
+window.onerror=function(msg,src,line,col,err){
+  try{ localStorage.setItem('sqm_lasterror',JSON.stringify({msg:String(msg).slice(0,300),line:line,at:Date.now()})); }catch(_){}
+  try{ if(S.phase==='h1'||S.phase==='h2') writeCrashSnapshot(); }catch(_){}
+  try{ showToast('⚠ Error caught — game data safe'); }catch(_){}
+  return false;
+};
 </script>
 </body>
 </html>
