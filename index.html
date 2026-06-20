@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.06.09.2';
+const APP_VERSION = '2026.06.20.1';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -1743,17 +1743,26 @@ function getGamePos(pid){
 }
 
 // Set active game position
+function posBadgeContent(pid, pos){
+  return pos || '?';
+}
+
 function setGamePos(pid, pos){
   S.gamePositions[pid] = pos;
   if(!S.manualPositions) S.manualPositions = {};
   S.manualPositions[pid] = true;  // mark as manually set
-  // Update just the position badge in the DOM without full re-render
+  // Fast path: update the badge in place if it has an id
   const badge = document.getElementById('pos-badge-'+pid);
   if(badge){
     badge.className = 'pos-badge ' + (POS_COLOURS[+pos]||'');
     badge.innerHTML = posBadgeContent(pid, pos);
   }
   updateCoverageRow();
+  saveState();
+  // Re-render the active screen so all badges/tiles reflect the change
+  if(S.phase==='halftime') renderHalftime();
+  else if(S.phase==='q1break'||S.phase==='q3break') renderQuarterBreak();
+  else if(S.phase==='h1'||S.phase==='h2') renderGame();
 }
 
 // Get positions covered by current court players
@@ -6272,16 +6281,32 @@ function exportGamePDF(){
   modal.id='pdf-preview-modal';
   modal.style.cssText='position:fixed;inset:0;background:#111420;z-index:9500;display:flex;flex-direction:column;';
 
+  // Top header — guaranteed clearance from iPad status bar / iPhone Dynamic Island
   var hdr=document.createElement('div');
-  hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px)+10px) 14px 10px;background:#0a0c14;flex-shrink:0;gap:8px;border-bottom:1px solid #1e2130;';
+  hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 24px) calc(env(safe-area-inset-right,0px)+14px) 12px calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;gap:8px;border-bottom:1px solid #1e2130;';
 
   var title=document.createElement('div');
   title.style.cssText='font-family:Impact,sans-serif;font-size:14px;letter-spacing:2px;color:var(--blue,#60a5fa);flex:1;';
   title.textContent='GAME REPORT';
 
+  var closeBtnTop=document.createElement('button');
+  closeBtnTop.textContent='✕';
+  closeBtnTop.style.cssText='background:none;border:none;color:var(--dim,#7a80a0);font-size:22px;cursor:pointer;flex-shrink:0;padding:0 6px;line-height:1;';
+  closeBtnTop.onclick=function(){document.getElementById('pdf-preview-modal').remove();};
+
+  hdr.appendChild(title);hdr.appendChild(closeBtnTop);
+
+  var iframe=document.createElement('iframe');
+  iframe.style.cssText='flex:1;border:none;background:#fff;';
+  iframe.setAttribute('sandbox','allow-modals allow-same-origin');
+
+  // Bottom action bar — primary buttons here, always reachable, never blocked by status bar
+  var footer=document.createElement('div');
+  footer.style.cssText='display:flex;gap:8px;padding:10px calc(env(safe-area-inset-right,0px)+14px) calc(env(safe-area-inset-bottom,0px)+12px) calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;border-top:1px solid #1e2130;';
+
   var shareBtn=document.createElement('button');
-  shareBtn.textContent='SHARE / PRINT';
-  shareBtn.style.cssText='background:var(--accent,#3ecf6e);color:#111;border:none;border-radius:8px;padding:7px 12px;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
+  shareBtn.innerHTML='📄 SHARE / PRINT PDF';
+  shareBtn.style.cssText='flex:1;background:var(--accent,#3ecf6e);color:#111;border:none;border-radius:10px;padding:13px 8px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;';
   shareBtn.onclick=function(){
     var blob=new Blob([html],{type:'text/html'});
     var file=new File([blob],teamName.replace(/\s+/g,'_')+'_game_report.html',{type:'text/html'});
@@ -6294,18 +6319,86 @@ function exportGamePDF(){
     }
   };
 
-  var closeBtn=document.createElement('button');
-  closeBtn.textContent='CLOSE';
-  closeBtn.style.cssText='background:none;border:1.5px solid var(--border,#2a2d3e);color:var(--dim,#7a80a0);border-radius:8px;padding:7px 12px;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
-  closeBtn.onclick=function(){document.getElementById('pdf-preview-modal').remove();};
+  var aiBtn=document.createElement('button');
+  aiBtn.innerHTML='🤖 AI TEXT';
+  aiBtn.style.cssText='background:rgba(167,139,250,.18);color:#a78bfa;border:1.5px solid rgba(167,139,250,.4);border-radius:10px;padding:13px 14px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
+  aiBtn.onclick=function(){ shareAIText(); };
 
-  var iframe=document.createElement('iframe');
-  iframe.style.cssText='flex:1;border:none;background:#fff;';
-  iframe.setAttribute('sandbox','allow-modals allow-same-origin');
+  footer.appendChild(shareBtn);footer.appendChild(aiBtn);
 
-  hdr.appendChild(title);hdr.appendChild(shareBtn);hdr.appendChild(closeBtn);
-  modal.appendChild(hdr);modal.appendChild(iframe);
+  modal.appendChild(hdr);modal.appendChild(iframe);modal.appendChild(footer);
   document.body.appendChild(modal);
+
+  // ── Build AI text and share/download it as a .txt file ──
+  function buildAIText(){
+    var lines=[];
+    lines.push('SQUAD MANAGER — GAME REPORT');
+    lines.push(teamName+(S.opponent?' vs '+S.opponent:''));
+    var su=S.finalScore.us, st=S.finalScore.them;
+    lines.push('Final score: '+((su!=null&&st!=null)?(su+' – '+st):'Not recorded'));
+    lines.push('Duration: '+Math.round(S.gameTime/60)+' min');
+    var fair=Math.round(S.gameTime*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
+    lines.push('Fair share: '+fmt(fair)+' per player');
+    lines.push('');
+    lines.push('PLAYING TIME');
+    lines.push('--------------------------------------------');
+    sorted.forEach(function(p){
+      var diff=p.playTime-fair;
+      var ds=(diff>=0?'+':'-')+fmt(Math.abs(diff));
+      lines.push(p.name.padEnd(20)+fmt(p.playTime).padStart(6)+'  '+ds.padStart(7)+'  '+p.fouls+'f');
+    });
+    if(S.subLog&&S.subLog.length){
+      lines.push('');
+      lines.push('SUBSTITUTIONS ('+S.subLog.length+')');
+      lines.push('--------------------------------------------');
+      S.subLog.forEach(function(e){
+        lines.push(fmt(e.gameTime).padEnd(8)+(e.isHalftime?'HALF':'H'+e.half)+'  ▲ '+e.on.join(', ')+'  ▼ '+e.off.join(', '));
+      });
+    }
+    lines.push('');
+    lines.push('--------------------------------------------');
+    lines.push('Suggested questions: Who needs more court time next game? Were minutes distributed fairly? Any players at foul trouble?');
+    return lines.join('\n');
+  }
+
+  function shareAIText(){
+    var txt=buildAIText();
+    var fname=teamName.replace(/\s+/g,'_')+'_ai_report.txt';
+    var blob=new Blob([txt],{type:'text/plain'});
+    var file=new File([blob],fname,{type:'text/plain'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:teamName+' AI Report'}).catch(function(){ fallbackAIView(txt); });
+    } else {
+      fallbackAIView(txt);
+    }
+  }
+
+  function fallbackAIView(txt){
+    var ex=document.getElementById('ai-text-overlay'); if(ex)ex.remove();
+    var ov=document.createElement('div');
+    ov.id='ai-text-overlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9990;display:flex;flex-direction:column;';
+    var oh=document.createElement('div');
+    oh.style.cssText='display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px)+24px) calc(env(safe-area-inset-right,0px)+14px) 10px calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;border-bottom:1px solid #1e2130;';
+    var ot=document.createElement('div');
+    ot.style.cssText='font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px;color:#a78bfa;flex:1;';
+    ot.textContent='AI TEXT — COPY';
+    var ocopy=document.createElement('button');
+    ocopy.textContent='COPY';
+    ocopy.style.cssText='background:#a78bfa;color:#111;border:none;border-radius:8px;padding:7px 14px;font-family:Impact,sans-serif;font-size:12px;cursor:pointer;';
+    ocopy.onclick=function(){ if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){ocopy.textContent='COPIED ✓';setTimeout(function(){ocopy.textContent='COPY';},2000);});}else{ota.select();document.execCommand('copy');ocopy.textContent='COPIED ✓';} };
+    var oclose=document.createElement('button');
+    oclose.textContent='CLOSE';
+    oclose.style.cssText='background:none;border:1.5px solid #2a2d3e;color:#7a80a0;border-radius:8px;padding:7px 12px;font-family:Impact,sans-serif;font-size:12px;cursor:pointer;';
+    oclose.onclick=function(){ov.remove();};
+    oh.appendChild(ot);oh.appendChild(ocopy);oh.appendChild(oclose);
+    var ota=document.createElement('textarea');
+    ota.value=txt;ota.readOnly=true;
+    ota.style.cssText='flex:1;background:#0f1118;color:#c8d0e0;border:none;outline:none;padding:14px;font-family:monospace;font-size:11px;line-height:1.6;resize:none;padding-bottom:calc(env(safe-area-inset-bottom,0px)+14px);';
+    ov.appendChild(oh);ov.appendChild(ota);
+    document.body.appendChild(ov);
+    ota.focus();ota.select();
+  }
 
   try{iframe.contentDocument.open();iframe.contentDocument.write(html);iframe.contentDocument.close();}
   catch(e){iframe.src=URL.createObjectURL(new Blob([html],{type:'text/html'}));}
@@ -6826,7 +6919,7 @@ function renderGameover(){
     <div style="display:flex;align-items:flex-start;justify-content:center;gap:10px;margin-top:12px;">
       <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Us</div>
-        <input id="score-us" type="number" min="0" max="999" value="${S.finalScore.us??''}" placeholder="—"
+        <input id="score-us" type="number" min="0" max="999" value="${S.finalScore.us!=null?S.finalScore.us:(hasTracked?trackedTotals.us:'')}" placeholder="—"
           style="width:62px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--green);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"
           oninput="S.finalScore.us=this.value===''?null:+this.value;saveState()">
         ${hasTracked?`<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">${trackedTotals.us}</span></div>`:''}
@@ -6834,7 +6927,7 @@ function renderGameover(){
       <div style="font-family:Impact,sans-serif;font-size:24px;color:var(--dim);margin-top:14px;">:</div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Them</div>
-        <input id="score-them" type="number" min="0" max="999" value="${S.finalScore.them??''}" placeholder="—"
+        <input id="score-them" type="number" min="0" max="999" value="${S.finalScore.them!=null?S.finalScore.them:(hasTracked?trackedTotals.them:'')}" placeholder="—"
           style="width:62px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--red);font-family:Impact,sans-serif;font-size:28px;text-align:center;padding:6px 4px;outline:none;"
           oninput="S.finalScore.them=this.value===''?null:+this.value;saveState()">
         ${hasTracked?`<div style="font-size:9px;color:#374151;margin-top:2px;">tracked: <span style="color:#4b5563;font-family:Impact,sans-serif">${trackedTotals.them}</span></div>`:''}
