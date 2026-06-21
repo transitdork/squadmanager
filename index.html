@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.06.21.1';
+const APP_VERSION = '2026.06.21.2';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -6305,31 +6305,36 @@ function exportGamePDF(){
   footer.style.cssText='display:flex;gap:8px;padding:10px calc(env(safe-area-inset-right,0px)+14px) calc(env(safe-area-inset-bottom,0px)+12px) calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;border-top:1px solid #1e2130;';
 
   var shareBtn=document.createElement('button');
-  shareBtn.innerHTML='📄 SHARE / PRINT PDF';
+  shareBtn.innerHTML='📄 SHARE / SAVE REPORT';
   shareBtn.style.cssText='flex:1;background:var(--accent,#3ecf6e);color:#111;border:none;border-radius:10px;padding:13px 8px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;';
   shareBtn.onclick=function(){
-    var blob=new Blob([html],{type:'text/html'});
-    var file=new File([blob],teamName.replace(/\s+/g,'_')+'_game_report.html',{type:'text/html'});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){
-      navigator.share({files:[file],title:teamName+' Game Report'}).catch(function(){});
+    var htmlBlob=new Blob([html],{type:'text/html'});
+    var htmlFile=new File([htmlBlob],teamName.replace(/\s+/g,'_')+'_game_report.html',{type:'text/html'});
+    var aiTxt=buildAIText();
+    var txtBlob=new Blob([aiTxt],{type:'text/plain'});
+    var txtFile=new File([txtBlob],teamName.replace(/\s+/g,'_')+'_AI_summary.txt',{type:'text/plain'});
+    // Try to share BOTH files together (report + AI summary)
+    if(navigator.canShare&&navigator.canShare({files:[htmlFile,txtFile]})){
+      navigator.share({files:[htmlFile,txtFile],title:teamName+' Game Report'}).catch(function(){});
+    } else if(navigator.canShare&&navigator.canShare({files:[htmlFile]})){
+      // Some platforms only allow one file type — share report, download the txt separately
+      navigator.share({files:[htmlFile],title:teamName+' Game Report'}).catch(function(){});
+      var a2=document.createElement('a');a2.href=URL.createObjectURL(txtBlob);a2.download=txtFile.name;document.body.appendChild(a2);a2.click();setTimeout(function(){document.body.removeChild(a2);},500);
     } else {
+      // No share API — print the report and download the AI summary
       var w=window.open('','_blank');
       if(w){w.document.open();w.document.write(html);w.document.close();w.focus();setTimeout(function(){w.print();},500);}
-      else{var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);},500);}
+      else{var a=document.createElement('a');a.href=URL.createObjectURL(htmlBlob);a.download=htmlFile.name;document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);},500);}
+      var a3=document.createElement('a');a3.href=URL.createObjectURL(txtBlob);a3.download=txtFile.name;document.body.appendChild(a3);a3.click();setTimeout(function(){document.body.removeChild(a3);},500);
     }
   };
-
-  var aiBtn=document.createElement('button');
-  aiBtn.innerHTML='🤖 AI TEXT';
-  aiBtn.style.cssText='background:rgba(167,139,250,.18);color:#a78bfa;border:1.5px solid rgba(167,139,250,.4);border-radius:10px;padding:13px 14px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
-  aiBtn.onclick=function(){ shareAIText(); };
 
   var closeBtnBot=document.createElement('button');
   closeBtnBot.textContent='CLOSE';
   closeBtnBot.style.cssText='background:rgba(255,255,255,.06);border:1.5px solid var(--border,#2a2d3e);color:var(--dim,#7a80a0);border-radius:10px;padding:13px 16px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
   closeBtnBot.onclick=function(){document.getElementById('pdf-preview-modal').remove();};
 
-  footer.appendChild(shareBtn);footer.appendChild(aiBtn);footer.appendChild(closeBtnBot);
+  footer.appendChild(shareBtn);footer.appendChild(closeBtnBot);
 
   modal.appendChild(hdr);modal.appendChild(iframe);modal.appendChild(footer);
   document.body.appendChild(modal);
