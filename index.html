@@ -250,7 +250,7 @@ body{
 
 /* ── GAME ── */
 .game{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;position:relative;}
-.ghdr{background:var(--surface);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top, 0px) + 7px) env(safe-area-inset-right, 9px) 7px env(safe-area-inset-left, 9px);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:5px;}
+.ghdr{background:var(--surface);border-bottom:1px solid var(--border);padding:max(env(safe-area-inset-top, 0px), 40px) env(safe-area-inset-right, 9px) 7px env(safe-area-inset-left, 9px);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:5px;}
 .hll{display:flex;flex-direction:column;gap:1px;}
 .gclock{font-family:Impact,sans-serif;font-size:28px;line-height:1;letter-spacing:.05em;}
 .glbl{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#7a80a0;}
@@ -640,7 +640,7 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.06.20.1';
+const APP_VERSION = '2026.06.21.1';
 const COURT_SIZE = 5;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -4801,7 +4801,7 @@ function generatePromptExport(){
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9600;display:flex;flex-direction:column;';
 
   var hdr=document.createElement('div');
-  hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px)+10px) 14px 10px;background:#0a0c14;flex-shrink:0;border-bottom:1px solid #1e2130;';
+  hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:max(env(safe-area-inset-top,0px),44px) 14px 10px;background:#0a0c14;flex-shrink:0;border-bottom:1px solid #1e2130;';
   hdr.innerHTML='<div style="font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px;color:var(--blue,#60a5fa);flex:1">ROTATION PROMPT</div>';
 
   var copyBtn=document.createElement('button');
@@ -6281,9 +6281,9 @@ function exportGamePDF(){
   modal.id='pdf-preview-modal';
   modal.style.cssText='position:fixed;inset:0;background:#111420;z-index:9500;display:flex;flex-direction:column;';
 
-  // Top header — guaranteed clearance from iPad status bar / iPhone Dynamic Island
+  // Top header — uses max() so iPad (which reports 0 top inset) still clears the status bar
   var hdr=document.createElement('div');
-  hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 24px) calc(env(safe-area-inset-right,0px)+14px) 12px calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;gap:8px;border-bottom:1px solid #1e2130;';
+  hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:max(env(safe-area-inset-top,0px),44px) calc(env(safe-area-inset-right,0px)+14px) 12px calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;gap:8px;border-bottom:1px solid #1e2130;';
 
   var title=document.createElement('div');
   title.style.cssText='font-family:Impact,sans-serif;font-size:14px;letter-spacing:2px;color:var(--blue,#60a5fa);flex:1;';
@@ -6324,7 +6324,12 @@ function exportGamePDF(){
   aiBtn.style.cssText='background:rgba(167,139,250,.18);color:#a78bfa;border:1.5px solid rgba(167,139,250,.4);border-radius:10px;padding:13px 14px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
   aiBtn.onclick=function(){ shareAIText(); };
 
-  footer.appendChild(shareBtn);footer.appendChild(aiBtn);
+  var closeBtnBot=document.createElement('button');
+  closeBtnBot.textContent='CLOSE';
+  closeBtnBot.style.cssText='background:rgba(255,255,255,.06);border:1.5px solid var(--border,#2a2d3e);color:var(--dim,#7a80a0);border-radius:10px;padding:13px 16px;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
+  closeBtnBot.onclick=function(){document.getElementById('pdf-preview-modal').remove();};
+
+  footer.appendChild(shareBtn);footer.appendChild(aiBtn);footer.appendChild(closeBtnBot);
 
   modal.appendChild(hdr);modal.appendChild(iframe);modal.appendChild(footer);
   document.body.appendChild(modal);
@@ -6379,7 +6384,7 @@ function exportGamePDF(){
     ov.id='ai-text-overlay';
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9990;display:flex;flex-direction:column;';
     var oh=document.createElement('div');
-    oh.style.cssText='display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px)+24px) calc(env(safe-area-inset-right,0px)+14px) 10px calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;border-bottom:1px solid #1e2130;';
+    oh.style.cssText='display:flex;align-items:center;gap:8px;padding:max(env(safe-area-inset-top,0px),44px) calc(env(safe-area-inset-right,0px)+14px) 10px calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;border-bottom:1px solid #1e2130;';
     var ot=document.createElement('div');
     ot.style.cssText='font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px;color:#a78bfa;flex:1;';
     ot.textContent='AI TEXT — COPY';
@@ -7455,7 +7460,7 @@ function viewSavedReport(idx){
       bdrop.id='saved-ai-export';
       bdrop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;flex-direction:column;';
       const ehdr=document.createElement('div');
-      ehdr.style.cssText='display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px)+10px) calc(env(safe-area-inset-right,0px)+14px) 10px calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;border-bottom:1px solid #1e2130;';
+      ehdr.style.cssText='display:flex;align-items:center;gap:8px;padding:max(env(safe-area-inset-top,0px),44px) calc(env(safe-area-inset-right,0px)+14px) 10px calc(env(safe-area-inset-left,0px)+14px);background:#0a0c14;flex-shrink:0;border-bottom:1px solid #1e2130;';
       const eTitle=document.createElement('div');
       eTitle.style.cssText='font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px;color:#a78bfa;flex:1;';
       eTitle.textContent='EXPORT TO AI';
@@ -7496,7 +7501,7 @@ function viewSavedReport(idx){
     modal.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:9700;display:flex;flex-direction:column;overflow:hidden;';
 
     const hdr=document.createElement('div');
-    hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px)+10px) calc(env(safe-area-inset-right,0px)+14px) 10px calc(env(safe-area-inset-left,0px)+14px);background:var(--surface);flex-shrink:0;border-bottom:1px solid var(--border);';
+    hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:max(env(safe-area-inset-top,0px),44px) calc(env(safe-area-inset-right,0px)+14px) 10px calc(env(safe-area-inset-left,0px)+14px);background:var(--surface);flex-shrink:0;border-bottom:1px solid var(--border);';
     const backBtn=document.createElement('button');
     backBtn.textContent='←';
     backBtn.style.cssText='background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:0 6px 0 0;flex-shrink:0;';
