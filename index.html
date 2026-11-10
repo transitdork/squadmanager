@@ -214,7 +214,6 @@ body{
 .pnum{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:9px;font-weight:700;color:#7a80a0;pointer-events:none;}
 .pi{width:100%;background:#222736;border:1.5px solid #2e3350;border-radius:9px;padding:9px 24px;color:#eef0f8;font-size:13px;outline:none;}
 .pi:focus{border-color:#f08c00;}
-.pi.starts{border-left:3px solid #3ecf6e;}
 .rmv{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#7a80a0;cursor:pointer;font-size:13px;padding:3px;}
 .h-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
 .ni-wrap{display:flex;flex-direction:column;}
@@ -290,6 +289,7 @@ body{
 
 .cols{flex:1;display:flex;overflow:hidden;}
 .col{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:4px calc(env(safe-area-inset-right, 0px) + 4px) 4px calc(env(safe-area-inset-left, 0px) + 4px);gap:3px;}
+html[data-layout="portrait"] .col:first-child{border-right:1px solid var(--border);}
 .col.bench-col{overflow-y:auto;justify-content:flex-start;}
 /* Bench cards: same fixed height as court cards, set by JS via --card-h */
 .pc.bench-card{height:var(--card-h,120px);flex-shrink:0;flex:none;overflow:hidden;}
@@ -339,27 +339,6 @@ body{
 .fotag{font-size:9px;font-weight:700;color:var(--red);margin-left:3px;letter-spacing:1px;}
 .instr{background:var(--surface);border-top:1px solid var(--border);padding:4px calc(env(safe-area-inset-right, 0px) + 10px) calc(env(safe-area-inset-bottom, 0px) + 4px) calc(env(safe-area-inset-left, 0px) + 10px);text-align:center;font-size:10px;color:var(--dim);flex-shrink:0;}
 
-/* ── PAUSE OVERLAY ── */
-.povl{position:absolute;inset:0;background:rgba(8,10,16,.72);display:flex;flex-direction:column;align-items:stretch;z-index:100;cursor:pointer;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);overflow-y:auto;}
-.po-top{display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 14px) calc(env(safe-area-inset-right,0px) + 16px) 10px calc(env(safe-area-inset-left,0px) + 16px);flex-shrink:0;}
-.potitle{font-family:Impact,sans-serif;font-size:66px;letter-spacing:6px;color:#eef0f8;line-height:1;text-shadow:0 2px 12px rgba(0,0,0,.8);}
-.potime{font-family:Impact,sans-serif;font-size:28px;color:#f08c00;margin-top:3px;letter-spacing:.05em;}
-.posub{color:#7a80a0;font-size:13px;margin-top:8px;}
-.postart{color:#3ecf6e;font-size:15px;margin-top:8px;}
-.po-roster{display:flex;flex:1;min-height:0;border-top:1px solid rgba(255,255,255,.08);}
-.po-col{flex:1;padding:7px calc(env(safe-area-inset-right,0px) + 6px) calc(env(safe-area-inset-bottom,0px) + 7px) calc(env(safe-area-inset-left,0px) + 6px);display:flex;flex-direction:column;gap:4px;overflow-y:auto;}
-.po-chdr{font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:3px;border-radius:5px;margin-bottom:2px;flex-shrink:0;}
-.po-chdr.court{background:rgba(62,207,110,.18);color:#3ecf6e;}
-.po-chdr.bench{background:rgba(74,158,255,.15);color:#4a9eff;}
-.po-chdr.sub-out{background:rgba(255,140,0,.18);color:#ff8c00;}
-.po-pill{border-radius:8px;padding:5px 9px;border:1px solid;display:flex;align-items:center;justify-content:space-between;gap:6px;}
-.po-pill.court{background:rgba(26,46,26,.65);border-color:rgba(62,207,110,.25);}
-.po-pill.bench{background:rgba(30,34,50,.65);border-color:rgba(74,158,255,.18);}
-.po-pill.sub-out{background:rgba(46,26,0,.65);border-color:rgba(255,140,0,.35);}
-.po-pname{font-weight:700;font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.5);}
-.po-ptime{font-family:Impact,sans-serif;font-size:12px;color:#7a80a0;flex-shrink:0;letter-spacing:.03em;}
-.po-ptime.g{color:#3ecf6e;} .po-ptime.b{color:#4a9eff;} .po-ptime.a{color:#ff8c00;}
-
 /* ── HALFTIME ── */
 .ht{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 .ht-hdr{background:#1a0d2e;border-bottom:2px solid rgba(192,132,252,.27);padding:calc(env(safe-area-inset-top,0px) + 14px) calc(env(safe-area-inset-right,0px) + 13px) 11px calc(env(safe-area-inset-left,0px) + 13px);text-align:center;flex-shrink:0;}
@@ -382,6 +361,34 @@ body{
 .ht-start{width:100%;background:#3ecf6e;color:#0a1a0a;font-family:Impact,sans-serif;font-size:22px;letter-spacing:2px;border:none;border-radius:11px;padding:13px;cursor:pointer;}
 .ht-start:disabled{background:#2a4a2a;color:#7a80a0;cursor:not-allowed;}
 .ht-note{text-align:center;font-size:10px;color:#7a80a0;margin-top:5px;}
+.optional-label{font:500 12px system-ui,sans-serif;color:var(--dim);letter-spacing:0;}
+.starting-chips{margin-bottom:8px;}
+.starting-chips .chip{font:inherit;min-height:36px;overflow-wrap:anywhere;text-align:left;}
+.starting-chips .chip:disabled{opacity:.55;cursor:default;}
+.fixed-duration{display:grid;place-items:center;}
+.lineup,.game{height:100vh;height:100dvh;}
+.lineup .ht-hdr{position:relative;}
+.lineup .ht-title{font-size:36px;letter-spacing:0;}
+.lineup-back{position:absolute;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);}
+.lineup .ht-col{min-width:0;padding:8px;overscroll-behavior:contain;}
+.lineup .ht-col + .ht-col{border-left:1px solid var(--border);}
+.lineup .ht-card{display:flex;align-items:center;min-width:0;padding:0 5px;border-radius:8px;}
+.lineup .ht-card.bench{background:var(--blueDim);border-color:rgba(74,158,255,.25);}
+.lineup .ht-chdr.bench{background:var(--blueDim);color:var(--blue);}
+.lineup-player{flex:1;min-width:0;min-height:48px;padding:8px 5px;color:var(--text);background:none;border:none;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:left;cursor:pointer;overflow-wrap:anywhere;}
+.lineup-player:disabled{cursor:default;}
+.lineup .pos-badge{min-width:32px;min-height:32px;cursor:pointer;}
+.lineup-hint{font-size:9px;color:var(--warn);font-weight:700;margin-top:3px;}
+.lineup-empty,.lineup-status{font-size:12px;color:var(--dim);text-align:center;padding:5px;}
+.lineup-status:empty{display:none;}
+.lineup .ht-start{min-height:52px;border-radius:8px;letter-spacing:0;}
+.lineup-times{padding:4px 8px 8px;color:var(--dim);font-size:12px;}
+.lineup-times summary{width:max-content;cursor:pointer;}
+.lineup-time-list{max-height:120px;overflow:auto;margin-top:6px;display:grid;gap:4px;}
+.lineup-time{display:grid;grid-template-columns:minmax(65px,1fr) 3fr 42px;align-items:center;gap:8px;}
+.lineup-time span:first-child{overflow-wrap:anywhere;}
+.lineup-time meter{width:100%;accent-color:var(--green);}
+.pbtn:disabled{opacity:.5;cursor:default;}
 
 /* ── GAME OVER ── */
 .go{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
@@ -444,29 +451,6 @@ body{
 .rat-save-btn{width:100%;background:var(--accent);color:#111;font-family:Impact,sans-serif;font-size:20px;letter-spacing:2px;border:none;border-radius:10px;padding:14px;cursor:pointer;margin-top:8px;}
 .player-row-rate{background:rgba(74,158,255,.1);border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;}
 
-/* ── AI SUMMARY ── */
-.ai-summary-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;display:flex;align-items:flex-end;backdrop-filter:blur(3px);}
-.ai-summary-box{background:var(--surface);border-top:1px solid var(--border);border-radius:18px 18px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom,0px) + 30px);width:100%;max-height:80vh;display:flex;flex-direction:column;gap:10px;}
-.ai-summary-title{font-family:Impact,sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent);}
-.ai-summary-content{flex:1;overflow-y:auto;font-size:13px;color:var(--text);line-height:1.7;white-space:pre-wrap;}
-.ai-summary-close{background:var(--card);border:1.5px solid var(--border);color:var(--dim);border-radius:9px;padding:10px;cursor:pointer;font-size:13px;font-weight:600;}
-/* ── AI ROTATION GENERATOR ── */
-.ai-rot-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;display:flex;align-items:flex-end;backdrop-filter:blur(3px);}
-.ai-rot-box{background:var(--surface);border-top:1px solid var(--border);border-radius:18px 18px 0 0;padding:20px 16px calc(env(safe-area-inset-bottom,0px) + 32px);width:100%;max-height:82vh;display:flex;flex-direction:column;gap:12px;}
-.ai-rot-title{font-family:Impact,sans-serif;font-size:20px;letter-spacing:2px;color:var(--accent);}
-.ai-rot-body{flex:1;overflow-y:auto;font-size:13px;color:var(--text);line-height:1.65;}
-.ai-rot-section{background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:10px;}
-.ai-rot-section-title{font-family:Impact,sans-serif;font-size:12px;letter-spacing:1.5px;color:var(--blue);margin-bottom:8px;}
-.ai-rot-sub-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);}
-.ai-rot-sub-row:last-child{border-bottom:none;}
-.ai-rot-sub-num{font-family:Impact,sans-serif;font-size:13px;color:var(--accent);width:44px;flex-shrink:0;}
-.ai-rot-off{color:#f472b6;font-size:12px;flex:1;}
-.ai-rot-on{color:#a78bfa;font-size:12px;flex:1;}
-.ai-rot-note{font-size:11px;color:var(--dim);font-style:italic;margin-top:6px;line-height:1.5;}
-.ai-rot-load-btn{flex:1;background:var(--green);color:#0a1a0a;font-family:Impact,sans-serif;font-size:18px;letter-spacing:1.5px;border:none;border-radius:10px;padding:13px;cursor:pointer;}
-.ai-rot-cancel-btn{background:var(--card);border:1.5px solid var(--border);color:var(--dim);font-family:Impact,sans-serif;font-size:15px;border-radius:10px;padding:13px 16px;cursor:pointer;}
-.ai-rot-spinner{text-align:center;padding:30px 0;color:var(--dim);}
-.ai-rot-spinner .spin{font-size:32px;display:inline-block;animation:spin 1s linear infinite;margin-bottom:10px;}
 
 /* ── TABLET / IPAD SCALING ── */
 /* Applies to screens >= 768px wide (iPad portrait and larger) */
@@ -530,33 +514,6 @@ body{
   .sv    { font-size: clamp(15px, 2.3vh, 24px); }
 }
 
-/* ── AI PLAN PARAMETERS ── */
-.ai-params-box{background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:12px 12px 8px;margin-top:8px;}
-/* Each param: label row + slider row, stacked vertically */
-.aip{margin-bottom:14px;}
-.aip:last-child{margin-bottom:4px;}
-.aip-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
-.aip-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);}
-.aip-vals{font-family:Impact,sans-serif;font-size:14px;color:var(--accent);white-space:nowrap;}
-.aip-sliders{display:flex;flex-direction:column;gap:10px;}
-.aip-srow{display:flex;align-items:center;gap:8px;min-height:44px;}
-.aip-tag{font-size:10px;color:var(--dim);width:26px;flex-shrink:0;text-align:right;}
-/* Touch-friendly slider: tall element, thin visual track */
-.ai-pslider{
-  -webkit-appearance:none;appearance:none;
-  flex:1;height:44px;background:transparent;
-  outline:none;min-width:0;cursor:pointer;}
-.ai-pslider::-webkit-slider-runnable-track{
-  height:6px;border-radius:3px;background:var(--border);margin-top:0;}
-.ai-pslider::-webkit-slider-thumb{
-  -webkit-appearance:none;width:30px;height:30px;
-  margin-top:-12px;border-radius:50%;
-  background:var(--accent);cursor:pointer;
-  border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4);}
-.ai-pslider::-moz-range-track{height:6px;border-radius:3px;background:var(--border);}
-.ai-pslider::-moz-range-thumb{width:28px;height:28px;
-  border-radius:50%;background:var(--accent);cursor:pointer;
-  border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4);}
 
 /* ── TIMELINE MODAL ── */
 .tl-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8000;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);}
@@ -617,6 +574,36 @@ body{
   transition:transform .1s;}
 .pos-picker-btn:active{transform:scale(.95);}
 .pos-picker-recommend{font-size:11px;color:var(--green);margin-top:-6px;}
+html[data-layout="landscape"] .cols,
+html[data-layout="landscape"] .ht-cols{flex-direction:column;gap:12px;overflow-y:auto;padding:8px max(8px,env(safe-area-inset-right,0px)) 8px max(8px,env(safe-area-inset-left,0px));}
+html[data-layout="landscape"] .cols .col,
+html[data-layout="landscape"] .lineup .ht-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:none;align-content:start;overflow:visible;padding:0;border:0;}
+html[data-layout="landscape"] :is(.chdr,.ht-chdr){grid-column:1/-1;}
+html[data-layout="landscape"] .cols .pc{height:auto;min-height:112px;border-radius:8px;padding:8px;gap:5px;}
+html[data-layout="landscape"] .cols .cname{font-size:17px;white-space:normal;overflow-wrap:anywhere;}
+html[data-layout="landscape"] .cols .sv{font-size:20px;letter-spacing:0;}
+html[data-layout="landscape"] .cols .sk{font-size:8px;letter-spacing:0;}
+html[data-layout="landscape"] .cols .cstats{flex-wrap:wrap;gap:4px 8px;overflow:visible;}
+html[data-layout="landscape"] .cols .fr{flex-wrap:wrap;gap:3px;}
+html[data-layout="landscape"] .cols .fd{width:20px;height:20px;}
+html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
+@media (min-width:768px){
+  html[data-layout="landscape"] .cols .col,
+  html[data-layout="landscape"] .lineup .ht-col{grid-template-columns:repeat(5,minmax(0,1fr));}
+  html[data-layout="landscape"] .cols .pc{min-height:130px;}
+  html[data-layout="landscape"] .cols .fd{width:22px;height:22px;}
+  html[data-layout="landscape"] .lineup .ht-name{font-size:16px;}
+}
+@media (min-width:1080px){
+  html[data-layout="landscape"] .cols .pc{min-height:150px;padding:12px;}
+  html[data-layout="landscape"] .cols .cname{font-size:23px;}
+  html[data-layout="landscape"] .cols .sv{font-size:28px;}
+  html[data-layout="landscape"] .cols .fd{width:26px;height:26px;}
+}
+@media (max-height:650px){
+  html[data-layout="portrait"] .cols .col{overflow-y:auto;}
+  html[data-layout="portrait"] .cols .pc{flex:none;min-height:90px;}
+}
 </style>
 </head>
 <body>
@@ -640,8 +627,9 @@ body{
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.06.21.2';
+const APP_VERSION = '2026.11.10.1';
 const COURT_SIZE = 5;
+const QUARTER_SECS = 10*60;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
 const PLANS_KEY = 'squadmgr_plans_v1';
@@ -672,8 +660,8 @@ function loadPlans(){
     P.plans=arr.map(p=>({
       ...p,
       subPlan:{
-        h1:(p.subPlan.h1||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on)}:null),
-        h2:(p.subPlan.h2||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on)}:null),
+        h1:(p.subPlan.h1||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on),atTime:s.atTime||null}:null),
+        h2:(p.subPlan.h2||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on),atTime:s.atTime||null}:null),
       }
     }));
   }catch(_){}
@@ -719,92 +707,6 @@ function deletePlan(id){
   P.plans=P.plans.filter(p=>p.id!==id);
   savePlans();
   renderSetup(true);
-}
-
-// ── Sub Plan Export / Import ──
-function exportSubPlan(){
-  const filtered=S.names.filter(n=>n.trim());
-  if(!S.useSubPlan||(!(S.subPlan.h1||[]).length&&!(S.subPlan.h2||[]).length)){
-    alert('No sub plan to export. Build a plan first.');return;
-  }
-  function serHalf(half){
-    return (half||[]).map(s=>({off:[...s.off],on:[...s.on],atTime:s.atTime||null}));
-  }
-  const data={version:1,exportedAt:new Date().toISOString(),
-    playerNames:filtered,h1Dur:S.h1Dur,h2Dur:S.h2Dur,h1Int:S.h1Int,h2Int:S.h2Int,
-    h1Sps:S.h1Sps,h2Sps:S.h2Sps,
-    h1:serHalf(S.subPlan.h1),h2:serHalf(S.subPlan.h2),
-    priorityPlayerIds:[...S.priorityPlayerIds],
-    h2PresetIds:S.useH2Preset?[...S.h2PresetIds]:null,
-    finalPresetIds:S.useFinalPreset?[...S.finalPresetIds]:null};
-  const jsonStr=JSON.stringify(data,null,2);
-  const date=new Date().toLocaleDateString('en-AU').replace(/\//g,'-');
-  const filename='squad-plan-'+date+'.json';
-  if(navigator.share){
-    const blob=new Blob([jsonStr],{type:'application/json'});
-    const file=new File([blob],filename,{type:'application/json'});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){
-      navigator.share({files:[file],title:'Squad Manager Sub Plan'}).catch(()=>{});return;
-    }
-  }
-  const url='data:application/json;charset=utf-8,'+encodeURIComponent(jsonStr);
-  const a=document.createElement('a');a.href=url;a.download=filename;a.click();
-  showToast('Sub plan exported ✓');
-}
-
-function importSubPlanFile(){
-  const inp=document.createElement('input');
-  inp.type='file';inp.accept='.json,application/json,text/plain';
-  inp.onchange=function(e){
-    const f=e.target.files[0];if(!f)return;
-    const r=new FileReader();
-    r.onload=function(ev){
-      try{
-        const data=JSON.parse(ev.target.result);
-        if(!data.h1||!data.h2)throw new Error('Invalid plan file');
-        applyImportedSubPlan(data);
-      }catch(err){alert('Could not load plan: '+err.message);}
-    };
-    r.readAsText(f);
-  };
-  inp.click();
-}
-
-function applyImportedSubPlan(data){
-  const filtered=S.names.filter(n=>n.trim());
-  const nameToIdx={};filtered.forEach(function(n,i){nameToIdx[n]=i;});
-  function findIdx(name){
-    if(nameToIdx[name]!==undefined)return nameToIdx[name];
-    const lower=String(name).toLowerCase();
-    for(const[n,i]of Object.entries(nameToIdx)){
-      if(n.toLowerCase()===lower)return i;
-      if(n.toLowerCase().startsWith(lower)||lower.startsWith(n.split(' ')[0].toLowerCase()))return i;
-    }
-    return undefined;
-  }
-  function mapHalf(half){
-    return(half||[]).map(function(s){return{
-      off:new Set((s.off||[]).map(findIdx).filter(function(i){return i!==undefined;})),
-      on: new Set((s.on||[]).map(findIdx).filter(function(i){return i!==undefined;})),
-      atTime:s.atTime||null};});  // atTime already handled;
-  }
-  if(data.h1Dur)S.h1Dur=data.h1Dur;if(data.h2Dur)S.h2Dur=data.h2Dur;
-  if(data.h1Int)S.h1Int=data.h1Int;if(data.h2Int)S.h2Int=data.h2Int;
-  S.subPlan={h1:mapHalf(data.h1),h2:mapHalf(data.h2)};
-  S.useSubPlan=true;
-  if(data.priorityPlayerIds&&data.priorityPlayerIds.length){
-    S.priorityPlayerIds=new Set(data.priorityPlayerIds.map(findIdx).filter(function(i){return i!==undefined;}));
-  }
-  if(data.h2PresetIds){
-    const ids=data.h2PresetIds.map(findIdx).filter(function(i){return i!==undefined;});
-    if(ids.length===COURT_SIZE){S.h2PresetIds=new Set(ids);S.useH2Preset=true;}
-  }
-  if(data.finalPresetIds){
-    const ids=data.finalPresetIds.map(findIdx).filter(function(i){return i!==undefined;});
-    if(ids.length===COURT_SIZE){S.finalPresetIds=new Set(ids);S.useFinalPreset=true;}
-  }
-  saveState();renderSetup(true);
-  showToast('Sub plan imported ✓');
 }
 
 function showSavePlanModal(onSave){
@@ -858,22 +760,44 @@ const DEFAULTS = {
     warn:    '#ffcc00',
     purple:  '#c084fc',
   },
-  apiKey: '',
-  geminiKey: '',
-  aiProvider: 'claude', // 'claude' | 'gemini'
-  geminiModel: 'gemini-3.1-pro-preview', // paid model with deep reasoning; switch to gemini-2.5-flash for free tier
+  layout: 'auto',
 };
-const CFG = { theme: DEFAULTS.theme, colors: {...DEFAULTS.colors}, apiKey: '', geminiKey: '', aiProvider: 'claude' };
+const CFG = {theme:DEFAULTS.theme, colors:{...DEFAULTS.colors}, layout:DEFAULTS.layout, uiScale:1};
 
 function saveSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({theme:CFG.theme,colors:CFG.colors,apiKey:CFG.apiKey,geminiKey:CFG.geminiKey,aiProvider:CFG.aiProvider,geminiModel:CFG.geminiModel})); }catch(_){}
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(CFG)); }catch(_){}
 }
 function loadSettings(){
   try{
     const raw=localStorage.getItem(SETTINGS_KEY);
-    if(raw){ const d=JSON.parse(raw); CFG.theme=d.theme||'dark'; CFG.colors={...DEFAULTS.colors,...(d.colors||{})}; CFG.apiKey=d.apiKey||''; CFG.geminiKey=d.geminiKey||''; CFG.aiProvider=d.aiProvider||'claude'; CFG.geminiModel=d.geminiModel||'gemini-2.5-flash'; }
+    if(raw){
+      const d=JSON.parse(raw);
+      CFG.theme=d.theme||DEFAULTS.theme;
+      CFG.colors={...DEFAULTS.colors,...(d.colors||{})};
+      CFG.layout=['portrait','landscape'].includes(d.layout)?d.layout:'auto';
+      CFG.uiScale=d.uiScale||1;
+      if('apiKey' in d || 'geminiKey' in d) saveSettings();
+    }
   }catch(_){}
   applyTheme();
+  applyLayout();
+}
+const wideLayout = window.matchMedia('(min-width: 768px) and (orientation: landscape)');
+function applyLayout(){
+  document.documentElement.dataset.layout=CFG.layout==='auto'?(wideLayout.matches?'landscape':'portrait'):CFG.layout;
+  requestAnimationFrame(syncCardHeights);
+}
+wideLayout.addEventListener('change',applyLayout);
+window.addEventListener('resize',()=>requestAnimationFrame(syncCardHeights));
+async function setLayout(layout){
+  CFG.layout=layout;
+  saveSettings();
+  applyLayout();
+  renderSettings();
+  try{
+    if(layout==='auto') screen.orientation?.unlock?.();
+    else await screen.orientation?.lock?.(layout);
+  }catch(_){ /* Keep the chosen app layout when native rotation lock is unavailable. */ }
 }
 function applyTheme(){
   const root=document.documentElement;
@@ -924,12 +848,21 @@ function loadTeams(){
 }
 
 function setActiveTeam(id){
+  if(id!==T.activeTeamId){
+    S.startingSlots.clear();
+    S.h2PresetIds.clear();
+    S.finalPresetIds.clear();
+    S.useH2Preset=false;
+    S.useFinalPreset=false;
+  }
   T.activeTeamId=id;
   T.showDropdown=false;
   try{ localStorage.setItem(TEAMS_KEY+'_active', id||''); }catch(_){}
   const team=T.teams.find(t=>t.id===id);
   if(team){
+    const starters=new Set([...S.startingSlots].map(slot=>S.names[slot]));
     S.names=team.players.map(p=>playerDisplayName(p));
+    S.startingSlots=new Set(S.names.flatMap((name,slot)=>starters.has(name)?[slot]:[]));
     while(S.names.length<5) S.names.push('');
     // Auto-configure game format based on league
     const lg=(team.league||'').toUpperCase();
@@ -958,19 +891,9 @@ const S = {
   opponent: '',
   h1Dur:20, h2Dur:20,
   h1Int:180, h2Int:180,  // stored in SECONDS (180 = 3min)
-  finalsMode: false,      // AI uses 15-20% more time for top-rated players
-  aiAdheresToPresets: true, // AI respects user h2Preset / finalPreset
-  aiParamsOpen: false,      // AI parameters section expanded
-  aiParams: {
-    aiTiming: true,
-    minSubsPerSub: 1,
-    maxSubsPerSub: 2,
-    minSubGap: 240,
-    playerDeltas: {},
-    benchConflicts: [],
-    minBenchDuration: 3,   // minutes a player must rest before returning
-    maxBenchDuration: 12,  // max minutes on bench (0 = no limit)
-  },
+  startingSlots: new Set(), // Roster field indices, independent of the order of the starting five
+  lineupMode: null,
+  lineupDraft: null,
   h1Sps:2,  h2Sps:2,
   useH2Preset: false,
   h2PresetIds: new Set(),
@@ -1001,7 +924,6 @@ const S = {
   finalScore: {us:null, them:null}, // entered on game over screen
   selCourt: new Set(),
   selBench: new Set(),
-  htOnCourt: new Set(),
 };
 
 // ═══════════════════════════════════════════
@@ -1011,6 +933,7 @@ const fmt = s => `${Math.floor(Math.abs(s)/60)}:${String(Math.abs(s)%60).padStar
 const $  = id => document.getElementById(id);
 const setText = (id,v) => { const e=$(''+id); if(e) e.textContent=v; };
 const setColor = (id,c) => { const e=$(''+id); if(e) e.style.color=c; };
+const escapeHTML = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 // ── Audio & Haptics ──
 // Single shared AudioContext — must be created/resumed on a user gesture
@@ -1129,17 +1052,26 @@ function getCurrentQuarter(){
   return S.phase==='h2'?'H2':'H1';
 }
 // Quarter break time within a half (midpoint)
-function getQuarterBreakTime(){ return Math.round(getHalfDur()/2); }
+function getQuarterBreakTime(){ return QUARTER_SECS; }
+
+function configuredHalfMinutes(half){
+  return usesQuarters()?QUARTER_SECS*2/60:half==='h2'?S.h2Dur:S.h1Dur;
+}
 
 // Each half duration — for quarter teams always 20 min (2×10min) regardless of stored h1Dur/h2Dur
 function getHalfDur(){
-  if(usesQuarters()) return 20*60;
-  return (S.phase==='h2'||S.phase==='q3break'?S.h2Dur:S.h1Dur)*60;
+  return configuredHalfMinutes(S.phase==='h2'||S.phase==='q3break'?'h2':'h1')*60;
 }
 // Total game seconds — always 40min for quarter teams regardless of stored h1Dur/h2Dur
 function gameTotalSecs(){ return usesQuarters() ? 40*60 : (S.h1Dur+S.h2Dur)*60; }
 function getSubInt(){  return S.phase==='h2'?S.h2Int:S.h1Int; }  // already in seconds
 function getCurrSps(){ return S.phase==='h2'?S.h2Sps:S.h1Sps; }
+function getPeriodRemaining(){
+  if(!usesQuarters()) return getHalfDur()-S.halfTime;
+  const secondQuarter=S.phase==='h2'?S.q3BreakDone:S.q1BreakDone;
+  const periodElapsed=S.halfTime-(secondQuarter?QUARTER_SECS:0);
+  return Math.min(QUARTER_SECS,Math.max(0,QUARTER_SECS-periodElapsed));
+}
 
 function setAlert(a){
   if(a===prevAlert) return;
@@ -1202,9 +1134,9 @@ function doTick(){
     if(delta>60&&(S.bgSuspendHalfTime===undefined||S.bgSuspendHalfTime===null)){
       S.bgSuspendHalfTime=S.halfTime;
     }
-    // Auto-stop ONLY at end of game (2nd half / Q4) — never mid-game or at halftime.
-    // H1 catch-up is uncapped; the coach uses TRIM to correct if needed.
-    if(S.phase==='h2'){
+    if(usesQuarters()){
+      delta=Math.min(delta,getPeriodRemaining());
+    } else if(S.phase==='h2'){
       const halfDur=getHalfDur();
       const remaining=Math.max(0,halfDur-S.halfTime);
       if(delta>=remaining&&delta>1){
@@ -1261,11 +1193,15 @@ function doTick(){
     if(S.alertState!=='halfend'&&S.alertState!=='sub-now') setAlert(null);
   }
 
-  // Quarter time alert (VJBL/EDL) — signal coach to end quarter manually
-  if(usesQuarters()){
-    const qbTime = getQuarterBreakTime();
-    if(S.phase==='h1' && !S.q1BreakDone && S.halfTime>=qbTime && S.halfTime<qbTime+5) setAlert('quartend');
-    if(S.phase==='h2' && !S.q3BreakDone && S.halfTime>=qbTime && S.halfTime<qbTime+5) setAlert('quartend');
+  if(usesQuarters() && getPeriodRemaining()===0){
+    stopTick();
+    S.isClockRunning=false;
+    S.isRunning=false;
+    setAlert(getCurrentQuarter()==='Q4'?'halfend':'quartend');
+    saveState();
+    writeCrashSnapshot();
+    renderGame();
+    return;
   }
 
   // Half / game end
@@ -1380,7 +1316,7 @@ function fcColor(fc,target){
 }
 
 function updateTimerDOM(){
-  const halfRem=getHalfDur()-S.halfTime;
+  const halfRem=getPeriodRemaining();
   const subC=S.alertState==='sub-now'?'#ff5555':S.alertState==='warning'?'#ffcc00':'#eef0f8';
   const halfC=halfRem<=60?'#ff5555':halfRem<=120?'#ffcc00':'#eef0f8';
 
@@ -1409,7 +1345,7 @@ function updateAlertBar(){
   if(!el) return;
   if(S.alertState==='warning'){  el.className='abar warn'; el.textContent='⏱ SUB IN 30 SECONDS'; el.style.display='block'; }
   else if(S.alertState==='sub-now'){ el.className='abar now'; el.textContent='🔔 TIME TO SUBSTITUTE!'; el.style.display='block'; }
-  else if(S.alertState==='quartend'){ el.className='abar half'; el.textContent='🏀 '+(S.q1BreakDone?'Q3 TIME — TAP END Q3':'Q1 TIME — TAP END Q1'); el.style.display='block'; }
+  else if(S.alertState==='quartend'){ el.className='abar half'; el.textContent='🏀 END OF '+getCurrentQuarter(); el.style.display='block'; }
   else if(S.alertState==='halfend'){ el.className='abar half'; el.textContent='🏀 '+(S.phase==='h2'?'FULL TIME — TAP END GAME':(usesQuarters()?(S.q1BreakDone?'END Q2 — TAP END Q2':'END Q1 — TAP END Q1'):'HALF TIME — TAP END HALF')); el.style.display='block'; }
   else { el.style.display='none'; }
 }
@@ -1431,14 +1367,19 @@ function highlightBench(){
 }
 
 // ── Sub Plan Helpers ──
+function startingPresetIds(){
+  return S.names.flatMap((name,slot)=>name.trim()?[slot]:[])
+    .flatMap((slot,id)=>S.startingSlots.has(slot)?[id]:[]);
+}
+
+function plannedStartingIds(halfKey){
+  if(halfKey==='h2'&&S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE) return [...S.h2PresetIds];
+  const startingIds=startingPresetIds();
+  return startingIds.length===COURT_SIZE?startingIds:S.names.filter(n=>n.trim()).slice(0,COURT_SIZE).map((_,i)=>i);
+}
+
 function getCourtAtPlanPoint(halfKey, subIdx){
-  const filtered=S.names.filter(n=>n.trim());
-  let courtIds;
-  if(halfKey==='h2'&&S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE){
-    courtIds=new Set(S.h2PresetIds);
-  } else {
-    courtIds=new Set(filtered.slice(0,COURT_SIZE).map((_,i)=>i));
-  }
+  const courtIds=new Set(plannedStartingIds(halfKey));
   const plan=S.subPlan[halfKey]||[];
   for(let i=0;i<subIdx;i++){
     const sub=plan[i];
@@ -1465,6 +1406,9 @@ function getPlanHighlights(){
   const plan=S.subPlan[halfKey]||[];
   const sub=plan[S.planSubIdx];
   if(!sub||(!sub.off.size&&!sub.on.size)) return null;
+  const liveCourt=currentCourtIds();
+  if([...sub.off].some(id=>!liveCourt.has(id))||
+    [...sub.on].some(id=>!S.players.some(p=>p.id===id&&!p.onCourt&&p.fouls<5))) return null;
   return {off:sub.off, on:sub.on, isFinal:false};
 }
 
@@ -1491,11 +1435,7 @@ function calcPlanPlayTimes(){
   const playSecs=filtered.map(()=>0);
 
   const simHalf=(halfKey,dur,intv)=>{
-    let courtIds;
-    if(halfKey==='h2'&&S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE)
-      courtIds=new Set(S.h2PresetIds);
-    else
-      courtIds=new Set(filtered.slice(0,COURT_SIZE).map((_,i)=>i));
+    const courtIds=new Set(plannedStartingIds(halfKey));
 
     const plan=S.subPlan[halfKey]||[];
     const halfSecs=dur*60;
@@ -1514,13 +1454,13 @@ function calcPlanPlayTimes(){
     for(let i=0;i<numSubs;i++){
       const sub=plan[i];
       if(!sub) continue;
-      // Use AI atTime if available and valid, else fall back to interval
+      // Use saved custom timing when available.
       const atTimeSecs = sub.atTime ? parseAtTime(sub.atTime) : null;
       const fallback = (i+1)*intv;
       const t = (atTimeSecs && atTimeSecs>0 && atTimeSecs<halfSecs) ? atTimeSecs : fallback;
       events.push({t, sub});
     }
-    // Sort by time in case AI returned out-of-order
+    // Sort by time in case a saved plan is out of order.
     events.sort((a,b)=>a.t-b.t);
 
     // Simulate stints
@@ -1537,8 +1477,8 @@ function calcPlanPlayTimes(){
     if(finalStint>0) courtIds.forEach(id=>{ if(id<playSecs.length) playSecs[id]+=finalStint; });
   };
 
-  simHalf('h1',S.h1Dur,S.h1Int);
-  simHalf('h2',S.h2Dur,S.h2Int);
+  simHalf('h1',configuredHalfMinutes('h1'),S.h1Int);
+  simHalf('h2',configuredHalfMinutes('h2'),S.h2Int);
   return filtered.map((name,i)=>({name, secs:playSecs[i]||0}));
 }
 
@@ -1760,8 +1700,7 @@ function setGamePos(pid, pos){
   updateCoverageRow();
   saveState();
   // Re-render the active screen so all badges/tiles reflect the change
-  if(S.phase==='halftime') renderHalftime();
-  else if(S.phase==='q1break'||S.phase==='q3break') renderQuarterBreak();
+  if(isBetweenPeriods()) renderLineup();
   else if(S.phase==='h1'||S.phase==='h2') renderGame();
 }
 
@@ -2174,7 +2113,8 @@ function buildSubPlanHTML(){
     const startIds = getCourtAtPlanPoint(halfKey, 0);
     const startNames = [...startIds].map(id=>filtered[id]).filter(Boolean);
     if(halfKey==='h1'){
-      h += lineupCardHTML(startNames,'rgba(62,207,110,.07)','rgba(62,207,110,.3)','var(--green)','▶ STARTING 5 — 1ST HALF','h1start');
+      const startLabel=startingPresetIds().length===COURT_SIZE?'STARTING 5':'PLANNING LINEUP';
+      h += lineupCardHTML(startNames,'rgba(62,207,110,.07)','rgba(62,207,110,.3)','var(--green)',startLabel+' — '+(usesQuarters()?'Q1':'1ST HALF'),'h1start');
     } else {
       const h2Label = S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE ? '▶ STARTING 5 — 2ND HALF (Preset)' : '▶ STARTING 5 — 2ND HALF';
       h += lineupCardHTML(startNames,'rgba(74,158,255,.07)','rgba(74,158,255,.3)','var(--blue)', h2Label,'h2start');
@@ -2270,72 +2210,71 @@ function buildSubPlanHTML(){
   };
 
   return summaryHTML
-       + renderHalf('h1',S.h1Dur,S.h1Int,'1ST HALF')
-       + renderHalf('h2',S.h2Dur,S.h2Int,'2ND HALF');
+       + renderHalf('h1',configuredHalfMinutes('h1'),S.h1Int,usesQuarters()?'Q1 / Q2':'1ST HALF')
+       + renderHalf('h2',configuredHalfMinutes('h2'),S.h2Int,usesQuarters()?'Q3 / Q4':'2ND HALF');
 }
 
 // ═══════════════════════════════════════════
 // ACTIONS
 // ═══════════════════════════════════════════
 function startGame(){
-  unlockAudio();
   const filtered=S.names.filter(n=>n.trim());
+  if(filtered.length<COURT_SIZE) return;
+  if(S.savedGame&&!confirm('Start a new game and discard the unfinished game?')) return;
+  $('sw-update-banner')?.remove();
+  unlockAudio();
   // Initialise game positions and manual overrides
   S.scoreLog = [];
   S.scoreBarExpanded = false;
   S.gamePositions = {};
   S.q1BreakDone = false; S.q3BreakDone = false;
   S.manualPositions = {};
-  // Assign optimal positions to starting 5, then apply any preset overrides
-  const startIds = filtered.slice(0, COURT_SIZE).map((_, i) => i);
-  const optimal = computeOptimalPositions(startIds);
-  startIds.forEach(pid => { if(optimal[pid]) S.gamePositions[pid] = optimal[pid]; });
-  // Apply h1start preset position overrides (from sub plan position picker)
-  applyPresetPositions('h1start', filtered.slice(0, COURT_SIZE));
   S.players=filtered.map((name,i)=>({
-    id:i, name, onCourt:i<COURT_SIZE,
+    id:i, name, onCourt:false,
     playTime:0, h1PlayTime:0, h2PlayTime:0,
     benchTime:0, benchStint:0, fouls:0
   }));
   S.gameTime=0; S.halfTime=0;
   S.subCountdown=S.h1Int;  // already in seconds
   S.alertState=null; prevAlert=null;
-  S.isRunning=false; S.planSubIdx=0;
-  acquireWakeLock();
+  S.isRunning=false; S.isClockRunning=false; S.planSubIdx=0;
   S.subLog=[]; S.savedGame=null;
+  window._undoSubSnap=null;
   S.selCourt=new Set(); S.selBench=new Set();
   S.phase='h1';
+  S.lineupMode='start';
+  const preset=startingPresetIds();
+  S.lineupDraft=new Set(preset.length===COURT_SIZE?preset:[]);
+  clearCrashSnapshot();
+  saveState();
+  startAutoSave();
   render();
-}
-
-function goToSetup(){
-  stopTick(); S.isRunning=false;
-  S.savedGame={
-    phase:S.phase, players:S.players.map(p=>({...p})),
-    gameTime:S.gameTime, halfTime:S.halfTime, subCountdown:S.subCountdown,
-    alertState:S.alertState, h1Dur:S.h1Dur, h2Dur:S.h2Dur,
-    h1Int:S.h1Int, h2Int:S.h2Int, h1Sps:S.h1Sps, h2Sps:S.h2Sps, subLog:[...S.subLog]
-  };
-  S.phase='setup'; render();
 }
 
 function continueGame(){
   if(!S.savedGame) return;
+  $('sw-update-banner')?.remove();
   const sg=S.savedGame;
-  S.players=sg.players.map(p=>({...p}));
-  S.gameTime=sg.gameTime; S.halfTime=sg.halfTime;
-  S.subCountdown=sg.subCountdown; S.alertState=sg.alertState; prevAlert=sg.alertState;
-  S.h1Dur=sg.h1Dur; S.h2Dur=sg.h2Dur;
-  S.h1Int=sg.h1Int; S.h2Int=sg.h2Int;
-  S.h1Sps=sg.h1Sps; S.h2Sps=sg.h2Sps;
-  S.subLog=[...sg.subLog]; S.isRunning=false;
-  S.selCourt=new Set(); S.selBench=new Set();
-  S.phase=sg.phase; render();
+  if(Object.hasOwn(sg,'teamId')){
+    T.activeTeamId=sg.teamId;
+    try{ localStorage.setItem(TEAMS_KEY+'_active',sg.teamId||''); }catch(_){}
+  }
+  loadStateFromData(sg,false);
+  S.phase=sg.phase;
+  if((S.phase==='h1'||S.phase==='h2')&&!S.lineupMode&&!(usesQuarters()&&getPeriodRemaining()===0)){
+    S.lineupMode='resume';
+    S.lineupDraft=currentCourtIds();
+  }
+  S.savedGame=null;
+  saveState();
+  startAutoSave();
+  render();
 }
 
 
 // ── One-tap game clock stop/start (injury, held ball) ──────────
 function toggleGameClock(){
+  if(S.lineupMode||(usesQuarters()&&getPeriodRemaining()===0)) return;
   unlockAudio();
   if(S.isClockRunning||S.isRunning){
     S.isClockRunning=false; S.isRunning=false;
@@ -2349,36 +2288,17 @@ function toggleGameClock(){
 }
 
 function togglePause(){
+  if(S.lineupMode||!S.isRunning) return;
   unlockAudio();
-  const wasRunning = S.isRunning;
-  S.isRunning = !wasRunning;
-
-  if(S.isRunning){
-    // Resuming: both clocks run
-    S.isClockRunning = true;
-    _lastTickWall=Date.now();
-    startTick();
-  } else {
-    // Timeout: check league rules
-    if(isGameClockStoppedOnTimeout()){
-      // VJBL/EDL always, or EDJBL in last 2min H2: stop everything
-      S.isClockRunning = false;
-      stopTick();
-    } else {
-      // EDJBL normal timeout: game clock keeps running, player clocks stop
-      S.isClockRunning = true;
-      startTick(); // keep ticking but isRunning=false means player timers won't increment
-    }
-  }
-
-  const ovl=$('pause-ovl');
-  if(ovl) ovl.style.display=S.isRunning?'none':'flex';
-  const pbtn=$('pbtn');
-  if(pbtn){ pbtn.textContent=S.isRunning?'⏸ TIMEOUT':'▶ RESUME'; pbtn.className='pbtn'+(S.isRunning?' live':''); }
-
-  // Show a small indicator when clock keeps running during EDJBL timeout
-  const clockNote=$('timeout-clock-note');
-  if(clockNote) clockNote.style.display=(!S.isRunning&&S.isClockRunning)?'block':'none';
+  S.isClockRunning=!isGameClockStoppedOnTimeout();
+  S.isRunning=false;
+  if(!S.isClockRunning) stopTick();
+  S.lineupMode='timeout';
+  S.lineupDraft=currentCourtIds();
+  S.selCourt.clear(); S.selBench.clear();
+  saveState();
+  writeCrashSnapshot();
+  renderGame();
 }
 
 
@@ -2411,29 +2331,8 @@ function undoLastSub(){
   renderGame();
 }
 
-function resumeFromOverlay(){
-  // Auto-commit any pending sub selections before resuming
-  if((S.selCourt.size>0||S.selBench.size>0)){
-    const availableSpots=COURT_SIZE-S.players.filter(p=>p.onCourt).length;
-    const fillingUp=S.selCourt.size===0&&availableSpots>0&&S.selBench.size<=availableSpots;
-    const canSub=S.selCourt.size>0&&S.selBench.size>0&&S.selCourt.size===S.selBench.size;
-    if(canSub||fillingUp) commitSub();
-  }
-  if(!S.isRunning){ S.isRunning=true; S.isClockRunning=true; _lastTickWall=Date.now(); startTick(); }
-  const ovl=$('pause-ovl');
-  if(ovl) ovl.style.display='none';
-  const pbtn=$('pbtn');
-  if(pbtn){ pbtn.textContent='⏸ TIMEOUT'; pbtn.className='pbtn live'; }
-}
 
-function commitSub(){
-  const cp=courtPlayers();
-  const availableSpots=COURT_SIZE-cp.length;
-  const fillingUp=S.selCourt.size===0&&availableSpots>0&&S.selBench.size<=availableSpots;
-  if(!S.selBench.size) return;
-  if(!fillingUp&&!S.selCourt.size) return;
-
-  // Snapshot for UNDO before mutating anything
+function snapshotSubForUndo(){
   window._undoSubSnap={
     at:Date.now(),
     players:JSON.parse(JSON.stringify(S.players)),
@@ -2442,6 +2341,16 @@ function commitSub(){
     subCountdown:S.subCountdown,
     gamePositions:Object.assign({},S.gamePositions)
   };
+}
+
+function commitSub(){
+  const cp=courtPlayers();
+  const availableSpots=COURT_SIZE-cp.length;
+  const fillingUp=S.selCourt.size===0&&availableSpots>0&&S.selBench.size<=availableSpots;
+  if(!S.selBench.size||cp.length-S.selCourt.size+S.selBench.size>COURT_SIZE) return;
+  if(!fillingUp&&!S.selCourt.size) return;
+
+  snapshotSubForUndo();
   const off=S.players.filter(p=>S.selCourt.has(p.id)).map(p=>p.name);
   const on =S.players.filter(p=>S.selBench.has(p.id)).map(p=>p.name);
   S.subLog.push({gameTime:S.gameTime, halfTime:S.halfTime, half:S.phase==='h2'?2:1, on, off});
@@ -2532,87 +2441,114 @@ function toggleFoul(pid, dot){
   renderGame();
 }
 
-function startQuarterResume(fromPhase){
-  S.alertState=null; prevAlert=null;
-  S.selCourt=new Set(); S.selBench=new Set();
-  // Apply any pending sub selections from quarter break screen
-  if(S.pendingQBreakSubs){
-    const {off, on} = S.pendingQBreakSubs;
-    const offArr=[...off], onArr=[...on];
-    const cnt=Math.min(offArr.length,onArr.length);
-    if(cnt>0){
-      const offNames=[], onNames=[];
-      S.players.forEach(p=>{
-        if(off.has(p.id)){ p.onCourt=false; offNames.push(p.name); }
-        if(on.has(p.id)){ p.onCourt=true; p.benchStint=0; onNames.push(p.name); }
-      });
-      S.subLog.push({gameTime:S.gameTime, halfTime:S.halfTime, half:S.phase==='q1break'?1:2, on:onNames, off:offNames});
-    }
-    S.pendingQBreakSubs=null;
+function currentCourtIds(){
+  return new Set(S.players.filter(p=>p.onCourt&&p.fouls<5).map(p=>p.id));
+}
+
+function isBetweenPeriods(){
+  return ['halftime','q1break','q3break'].includes(S.phase);
+}
+
+function lineupCourt(){
+  const draft=S.lineupDraft||currentCourtIds();
+  return new Set(S.players.filter(p=>draft.has(p.id)&&p.fouls<5).map(p=>p.id));
+}
+
+function lineupLimit(){
+  return Math.min(COURT_SIZE,S.players.filter(p=>p.fouls<5).length);
+}
+
+function lineupMinimum(){
+  const alreadyOnCourt=currentCourtIds().size;
+  if((S.lineupMode==='timeout'||S.lineupMode==='resume')&&alreadyOnCourt>0)
+    return Math.min(lineupLimit(),alreadyOnCourt);
+  return lineupLimit();
+}
+
+function toggleLineupPlayer(pid){
+  if(!S.lineupMode&&!isBetweenPeriods()) return;
+  const player=S.players.find(p=>p.id===pid);
+  if(!player||player.fouls>=5) return;
+  const court=lineupCourt();
+  if(!court.delete(pid)){
+    if(court.size>=lineupLimit()) return;
+    court.add(pid);
   }
-  // Recompute optimal positions for new court lineup
-  const newCourtIds=S.players.filter(p=>p.onCourt).map(p=>p.id);
-  const optimal=computeOptimalPositions(newCourtIds);
-  if(!S.manualPositions) S.manualPositions={};
-  newCourtIds.forEach(pid=>{ if(!S.manualPositions[pid]&&optimal[pid]) S.gamePositions[pid]=optimal[pid]; });
-  S.phase = fromPhase==='q1break' ? 'h1' : 'h2';
-  S.isRunning=true; S.isClockRunning=true;
-  render();
-  startTick();
+  S.lineupDraft=court;
+  saveState();
+  renderLineup();
+  $('lineup-player-'+pid)?.focus({preventScroll:true});
 }
 
 function endHalf(){
-  stopTick(); S.isRunning=false; S.isClockRunning=false;
-  // Quarter teams: route to the correct break screen
-  if(usesQuarters() && S.phase==='h1' && !S.q1BreakDone){
-    S.q1BreakDone=true; S.phase='q1break'; render(); return;
+  stopTick();
+  S.isRunning=false; S.isClockRunning=false;
+  S.lineupMode=null;
+  S.selCourt.clear(); S.selBench.clear();
+  window._undoSubSnap=null;
+  const quarterBreak=usesQuarters()&&((S.phase==='h1'&&!S.q1BreakDone)||(S.phase==='h2'&&!S.q3BreakDone));
+  const preset=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE;
+  S.lineupDraft=(!quarterBreak&&preset)?new Set(S.h2PresetIds):currentCourtIds();
+  if(quarterBreak){
+    if(S.phase==='h1'){ S.q1BreakDone=true; S.phase='q1break'; }
+    else { S.q3BreakDone=true; S.phase='q3break'; }
+  } else {
+    S.phase='halftime';
   }
-  if(usesQuarters() && S.phase==='h2' && !S.q3BreakDone){
-    S.q3BreakDone=true; S.phase='q3break'; render(); return;
-  }
-  // Non-quarter teams, or Q2→halftime, or Q4→game end (shouldn't reach here for Q4)
-  const h2Court=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE
-    ? new Set(S.h2PresetIds)
-    : new Set(S.players.filter(p=>p.onCourt).map(p=>p.id));
-  S.htOnCourt=h2Court;
-  S.phase='halftime'; render();
+  saveState();
+  writeCrashSnapshot();
+  render();
 }
 
-function toggleHtPlayer(pid){
-  const s=new Set(S.htOnCourt);
-  if(s.has(pid)){ s.delete(pid); S.htOnCourt=s; }
-  else if(s.size<COURT_SIZE){ s.add(pid); S.htOnCourt=s; }
-  renderHalftime();
-}
+function finishLineup(){
+  if(!S.lineupMode&&!isBetweenPeriods()) return;
+  const court=lineupCourt();
+  if(court.size<lineupMinimum()||court.size>lineupLimit()||!court.size) return;
 
-function startSecondHalf(){
-  // Log any halftime lineup changes as a sub entry at gameTime boundary
-  const prevCourt = new Set(S.players.filter(p=>p.onCourt).map(p=>p.id));
-  const offIds = [...prevCourt].filter(id=>!S.htOnCourt.has(id));
-  const onIds  = [...S.htOnCourt].filter(id=>!prevCourt.has(id));
-  if(offIds.length||onIds.length){
-    const getName = id=>{ const p=S.players.find(q=>q.id===id); return p?p.name:'?'; };
-    S.subLog.push({gameTime:S.gameTime, halfTime:0, half:2, isHalftime:true,
-      on:onIds.map(getName), off:offIds.map(getName)});
+  const phase=S.phase;
+  const firstStart=S.lineupMode==='start';
+  const halftime=phase==='halftime';
+  const isBreak=isBetweenPeriods();
+  const previousCourt=currentCourtIds();
+  const off=S.players.filter(p=>previousCourt.has(p.id)&&!court.has(p.id)).map(p=>p.name);
+  const on=S.players.filter(p=>court.has(p.id)&&!previousCourt.has(p.id)).map(p=>p.name);
+
+  unlockAudio();
+  if(halftime){
+    S.phase='h2';
+    S.halfTime=0; S.subCountdown=S.h2Int; S.planSubIdx=0;
+  } else if(isBreak){
+    S.phase=phase==='q1break'?'h1':'h2';
+    S.halfTime=getQuarterBreakTime();
   }
-  S.players.forEach(p=>{ p.onCourt=S.htOnCourt.has(p.id); p.benchStint=0; });
-  S.halfTime=0; S.subCountdown=S.h2Int;
-  S.alertState=null; prevAlert=null; S.planSubIdx=0;
-  S.selCourt=new Set(); S.selBench=new Set();
-  // Apply h2start preset positions then re-optimise for new lineup
-  const filtered2=S.names.filter(n=>n.trim());
-  const h2CourtIds=[...S.htOnCourt];
-  const h2Optimal=computeOptimalPositions(h2CourtIds);
-  h2CourtIds.forEach(pid=>{ if(!S.manualPositions[pid]&&h2Optimal[pid]) S.gamePositions[pid]=h2Optimal[pid]; });
-  applyPresetPositions('h2start', h2CourtIds.map(id=>filtered2[id]).filter(Boolean));
-  S.phase='h2'; S.isRunning=true; S.isClockRunning=true;
+  if(!firstStart&&(off.length||on.length)){
+    if(!isBreak){
+      snapshotSubForUndo();
+      S.subCountdown=getSubInt();
+      S.planSubIdx++;
+    }
+    S.subLog.push({gameTime:S.gameTime,halfTime:S.halfTime,half:S.phase==='h2'?2:1,on,off,
+      ...(halftime?{isHalftime:true}:{})});
+  }
+  S.players.forEach(p=>{
+    p.onCourt=court.has(p.id);
+    if(p.onCourt||halftime) p.benchStint=0;
+  });
+  recomputeCourtPositions();
+  if(firstStart||halftime) applyPresetPositions(firstStart?'h1start':'h2start',S.players.filter(p=>p.onCourt).map(p=>p.name));
+  S.lineupMode=null; S.lineupDraft=null;
+  S.selCourt.clear(); S.selBench.clear();
+  S.alertState=null; prevAlert=null;
+  S.isRunning=true; S.isClockRunning=true;
   _lastTickWall=Date.now();
   acquireWakeLock();
-  render();
-  startTick();
+  saveState();
+  startAutoSave();
+  writeCrashSnapshot();
+  renderGame();
 }
 
-function endGame(){ stopTick(); releaseWakeLock(); S.isRunning=false; S.isClockRunning=false; S.phase='gameover'; clearCrashSnapshot(); render(); }
+function endGame(){ stopTick(); releaseWakeLock(); S.isRunning=false; S.isClockRunning=false; S.lineupMode=null; S.lineupDraft=null; S.phase='gameover'; clearCrashSnapshot(); render(); }
 
 function exportReport(){
   const now=new Date();
@@ -2710,218 +2646,12 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
 
   return `
 <div class="pc ${sk}${selClass}${foClass}${selectable}${role==='court'?' court-card':''}" ${click}>
-  <div class="ctop"><div class="cname">${p.name}${posDisplay}</div>${badge}</div>
+  <div class="ctop"><div class="cname">${escapeHTML(p.name)}${posDisplay}</div>${badge}</div>
   <div class="cstats">
     <div class="stat"><span id="pt-${p.id}" class="sv svg">${fmt(p.playTime)}</span><span class="sk">Played</span></div>
     ${fcHTML}${benchHTML}
   </div>
   ${foulDotsHTML(p.id, p.fouls)}
-</div>`;
-}
-
-function postSubPositionBoard(stayOn, nextOff, nextOn){
-  const newCourt = [...stayOn, ...nextOn];
-  if(!newCourt.length) return '';
-  const anyRatings = newCourt.some(p=>allPositionsForPlayer(p.id).length>0);
-  if(!anyRatings) return '';
-
-  // Use subPlanPositions for the upcoming sub's lineup if available
-  const halfKey = S.phase==='h2'?'h2':'h1';
-  const subIdx = S.planSubIdx;
-  const planPosOverrides = (S.subPlanPositions[halfKey]&&S.subPlanPositions[halfKey][subIdx])||{};
-  const filtered = S.names.filter(n=>n.trim());
-
-  const coveredAfter = new Set();
-  newCourt.forEach(p=>{
-    const name = filtered[p.id];
-    const planPos = name&&planPosOverrides[name];
-    const pos = planPos ? String(parseInt(planPos)) : getGamePos(p.id);
-    if(pos) coveredAfter.add(pos);
-  });
-  const missing = ['1','2','3','4','5'].filter(n=>!coveredAfter.has(n));
-
-  const tiles = newCourt.map(p=>{
-    const name = filtered[p.id];
-    const planPos = name&&planPosOverrides[name] ? String(parseInt(planPosOverrides[name])) : null;
-    const pos = planPos || getGamePos(p.id);
-    const allPos = allPositionsForPlayer(p.id);
-    const isComingOn = nextOn.some(q=>q.id===p.id);
-    const posClass = pos ? 'pos-'+pos : '';
-    const firstName = (S.names[p.id]||p.name||'').split(' ')[0];
-    const hasPlanPos = !!planPos;
-    // Recommend a move if player can fill a missing position
-    const canFill = allPos.filter(ap=>missing.includes(ap) && ap!==pos);
-    const recBit = canFill.length
-      ? '<div style="font-size:10px;margin-top:3px;color:var(--accent);font-weight:700;">→'+canFill[0]+'</div>'
-      : '';
-    return '<button onclick="event.stopPropagation();openPosPicker('+p.id+',\'court\')" '+
-      'style="flex:1;min-width:0;border-radius:11px;padding:10px 4px 8px;border:'+(isComingOn?'2.5px':'1.5px')+' solid;cursor:pointer;'+
-      'background:'+(isComingOn?'rgba(0,207,180,.18)':'rgba(255,255,255,.06)')+';'+
-      'display:flex;flex-direction:column;align-items:center;justify-content:center;" '+
-      'class="'+posClass+'">'+
-      '<div style="font-family:Impact,sans-serif;font-size:28px;line-height:1;">'+(pos||'?')+'</div>'+
-      '<div style="font-size:10px;margin-top:4px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 4px;">'+(isComingOn?'▲ ':'')+firstName+(hasPlanPos?'<span style="font-size:7px;color:var(--warn);margin-left:2px;">✎</span>':'')+'</div>'+
-      recBit+
-      '</button>';
-  }).join('');
-
-  const missingNote = missing.length
-    ? '<div style="text-align:center;font-size:12px;color:var(--red);margin-top:7px;font-weight:600;">⚠ Missing: '+missing.join(' · ')+'</div>'
-    : '<div style="text-align:center;font-size:12px;color:var(--green);margin-top:7px;">✓ All positions covered</div>';
-
-  return '<div onclick="event.stopPropagation()" style="padding:10px 12px 6px;flex-shrink:0;background:rgba(0,0,0,.4);border-top:1px solid rgba(255,255,255,.1);">'+
-    '<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;text-align:center;">COURT AFTER SUB — tap to change position</div>'+
-    '<div style="display:flex;gap:6px;height:90px;">'+tiles+'</div>'+
-    missingNote+
-    '</div>';
-}
-
-// Toggle sub selection from pause overlay — refreshes just the overlay
-function ovlSubInstruction(){
-  var cs=S.selCourt.size, bs=S.selBench.size;
-  if(cs>0&&bs>0&&cs===bs) return '<span style="color:var(--accent);font-weight:700;">✓ '+cs+' sub ready — tap anywhere to apply</span>';
-  if(cs>0||bs>0) return 'Tap court to sub off · bench to sub on (same count)';
-  return 'Tap players to select a sub · or tap to resume';
-}
-
-function toggleOvlSel(pid, fromCourt){
-  if(fromCourt){
-    if(S.selCourt.has(pid)) S.selCourt.delete(pid); else S.selCourt.add(pid);
-  } else {
-    if(S.selBench.has(pid)) S.selBench.delete(pid); else S.selBench.add(pid);
-  }
-  const ovl=document.getElementById('pause-ovl');
-  if(ovl) ovl.outerHTML=pauseOverlayHTML();
-}
-
-function pauseOverlayHTML(){
-  const cp=courtPlayers();
-  const bp=benchPlayers();
-  const sps=getCurrSps();
-  const gameStarted=S.gameTime>0;
-
-  // Determine who is highlighted for next sub
-  const planHL=getPlanHighlights();
-  let nextOffIds, nextOnIds, isPlanned=false, isFinalHL=false;
-  if(planHL){
-    nextOffIds=planHL.off; nextOnIds=planHL.on;
-    isPlanned=true; isFinalHL=planHL.isFinal;
-  } else {
-    nextOffIds=new Set(cp.slice(-sps).map(p=>p.id));
-    nextOnIds=new Set(bp.filter(p=>p.fouls<5).slice(0,sps).map(p=>p.id));
-  }
-
-  const stayOn=cp.filter(p=>!nextOffIds.has(p.id));
-  const nextOff=cp.filter(p=>nextOffIds.has(p.id));
-  const nextOn=bp.filter(p=>nextOnIds.has(p.id));
-  const otherBench=bp.filter(p=>!nextOnIds.has(p.id));
-
-  // Show position board when there's a sub happening
-  const showPosBoard = gameStarted && (nextOff.length>0||nextOn.length>0);
-  const posBoard = showPosBoard ? postSubPositionBoard(stayOn, nextOff, nextOn) : '';
-
-  const offColor=isFinalHL?'var(--gold)':'rgba(255,140,0,.85)';
-  const onColor=isFinalHL?'var(--gold)':'rgba(0,207,180,.85)';
-  const offBg=isFinalHL?'rgba(46,32,0,.7)':'rgba(46,26,0,.65)';
-  const onBg=isFinalHL?'rgba(46,32,0,.7)':'rgba(0,61,55,.65)';
-  const offBorder=isFinalHL?'rgba(250,204,21,.4)':'rgba(255,140,0,.4)';
-  const onBorder=isFinalHL?'rgba(250,204,21,.4)':'rgba(0,207,180,.4)';
-
-  const pillLarge=(name, time, timeColor, bg, border, pid, isComingOn)=>{
-    const allPos = (pid!==undefined) ? allPositionsForPlayer(pid) : [];
-    const covered = courtCoverage();
-    const gaps = ['1','2','3','4','5'].filter(n=>!covered[n]);
-    let posBit = '';
-    if(allPos.length){
-      if(isComingOn){
-        // For coming-on: show positions that fill gaps prominently
-        posBit = allPos.map(function(p){
-          const isGap=gaps.includes(p);
-          return '<span class="pos-badge '+(POS_COLOURS[+p]||'')+'" style="font-size:'+(isGap?'13':'10')+'px;padding:'+(isGap?'2px 7px':'1px 5px')+';margin-left:3px;'+(isGap?'':'opacity:.5;')+'">'+p+(isGap?'↑':'')+'</span>';
-        }).join('');
-      } else {
-        const pos = getGamePos(pid);
-        if(pos) posBit='<span class="pos-badge '+(POS_COLOURS[+pos]||'')+'" style="font-size:12px;padding:2px 7px;margin-left:4px;">'+pos+'</span>';
-      }
-    }
-    var fromCourt2 = !isComingOn; // off=fromCourt, on=fromBench
-    var isSel2 = pid!==undefined ? (fromCourt2 ? S.selCourt.has(pid) : S.selBench.has(pid)) : false;
-    var selOutline = isSel2 ? 'box-shadow:0 0 0 2px var(--accent);' : '';
-    var clickFn2 = pid!==undefined ? 'event.stopPropagation();toggleOvlSel('+pid+','+fromCourt2+');' : '';
-    var checkMark2 = isSel2 ? '<span style="color:var(--accent);margin-right:5px;font-size:14px;">✓</span>' : '';
-    return '<div onclick="'+clickFn2+'" style="border-radius:9px;padding:7px 11px;border:1.5px solid '+border+';background:'+bg+';'+selOutline+'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;cursor:pointer;">'+
-      '<span style="display:flex;align-items:center;font-weight:700;font-size:15px;color:#eef0f8;">'+checkMark2+name+posBit+'</span>'+
-      '<span style="font-family:Impact,sans-serif;font-size:14px;color:'+timeColor+'">'+time+'</span>'+
-      '</div>';
-  };
-
-  const pillSmall=(name, time, timeColor, pid, fromCourt)=>{
-    var pos = (pid!==undefined) ? getGamePos(pid) : null;
-    var posBit = pos ? '<span class="pos-badge '+(POS_COLOURS[+pos]||'')+'" style="font-size:10px;padding:2px 6px;margin-left:4px;cursor:pointer;" onclick="event.stopPropagation();openPosPicker('+pid+',\'court\')">'+pos+'</span>' : '';
-    var isSel = pid!==undefined && fromCourt!==undefined && (fromCourt ? S.selCourt.has(pid) : S.selBench.has(pid));
-    var selStyle = isSel ? 'border-color:var(--accent);background:rgba(255,140,0,.18);' : '';
-    var clickFn = pid!==undefined && fromCourt!==undefined ? 'event.stopPropagation();toggleOvlSel('+pid+','+fromCourt+');' : '';
-    var checkMark = isSel ? '<span style="color:var(--accent);margin-right:4px;font-size:11px;">✓</span>' : '';
-    return '<div onclick="'+clickFn+'" style="border-radius:7px;padding:5px 9px;border:1px solid var(--border);'+selStyle+'background:rgba(30,34,50,.65);display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px;cursor:'+(clickFn?'pointer':'default')+';">'+
-      '<span style="display:flex;align-items:center;font-weight:600;font-size:12px;color:#eef0f8;">'+checkMark+name+posBit+'</span>'+
-      '<span style="font-family:Impact,sans-serif;font-size:11px;color:'+timeColor+'">'+time+'</span>'+
-      '</div>';
-  };
-
-  let leftHTML='', rightHTML='';
-
-  if(gameStarted){
-    if(stayOn.length){
-      leftHTML+=`<div class="po-chdr court">STAYING ON</div>`;
-      stayOn.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)', p.id, true); });
-    }
-    if(nextOff.length){
-      const lbl=isFinalHL?'★ FINAL OFF':isPlanned?'PLANNED OFF':'SUB OFF';
-      leftHTML+=`<div class="po-chdr sub-out" style="margin-top:${stayOn.length?7:0}px;background:${offBg};border:1px solid ${offBorder};color:${offColor};">${lbl}</div>`;
-      nextOff.forEach(p=>{ leftHTML+=pillLarge(p.name, fmt(p.playTime), offColor, offBg, offBorder, p.id, false); });
-    }
-    if(!cp.length) leftHTML+=`<div style="text-align:center;color:var(--dim);font-size:11px;padding:10px">Empty court</div>`;
-
-    if(nextOn.length){
-      const lbl=isFinalHL?'★ FINAL ON':isPlanned?'PLANNED ON':'SUB ON';
-      rightHTML+=`<div class="po-chdr" style="background:${onBg};border:1px solid ${onBorder};color:${onColor};border-radius:5px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;text-align:center;padding:3px;margin-bottom:2px;">${lbl}</div>`;
-      nextOn.forEach(p=>{ rightHTML+=pillLarge(p.name, fmt(p.benchTime), onColor, onBg, onBorder, p.id, true); });
-    }
-    if(otherBench.length){
-      rightHTML+=`<div class="po-chdr bench" style="margin-top:${nextOn.length?7:0}px">BENCH</div>`;
-      otherBench.forEach(p=>{ rightHTML+=pillSmall(p.name, fmt(p.benchTime), 'var(--blue)', p.id, false); });
-    }
-    if(!bp.length) rightHTML+=`<div style="text-align:center;color:var(--dim);font-size:11px;padding:10px">Empty bench</div>`;
-  } else {
-    leftHTML+=`<div class="po-chdr court">STARTING COURT</div>`;
-    cp.forEach(p=>{ leftHTML+=pillSmall(p.name, fmt(p.playTime), 'var(--green)', p.id, true); });
-    rightHTML+=`<div class="po-chdr bench">BENCH</div>`;
-    bp.forEach(p=>{ rightHTML+=pillSmall(p.name, fmt(p.benchTime), 'var(--blue)'); });
-  }
-
-  let topHTML='';
-  if(gameStarted){
-    const subC=S.alertState==='sub-now'?'var(--red)':S.alertState==='warning'?'var(--warn)':'var(--accent)';
-    const subLbl=S.alertState==='sub-now'?'🔔 SUB NOW!':S.alertState==='warning'?'⏱ SUB IN 30s':'NEXT SUB IN';
-    topHTML=`<div class="potitle">TIMEOUT</div>
-      <div class="potime">${fmt(S.gameTime)}</div>
-      <div class="po-subcountdown-lbl">${subLbl}</div>
-      <div class="po-subcountdown" style="color:${subC}">${fmt(S.subCountdown)}</div>
-      <div class="posub">${ovlSubInstruction()}</div>`
-  } else {
-    const label=S.phase==='h2'?'2ND HALF':'1ST HALF';
-    topHTML=`<div class="potitle" style="font-size:56px;text-align:center">${label}</div><div class="postart">Tap anywhere to start the clock</div>`;
-  }
-
-  return `
-<div id="pause-ovl" class="povl" style="display:${S.isRunning?'none':'flex'}" onclick="resumeFromOverlay()">
-  <div class="po-top">${topHTML}</div>
-  ${posBoard}
-  <div class="po-roster" style="flex:1;min-height:0;overflow-y:auto;">
-    <div class="po-col" style="border-right:1px solid rgba(255,255,255,.08)">${leftHTML}</div>
-    <div class="po-col">${rightHTML}</div>
-  </div>
-  ${S.players&&S.players.length ? miniBarChartHTML() : ''}
 </div>`;
 }
 
@@ -2943,6 +2673,11 @@ function stepperHTML(field, label){
       <button onclick="event.stopPropagation();S.${field}=Math.min(1200,S.${field}+20);renderSetup(true)">+</button>
     </div>
   </div>`;
+}
+
+function periodDurationHTML(field){
+  if(usesQuarters()) return `<div class="ni-wrap"><div class="s-lbl">Mins/quarter</div><div class="ni fixed-duration">${QUARTER_SECS/60}</div></div>`;
+  return `<div class="ni-wrap"><div class="s-lbl">Mins/half</div><input aria-label="Minutes per half" class="ni" type="number" min="1" max="60" value="${S[field]}" onchange="S.${field}=Math.max(1,Math.min(60,parseInt(this.value)||20));renderSetup(true)"></div>`;
 }
 
 // ── Team Management ──
@@ -3422,6 +3157,7 @@ function resetSetup(){
   if(!confirm('Reset all game settings? This clears your roster, sub plan, presets and priority players. Your teams and ratings are NOT affected.')) return;
   // Reset only setup/game state, keep teams and settings
   S.names      = ['','','','',''];
+  S.startingSlots.clear();
   S.subPlan    = {h1:[], h2:[]};
   S.useSubPlan = false;
   S.h2PresetIds= new Set();
@@ -3429,9 +3165,6 @@ function resetSetup(){
   S.finalPresetIds = new Set();
   S.useFinalPreset = false;
   S.priorityPlayerIds = new Set();
-  S.aiParamsOpen = false;
-  S.finalsMode = false;
-  S.aiAdheresToPresets = true;
   S.phase = 'setup';
   saveState();
   renderSetup(false);
@@ -3473,7 +3206,7 @@ function autoModeTimeHTML(filtered, hasSubPlan){
     <div class="s-sec">
       <div class="s-hdr">AUTO-MODE: EXPECTED PLAYING TIME</div>
       <div style="background:var(--card);border:1.5px solid var(--border);border-radius:9px;padding:9px 11px;">
-        <div style="font-size:9px;color:var(--dim);margin-bottom:7px;text-transform:uppercase;letter-spacing:1px;">Based on ${n} players, ${usesQuarters()?'4 × '+S.h1Dur/2+' min quarters':fmt(totalSecs)+' total game'} · Sub every ${fmtInterval(S.h1Int)}</div>
+        <div style="font-size:9px;color:var(--dim);margin-bottom:7px;text-transform:uppercase;letter-spacing:1px;">Based on ${n} players, ${usesQuarters()?'4 × 10 min quarters':fmt(totalSecs)+' total game'} · Sub every ${fmtInterval(S.h1Int)}</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
           ${times.map((secs,i)=>{
             const isPri=S.priorityPlayerIds.has(i);
@@ -3488,1522 +3221,6 @@ function autoModeTimeHTML(filtered, hasSubPlan){
     </div>`;
 
   return prioritySection+summary;
-}
-
-// ═══════════════════════════════════════════
-// AI ROTATION PLAN GENERATOR
-// ═══════════════════════════════════════════
-function buildPlayerRatingSummary(filtered){
-  const team = T.teams.find(t=>t.id===T.activeTeamId);
-  const POS_LABELS = ['1-PG','2-SG','3-SF','4-PF','5-C'];
-  const ALT_LABELS = ['None','1-PG','2-SG','3-SF','4-PF','5-C'];
-
-  // Compute overall rating and key role scores per player
-  const playerData = filtered.map(name=>{
-    const player = team && team.players.find(p=>playerDisplayName(p)===name);
-    const r = player ? getPlayerRatings(T.activeTeamId, player.id) : {};
-    const has = Object.keys(r).length > 0;
-
-    if(!has) return { name, has:false };
-
-    const g = k => r[k] !== undefined ? Number(r[k]) : 5;
-
-    // Derive composite scores that actually matter for lineup decisions
-    const offence  = (g('layup')+g('jumpshot')+g('three')+g('passing')+g('dribble')+g('sharing'))/6;
-    const defence  = (g('defplayer')+g('defset')+g('offdef')+g('rebdef'))/4;
-    const handling = (g('passing')+g('dribble')+g('dribblepressure')+g('sharing')+g('receiving'))/5;
-    const interior = (g('reboff')+g('rebdef')+(g('height')===2?3:g('height')===1?1:0))/3; // height 0=small,1=med,2=tall
-    const energy   = (g('speed')+g('energy'))/2;
-    const iq       = (g('setplays')+g('composure')+g('foulshot'))/3;
-    const overall  = (offence+defence+energy+iq)/4;
-
-    // Primary and alt positions
-    const pos1 = POS_LABELS[parseInt(r.position)||0] || '1-PG';
-    const pos2 = parseInt(r.position2||0)>0 ? ALT_LABELS[parseInt(r.position2)] : null;
-    const pos3 = parseInt(r.position3||0)>0 ? ALT_LABELS[parseInt(r.position3)] : null;
-    const positions = [pos1, pos2, pos3].filter(Boolean).join('/');
-
-    // Role classification
-    const isHandler  = ['1-PG','2-SG'].some(p=>[pos1,pos2,pos3].includes(p));
-    const isInterior = ['4-PF','5-C'].some(p=>[pos1,pos2,pos3].includes(p));
-    const strengths  = [];
-    if(offence>=7)  strengths.push('scorer');
-    if(defence>=7)  strengths.push('defender');
-    if(handling>=7) strengths.push('ball-handler');
-    if(interior>=7) strengths.push('rebounder');
-    if(energy>=7)   strengths.push('high-energy');
-    if(iq>=7)       strengths.push('high-IQ');
-
-    const fatigueRaw = r.fatigue||'Normal';
-    return { name, has:true, overall, offence, defence, handling, interior, energy,
-             positions, isHandler, isInterior, strengths,
-             fatigue: fatigueRaw,
-             r1: Math.round(overall*10)/10 };
-  });
-
-  // Rank players by overall rating so AI can see relative strength
-  const ranked = [...playerData].filter(p=>p.has).sort((a,b)=>b.overall-a.overall);
-  const maxOvr = ranked.length ? ranked[0].overall : 10;
-
-  // Format each player as a concise briefing line
-  const lines = filtered.map(name=>{
-    const d = playerData.find(p=>p.name===name);
-    if(!d||!d.has) return `  ${name}: no ratings — treat as average`;
-
-    const starRating = '★'.repeat(Math.round(d.overall/2)) + '☆'.repeat(5-Math.round(d.overall/2));
-    const tier = d.overall >= maxOvr*0.85 ? 'CORE' : d.overall >= maxOvr*0.65 ? 'rotation' : 'reserve';
-    const strengthStr = d.strengths.length ? '  Strengths: '+d.strengths.join(', ') : '';
-    const posNote = d.isHandler ? ' [ball-handler]' : d.isInterior ? ' [interior]' : '';
-
-    const fatigueNote = d.fatigue&&d.fatigue!=='Normal' ? '  FATIGUE: '+d.fatigue : '';
-    return `  ${name} [${tier}] ${starRating} (${d.r1}/10)
-    Positions: ${d.positions}${posNote}
-    Off:${Math.round(d.offence*10)/10} Def:${Math.round(d.defence*10)/10} Handle:${Math.round(d.handling*10)/10} Interior:${Math.round(d.interior*10)/10} Energy:${Math.round(d.energy*10)/10}${strengthStr}${fatigueNote}`;
-  });
-
-  // Append lineup analysis: which 5-player combos are problematic
-  const handlers  = playerData.filter(p=>p.has&&p.isHandler).map(p=>p.name);
-  const interiors = playerData.filter(p=>p.has&&p.isInterior).map(p=>p.name);
-  const topPlayers = ranked.slice(0,Math.min(5,ranked.length)).map(p=>p.name);
-
-  const notes = [];
-  if(handlers.length<3)  notes.push(`Only ${handlers.length} ball-handler(s): ${handlers.join(', ')} — never bench all of them simultaneously`);
-  if(interiors.length<2) notes.push(`Only ${interiors.length} interior player(s): ${interiors.join(', ')} — keep at least one on court`);
-  if(topPlayers.length)  notes.push(`Top-rated players: ${topPlayers.join(', ')}`);
-
-  return lines.join('\n') + (notes.length ? '\n\nLINEUP RULES:\n  '+notes.join('\n  ') : '');
-}
-
-// ─── Universal AI call — routes to Claude or Gemini based on CFG.aiProvider ───
-async function callAI(prompt, maxTokens){
-  maxTokens = maxTokens || 2000;
-  const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')), 150000));
-
-  if(CFG.aiProvider === 'gemini'){
-    if(!CFG.geminiKey){ throw new Error('No Gemini API key — add it in ⚙ Settings'); }
-    const model = CFG.geminiModel||'gemini-2.5-flash';
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent';
-    // Pro uses thinkingLevel: LOW; Flash uses default dynamic thinking
-    const isProModel = model.includes('pro');
-    const genConfig = {
-      maxOutputTokens: maxTokens,
-      temperature: 0.4,
-      responseMimeType: 'application/json'
-    };
-    if(isProModel){
-      genConfig.thinkingConfig = { thinkingLevel: 'LOW' };
-    } else {
-      // Disable thinking for Flash — all tokens go to actual output, not internal reasoning
-      genConfig.thinkingConfig = { thinkingBudget: 0 };
-    }
-    const body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: genConfig });
-    const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.geminiKey };
-
-    // Exponential backoff retry: 0s → 15s → 35s (3 attempts total)
-    async function attemptFetch(attempt){
-      if(attempt>0){
-        const waitMs = attempt===1 ? 15000 : 35000;
-        const progEl = document.querySelector('#ai-rot-modal .ai-prog-lbl');
-        if(progEl) progEl.textContent = 'Rate limited — waiting '+Math.round(waitMs/1000)+'s before retry '+(attempt)+'/2…';
-        await new Promise(r=>setTimeout(r,waitMs));
-      }
-      const fetchP = fetch(url, { method:'POST', headers, body });
-      const resp = await Promise.race([fetchP, timeout]);
-      if(!resp.ok){
-        let errBody = {};
-        try{ errBody = await resp.json(); }catch(_){}
-        const apiMsg = errBody?.error?.message || errBody?.error?.status || JSON.stringify(errBody).slice(0,200);
-        if(resp.status===429){
-          if(attempt<2) return attemptFetch(attempt+1);
-          throw new Error('Gemini 429: ' + apiMsg);
-        }
-        if(resp.status===400) throw new Error('Gemini 400 (Bad request): ' + apiMsg);
-        if(resp.status===403) throw new Error('Gemini 403 (Key invalid or not enabled): ' + apiMsg);
-        throw new Error('Gemini HTTP '+resp.status+': '+apiMsg);
-      }
-      const data = await resp.json();
-      const parts = data.candidates?.[0]?.content?.parts || [];
-      const text = parts.filter(p=>!p.thought&&p.text).map(p=>p.text).join('').trim();
-      if(!text) throw new Error('Gemini returned empty response — try again');
-      return text;
-    }
-    return attemptFetch(0);
-  } else {
-    // Claude (default)
-    if(!CFG.apiKey){ throw new Error('No Anthropic API key — add it in ⚙ Settings'); }
-    const fetchP = fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CFG.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const resp = await Promise.race([fetchP, timeout]);
-    if(!resp.ok){
-      let msg = 'HTTP ' + resp.status;
-      try{ const d=await resp.json(); msg += ': ' + (d.error?.message||JSON.stringify(d)); }catch(_){}
-      if(resp.status===401) msg = 'Invalid Anthropic API key — check ⚙ Settings';
-      if(resp.status===429) msg = 'Rate limit. Wait 30s and try again.';
-      throw new Error(msg);
-    }
-    const data = await resp.json();
-    if(data.error) throw new Error('Claude: ' + data.error.message);
-    return (data.content||[]).map(c=>c.text||'').join('').trim();
-  }
-}
-
-// === AI Rotation Setup UI ===
-function aiRotationSetupHTML(filtered){
-  var n=filtered.length;
-  // Null-safety: ensure new fields exist in case of old saved state
-  if(!S.aiParams) S.aiParams={};
-  if(!S.aiParams.playerDeltas)  S.aiParams.playerDeltas={};
-  if(!S.aiParams.benchConflicts) S.aiParams.benchConflicts=[];
-  if(S.aiParams.aiTiming===undefined)     S.aiParams.aiTiming=true;
-  if(S.aiParams.minSubsPerSub===undefined) S.aiParams.minSubsPerSub=1;
-  if(S.aiParams.maxSubsPerSub===undefined) S.aiParams.maxSubsPerSub=2;
-  if(S.aiParams.minSubGap===undefined)     S.aiParams.minSubGap=240;
-  if(S.aiParams.minBenchDuration===undefined) S.aiParams.minBenchDuration=3;
-  if(S.aiParams.maxBenchDuration===undefined) S.aiParams.maxBenchDuration=12;
-  var p=S.aiParams;
-  var total=gameTotalSecs();
-  var fair=Math.round(total*COURT_SIZE/n);
-  var deltas=p.playerDeltas||{};
-  var conflicts=p.benchConflicts||[];
-  var hasSubPlan=S.subPlan&&((S.subPlan.h1||[]).filter(Boolean).length||(S.subPlan.h2||[]).filter(Boolean).length);
-
-  var POS_C={'1':'#14b8a6','2':'#3b82f6','3':'#8b5cf6','4':'#f59e0b','5':'#10b981'};
-  var POS_N={'1':'PG','2':'SG','3':'SF','4':'PF','5':'C'};
-
-  // Register toggle functions
-  window._aiToggleS5=function(idx){
-    var f2=S.names.filter(function(n){return n.trim();});
-    if(idx<COURT_SIZE){
-      var bench=f2.findIndex(function(_,i){return i>=COURT_SIZE;});
-      if(bench>=0){var t=f2[idx];f2[idx]=f2[bench];f2[bench]=t;}
-    } else {
-      var t=f2[idx];f2[idx]=f2[COURT_SIZE-1];f2[COURT_SIZE-1]=t;
-    }
-    var ni=0; for(var i=0;i<S.names.length;i++){if(S.names[i].trim())S.names[i]=f2[ni++];}
-    renderSetup(true);
-  };
-  window._aiToggleH2=function(idx){
-    var s=new Set(S.h2PresetIds);
-    if(s.has(idx)){s.delete(idx);S.h2PresetIds=s;if(!s.size)S.useH2Preset=false;}
-    else if(s.size<COURT_SIZE){s.add(idx);S.h2PresetIds=s;S.useH2Preset=s.size===COURT_SIZE;}
-    renderSetup(true);
-  };
-  window._aiToggleFin=function(idx){
-    var s=new Set(S.finalPresetIds);
-    if(s.has(idx)){s.delete(idx);S.finalPresetIds=s;if(!s.size)S.useFinalPreset=false;}
-    else if(s.size<COURT_SIZE){s.add(idx);S.finalPresetIds=s;S.useFinalPreset=s.size===COURT_SIZE;}
-    renderSetup(true);
-  };
-
-  var start5=filtered.slice(0,COURT_SIZE);
-  var h2Names=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE?[...S.h2PresetIds].map(function(i){return filtered[i];}).filter(Boolean):[];
-  var finNames=S.useFinalPreset&&S.finalPresetIds.size===COURT_SIZE?[...S.finalPresetIds].map(function(i){return filtered[i];}).filter(Boolean):[];
-
-  function presetHTML(label,selNames,desc){
-    var positions=selNames.length===COURT_SIZE?assignPositionsToGroup(selNames):{};
-    var covered=new Set(Object.values(positions).map(String));
-    var missing=['1','2','3','4','5'].filter(function(p){return!covered.has(p);});
-    var toggleFn=label==='Starting 5'?'window._aiToggleS5':label==='H2 Starting 5'?'window._aiToggleH2':'window._aiToggleFin';
-    var btns=filtered.map(function(name,i){
-      var sel=selNames.includes(name);
-      var pos=sel?positions[name]:null;
-      var col=pos?POS_C[pos]:'var(--accent)';
-      return '<button onclick="event.stopPropagation();'+toggleFn+'('+i+')" style="padding:3px 8px;border-radius:6px;font-size:10px;cursor:pointer;'
-        +'background:'+(sel?col+'22':'rgba(255,255,255,.04)')+';'
-        +'border:1.5px solid '+(sel?col+'88':'var(--border)')+';color:'+(sel?col:'var(--dim)')+';">'
-        +name+(pos?'&thinsp;<b style=\"font-family:Impact,sans-serif;font-size:9px\">'+pos+'</b>':'')
-        +'</button>';
-    }).join('');
-    var posRow='';
-    if(selNames.length===COURT_SIZE){
-      var teamObj=T.teams.find(function(t){return t.id===T.activeTeamId;});
-      posRow='<div style="display:flex;gap:4px;margin-top:6px">'
-        +selNames.map(function(nm){var pos=positions[nm];var col=POS_C[pos]||'#666';
-          var plObj=teamObj&&teamObj.players.find(function(p){return playerDisplayName(p)===nm;});
-          var pidStr=plObj?plObj.id:'';
-          return '<div style="flex:1;text-align:center;padding:3px 0;background:'+col+'18;border-radius:5px;border:1px solid '+col+'44;cursor:pointer;" onclick="'+
-            (pidStr?'openPosPicker('+JSON.stringify(pidStr)+',\'court\');setTimeout(function(){renderSetup(true);},400);':'')+'">'
-            +'<div style="font-family:Impact,sans-serif;font-size:13px;color:'+col+'">'+pos+'</div>'
-            +'<div style="font-size:8px;color:#9ca3af">'+nm+'</div>'
-            +'<div style="font-size:7px;color:#4b5563">'+(POS_N[pos]||'?')+'</div>'
-            +'<div style="font-size:7px;color:'+col+';margin-top:1px">tap to edit</div>'
-          +'</div>';
-        }).join('')+'</div>';
-      if(missing.length)posRow+='<div style="font-size:9px;color:var(--warn);margin-top:3px">No player rated for pos '+missing.join(',')+'</div>';
-    } else if(selNames.length>0){
-      posRow='<div style="font-size:9px;color:var(--dim);margin-top:3px">Select '+(COURT_SIZE-selNames.length)+' more</div>';
-    }
-    return '<div style="margin-bottom:10px;padding:10px 12px;background:rgba(255,255,255,.03);border-radius:9px;border:1px solid var(--border)">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
-        +'<span style="font-size:11px;font-weight:700;color:#9ca3af">'+label+'</span>'
-        +'<span style="font-size:9px;color:var(--dim)">'+desc+'</span>'
-      +'</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:4px">'+btns+'</div>'
-      +posRow+'</div>';
-  }
-
-  // Live slider update — updates label+bar without re-rendering the whole screen
-  window._aiSliderLive=function(name,val,fairSecs,maxD){
-    var delta=+val;
-    var col=delta>60?'var(--warn)':delta<-60?'var(--blue)':'var(--green)';
-    var dStr=(delta>=0?'+':'')+Math.floor(Math.abs(delta)/60)+':'+(String(Math.abs(delta)%60).padStart(2,'0'));
-    var target=fairSecs+delta;
-    var tStr=Math.floor(target/60)+':'+(String(target%60).padStart(2,'0'));
-    var barL=delta>=0?'50%':((50+delta/maxD*50).toFixed(1)+'%');
-    var barW=(Math.abs(delta)/maxD*50).toFixed(1)+'%';
-    var safe=name.replace(/[^a-zA-Z0-9]/g,'_');
-    var dEl=document.getElementById('ai-d-'+safe);
-    var tEl=document.getElementById('ai-t-'+safe);
-    var bEl=document.getElementById('ai-b-'+safe);
-    if(dEl){dEl.textContent=dStr;dEl.style.color=col;}
-    if(tEl){tEl.textContent=tStr;}
-    if(bEl){bEl.style.left=barL;bEl.style.width=barW;bEl.style.background=col;}
-    if(!S.aiParams.playerDeltas)S.aiParams.playerDeltas={};
-    S.aiParams.playerDeltas[name]=delta;
-  };
-
-  function sliderHTML(name){
-    var delta=deltas[name]||0,target=fair+delta,maxD=480;
-    var col=delta>60?'var(--warn)':delta<-60?'var(--blue)':'var(--green)';
-    var dStr=(delta>=0?'+':'')+Math.floor(Math.abs(delta)/60)+':'+(String(Math.abs(delta)%60).padStart(2,'0'));
-    var barL=delta>=0?'50%':((50+delta/maxD*50).toFixed(1)+'%');
-    var barW=(Math.abs(delta)/maxD*50).toFixed(1)+'%';
-    var safe=name.replace(/[^a-zA-Z0-9]/g,'_');
-    return '<div style="margin-bottom:6px;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:7px;border:1px solid var(--border)">'
-      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
-        +'<span style="width:44px;font-size:11px;font-weight:700;color:var(--text);flex-shrink:0">'+name+'</span>'
-        +'<div style="flex:1"></div>'
-        +'<span id="ai-d-'+safe+'" style="font-family:Impact,sans-serif;font-size:10px;color:'+col+';min-width:30px;text-align:right">'+dStr+'</span>'
-        +'<span id="ai-t-'+safe+'" style="font-family:Impact,sans-serif;font-size:11px;color:var(--text);min-width:34px;text-align:right">'+Math.floor(target/60)+':'+(String(target%60).padStart(2,'0'))+'</span>'
-      +'</div>'
-      +'<div style="position:relative;height:4px;background:var(--border);border-radius:2px">'
-        +'<div style="position:absolute;left:50%;top:-1px;bottom:-1px;width:1.5px;background:rgba(255,255,255,.25);transform:translateX(-50%)"></div>'
-        +'<div id="ai-b-'+safe+'" style="position:absolute;left:'+barL+';width:'+barW+';top:0;bottom:0;background:'+col+';border-radius:2px"></div>'
-        +'<input type="range" min="'+(0-maxD)+'" max="'+maxD+'" step="30" value="'+delta+'"'
-          +' oninput="window._aiSliderLive(\''+name+'\',this.value,'+fair+','+maxD+')"'
-          +' onchange="renderSetup(true)"'
-          +' style="position:absolute;top:-8px;left:0;width:100%;opacity:0;cursor:pointer;height:20px">'
-      +'</div>'
-      +'<div style="display:flex;justify-content:space-between;font-size:7px;color:#374151;margin-top:1px">'
-        +'<span>-8:00</span><span style="color:rgba(255,255,255,.15)">equal: '+Math.floor(fair/60)+':'+(String(fair%60).padStart(2,'0'))+'</span><span>+8:00</span>'
-      +'</div></div>';
-  }
-
-  var totalAllocated=filtered.reduce(function(a,nm){return a+(fair+(deltas[nm]||0));},0);
-  var courtAvail=total*COURT_SIZE;
-  var allocOk=Math.abs(totalAllocated-courtAvail)<300;
-
-  var optHtml=filtered.map(function(nm){return '<option value="'+nm+'">'+nm+'</option>';}).join('');
-
-  return '<div>'
-    +(hasSubPlan?'<div style="padding:8px 10px;background:rgba(62,207,110,.08);border:1px solid rgba(62,207,110,.2);border-radius:8px;margin-bottom:10px;font-size:10px;color:var(--green);line-height:1.5">'
-      +'Sub plan detected. '
-      +'<button onclick="inferPresetsFromSubPlan();renderSetup(true)" style="background:rgba(62,207,110,.15);border:1px solid rgba(62,207,110,.3);color:var(--green);border-radius:5px;padding:2px 7px;font-size:9px;cursor:pointer">Sync presets</button>'
-    +'</div>':'')
-    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin-bottom:8px">LINEUPS & PRESETS</div>'
-    +presetHTML('Starting 5',start5,'Required')
-    +presetHTML('H2 Starting 5',h2Names,'Optional')
-    +presetHTML('Finishing 5',finNames,'Optional')
-    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:14px 0 4px">PLAYING TIME TARGETS</div>'
-    +'<div style="font-size:10px;color:var(--dim);margin-bottom:8px">Centre = equal ('+Math.floor(fair/60)+':'+(String(fair%60).padStart(2,'0'))+'/player). Drag to adjust.</div>'
-    +filtered.map(sliderHTML).join('')
-    +'<div style="font-size:9px;padding:5px 8px;border-radius:6px;margin-top:2px;text-align:center;background:'+(allocOk?'rgba(62,207,110,.06)':'rgba(245,158,11,.06)')+';border:1px solid '+(allocOk?'rgba(62,207,110,.15)':'rgba(245,158,11,.2)')+';color:'+(allocOk?'var(--green)':'var(--warn)')+';">'
-      +'Allocated: '+Math.floor(totalAllocated/60)+'m &middot; Available: '+Math.floor(courtAvail/60)+'m'
-      +(!allocOk?' &middot; AI will balance automatically':'')
-    +'</div>'
-    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:14px 0 6px">ROTATION TIMING</div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:8px">'
-      +[{v:true,l:'AI DECIDES',sub:'AI picks when/how many, optimising for time targets'},{v:false,l:'I SPECIFY',sub:'Set sub frequency and size'}].map(function(o){
-        return '<button onclick="S.aiParams.aiTiming='+o.v+';renderSetup(true)" style="flex:1;padding:8px;border-radius:8px;cursor:pointer;text-align:left;background:'+(p.aiTiming===o.v?'rgba(62,207,110,.12)':'rgba(255,255,255,.03)')+';border:1.5px solid '+(p.aiTiming===o.v?'rgba(62,207,110,.5)':'var(--border)')+';color:'+(p.aiTiming===o.v?'var(--green)':'var(--dim)')+';">'
-          +'<div style="font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px">'+o.l+'</div>'
-          +'<div style="font-size:9px;margin-top:2px;color:'+(p.aiTiming===o.v?'#4b9e72':'#374151')+'">'+o.sub+'</div>'
-        +'</button>';
-      }).join('')
-    +'</div>'
-    +(!p.aiTiming?'<div style="display:flex;gap:8px;padding:10px 12px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid var(--border);margin-bottom:8px">'
-      +'<div style="flex:1"><div style="font-size:8px;color:var(--dim);margin-bottom:4px">PLAYERS PER SUB</div>'
-        +'<div style="display:flex;gap:4px;align-items:center">'
-          +'<span style="font-size:9px;color:var(--dim)">min</span>'
-          +'<input type="number" min="1" max="3" value="'+p.minSubsPerSub+'" oninput="S.aiParams.minSubsPerSub=+this.value" style="width:36px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px;text-align:center;font-size:12px">'
-          +'<span style="font-size:9px;color:var(--dim)">max</span>'
-          +'<input type="number" min="1" max="3" value="'+p.maxSubsPerSub+'" oninput="S.aiParams.maxSubsPerSub=+this.value" style="width:36px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px;text-align:center;font-size:12px">'
-        +'</div></div>'
-      +'<div style="flex:1"><div style="font-size:8px;color:var(--dim);margin-bottom:4px">MIN GAP (min)</div>'
-        +'<input type="number" min="2" max="12" value="'+Math.round(p.minSubGap/60)+'" oninput="S.aiParams.minSubGap=+this.value*60" style="width:48px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px;text-align:center;font-size:12px">'
-      +'</div></div>':'')
-    +'<div style="display:flex;gap:8px;padding:10px 12px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid var(--border);margin-top:6px">'
-      +'<div style="flex:1"><div style="font-size:8px;color:var(--dim);margin-bottom:4px;letter-spacing:.5px">MIN BENCH REST (min)</div>'
-        +'<input type="number" min="1" max="10" value="'+(p.minBenchDuration||3)+'" oninput="S.aiParams.minBenchDuration=+this.value" style="width:48px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px;text-align:center;font-size:12px">'
-        +'<div style="font-size:8px;color:#374151;margin-top:2px">min before return</div>'
-      +'</div>'
-      +'<div style="flex:1"><div style="font-size:8px;color:var(--dim);margin-bottom:4px;letter-spacing:.5px">MAX BENCH (min, 0=no limit)</div>'
-        +'<input type="number" min="0" max="20" value="'+(p.maxBenchDuration||12)+'" oninput="S.aiParams.maxBenchDuration=+this.value" style="width:48px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px;text-align:center;font-size:12px">'
-      +'</div>'
-    +'</div>'
-    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:14px 0 4px">BENCH PREFERENCES</div>'
-    +'<div style="font-size:10px;color:var(--dim);margin-bottom:6px">Soft preference &mdash; AI may override to hit time targets.</div>'
-    +conflicts.map(function(pair,i){
-      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;padding:5px 8px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:7px">'
-        +'<span style="font-size:11px;color:#9ca3af;flex:1">'+pair[0]+' <span style="color:var(--dim)">not bench with</span> '+pair[1]+'</span>'
-        +'<button onclick="S.aiParams.benchConflicts.splice('+i+',1);renderSetup(true)" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;line-height:1">x</button>'
-      +'</div>';
-    }).join('')
-    +'<div style="display:flex;gap:5px;align-items:center;margin-top:4px">'
-      +'<select id="ai-ca" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px;font-size:11px">'+optHtml+'</select>'
-      +'<span style="font-size:9px;color:var(--dim);flex-shrink:0">not bench</span>'
-      +'<select id="ai-cb" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px;font-size:11px">'+optHtml+'</select>'
-      +'<button onclick="var a=document.getElementById(\'ai-ca\').value,b=document.getElementById(\'ai-cb\').value;if(a!==b){if(!S.aiParams.benchConflicts)S.aiParams.benchConflicts=[];S.aiParams.benchConflicts.push([a,b]);renderSetup(true);}" style="background:rgba(62,207,110,.1);border:1px solid rgba(62,207,110,.25);color:var(--green);border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer">+</button>'
-    +'</div>'
-    +'<div style="display:flex;gap:6px;align-items:center;margin:10px 0 6px;padding:7px 10px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid var(--border)">'
-      +'<div style="flex:1;font-size:10px;color:var(--dim)">Honour preset lineups (Starting 5, H2 Start, Finishing 5)</div>'
-      +'<button onclick="S.aiAdheresToPresets=!S.aiAdheresToPresets;renderSetup(true)" style="background:'+(S.aiAdheresToPresets?'rgba(96,165,250,.15)':'rgba(255,255,255,.04)')+';border:1.5px solid '+(S.aiAdheresToPresets?'rgba(96,165,250,.5)':'var(--border)')+';color:'+(S.aiAdheresToPresets?'var(--blue)':'var(--dim)')+';border-radius:7px;padding:4px 10px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer">'+(S.aiAdheresToPresets?'LOCKED':'UNLOCKED')+'</button>'
-    +'</div>'
-    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:14px 0 4px">COACH INSTRUCTIONS</div>'
-    +'<div style="font-size:10px;color:var(--dim);margin-bottom:5px">Highest priority &mdash; overrides all other parameters.</div>'
-    +'<textarea rows="2" placeholder="e.g. Nishi needs 3 min rest every 8 min. Kaia and Izzy never bench together."'
-      +' oninput="window._aiExtraPrompt=this.value"'
-      +' style="width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;padding:8px 10px;resize:vertical;outline:none;box-sizing:border-box">'
-      +(window._aiExtraPrompt||'')+'</textarea>'
-    +'<div style="font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;color:var(--accent);margin:12px 0 5px">PLANS</div>'
-    +(S.finalsMode?'<div style="padding:7px 10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:7px;margin-bottom:8px;font-size:10px;color:var(--warn)">&#9733; FINALS MODE: higher-rated players receive proportionally more time across all plans.</div>':'')
-    +'<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">'
-      +[['A','#3ecf6e','Balanced — even time, quality lineups'],['B','#60a5fa','Block — cohesive units, larger subs'],['C','#f59e0b','Strength-first — top players more time'],['D','#a78bfa','Equal time — clean intervals (:00 :30 :20 :40)'],['E','#f43f5e','Position-balanced — positional coverage + time']].map(function(row){
-        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:'+row[1]+'12;border:1px solid '+row[1]+'44;border-radius:7px">'
-          +'<div style="width:16px;height:16px;border-radius:50%;background:'+row[1]+';font-family:Impact,sans-serif;font-size:10px;color:#111;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+row[0]+'</div>'
-          +'<div style="font-size:10px;color:#9ca3af">'+row[2]+'</div></div>';
-      }).join('')
-    +'</div>'
-    +'<button onclick="event.stopPropagation();generateAIRotation()" style="width:100%;background:rgba(62,207,110,.18);border:1.5px solid rgba(62,207,110,.5);color:var(--green);border-radius:12px;padding:13px 0;font-family:Impact,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer">⚡ GENERATE ROTATION PLANS</button>'
-    +'<button onclick="event.stopPropagation();generatePromptExport()" style="width:100%;margin-top:6px;background:rgba(96,165,250,.12);border:1.5px solid rgba(96,165,250,.35);color:var(--blue);border-radius:10px;padding:10px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer">📋 COPY PROMPT FOR CHATGPT / CLAUDE / GEMINI</button>'
-    +(window._lastAIResult?'<button onclick="event.stopPropagation();reOpenAIPlans()" style="width:100%;margin-top:6px;background:rgba(167,139,250,.12);border:1.5px solid rgba(167,139,250,.3);color:var(--purple);border-radius:10px;padding:9px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer">View last plans</button>':'')
-  +'</div>';
-}
-
-
-function extractJSON(str){
-  str=(str||'').replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
-  let start=str.indexOf('{"');
-  if(start===-1)start=str.indexOf('{');
-  if(start===-1)return null;
-  let depth=0,inStr=false,esc=false;
-  for(let i=start;i<str.length;i++){
-    const ch=str[i];
-    if(esc){esc=false;continue;}
-    if(ch==='\\'&&inStr){esc=true;continue;}
-    if(ch==='"'&&!esc){inStr=!inStr;continue;}
-    if(inStr)continue;
-    if(ch==='{')depth++;
-    else if(ch==='}'){depth--;if(depth===0)return str.slice(start,i+1);}
-  }
-  let partial=str.slice(start).replace(/,\s*$/,'').replace(/"[^\n"]*$/,'"').replace(/,\s*"[^"]*$/,'');
-  let d=0,a=0;inStr=false;esc=false;
-  for(let i=0;i<partial.length;i++){
-    const ch=partial[i];
-    if(esc){esc=false;continue;}
-    if(ch==='\\'&&inStr){esc=true;continue;}
-    if(ch==='"'&&!esc){inStr=!inStr;continue;}
-    if(inStr)continue;
-    if(ch==='{')d++;else if(ch==='}')d--;
-    else if(ch==='[')a++;else if(ch===']')a--;
-  }
-  let rep=partial;
-  while(a-->0)rep+=']';
-  while(d-->0)rep+='}';
-  try{JSON.parse(rep);return rep;}catch(_){}
-  return null;
-}
-
-
-// Global parseAtTime (also defined locally in sub plan functions)
-function parseAtTime(t){
-  if(!t) return 0;
-  var parts=String(t).split(':');
-  var secs=parseInt(parts[0])*60+(parseInt(parts[1])||0);
-  return isNaN(secs)?0:secs;
-}
-
-
-// === AI helpers ===
-function snapToCleanInterval(secs){
-  var m=Math.floor(secs/60),s=secs%60;
-  var clean=[0,20,30,40,60];
-  var best=clean.reduce(function(a,b){return Math.abs(b-s)<Math.abs(a-s)?b:a;});
-  return best===60?(m+1)*60:m*60+best;
-}
-
-function assignPositionsToGroup(names){
-  var result={},used=new Set();
-  var players=names.map(function(n){
-    var team=T.teams.find(function(t){return t.id===T.activeTeamId;});
-    var tp=team&&team.players.find(function(p){return playerDisplayName(p)===n;});
-    var r=tp?getPlayerRatings(T.activeTeamId,tp.id):{};
-    return{name:n,pos:+r.position||0,pos2:+r.position2||0,pos3:+r.position3||0};
-  });
-  [function(p){return p.pos;},function(p){return p.pos2;},function(p){return p.pos3;}].forEach(function(g){
-    players.forEach(function(p){if(!result[p.name]){var v=g(p);if(v&&!used.has(v)){result[p.name]=v;used.add(v);}}});
-  });
-  var rem=[1,2,3,4,5].filter(function(n){return!used.has(n);});
-  players.forEach(function(p){if(!result[p.name]&&rem.length)result[p.name]=rem.shift();});
-  return result;
-}
-
-function computePlayerTargets(filtered){
-  var total=gameTotalSecs(),fair=Math.round(total*COURT_SIZE/filtered.length);
-  var deltas=S.aiParams.playerDeltas||{};
-  var targets={};
-  filtered.forEach(function(n){targets[n]=Math.max(0,Math.min(total,fair+(deltas[n]||0)));});
-
-  // Finals mode: proportionally boost higher-rated players across all plans
-  if(S.finalsMode){
-    var team=T.teams.find(function(t){return t.id===T.activeTeamId;});
-    var rated=filtered.map(function(n){
-      var pl=team&&team.players.find(function(p){return playerDisplayName(p)===n;});
-      var r=pl?getPlayerRatings(T.activeTeamId,pl.id):{};
-      var ovr=0,cnt=0;
-      ['layup','jumpshot','three','passing','dribble','sharing','defplayer','defset',
-       'offdef','reboff','rebdef','setplays','composure','speed','energy'].forEach(function(k){
-        if(r[k]!==undefined){ovr+=Number(r[k]);cnt++;}
-      });
-      return{n:n,ovr:cnt>0?ovr/cnt:5};
-    });
-    var maxOvr=Math.max.apply(null,rated.map(function(p){return p.ovr;}));
-    if(maxOvr>0){
-      rated.forEach(function(p){
-        // Proportional bonus: top player gets +15% of fair share, scales down linearly
-        var bonus=Math.round((p.ovr/maxOvr-0.7)*fair*0.5);
-        if(bonus>0)targets[p.n]=Math.min(total,targets[p.n]+bonus);
-      });
-    }
-  }
-
-  // Normalise so allocations sum to total court time available
-  var courtTime=total*COURT_SIZE,rawSum=Object.values(targets).reduce(function(a,b){return a+b;},0);
-  if(rawSum>0&&Math.abs(rawSum-courtTime)>30){
-    var scale=courtTime/rawSum;
-    Object.keys(targets).forEach(function(n){targets[n]=Math.round(targets[n]*scale);});
-  }
-  return targets;
-}
-
-
-function inferPresetsFromSubPlan(){
-  var filtered=S.names.filter(function(n){return n.trim();});
-  if(filtered.length<COURT_SIZE||!S.subPlan)return;
-  var court=new Set(filtered.slice(0,COURT_SIZE).map(function(n){return filtered.indexOf(n);}));
-  (S.subPlan.h1||[]).filter(Boolean).forEach(function(sub){
-    (sub.off||[]).forEach(function(n){var i=filtered.indexOf(n);if(i>=0)court.delete(i);});
-    (sub.on||[]).forEach(function(n){var i=filtered.indexOf(n);if(i>=0)court.add(i);});
-  });
-  if(court.size===COURT_SIZE){S.h2PresetIds=new Set(court);S.useH2Preset=true;}
-  var h2c=new Set(S.h2PresetIds.size===COURT_SIZE?S.h2PresetIds:court);
-  (S.subPlan.h2||[]).filter(Boolean).forEach(function(sub){
-    (sub.off||[]).forEach(function(n){var i=filtered.indexOf(n);if(i>=0)h2c.delete(i);});
-    (sub.on||[]).forEach(function(n){var i=filtered.indexOf(n);if(i>=0)h2c.add(i);});
-  });
-  if(h2c.size===COURT_SIZE){S.finalPresetIds=new Set(h2c);S.useFinalPreset=true;}
-}
-
-function calcPlanActualTimes(plan,filtered){
-  var halfSecs=usesQuarters()?20*60:S.h1Dur*60;
-  var times=Object.fromEntries(filtered.map(function(n){return[n,0];}));
-  function sim(subs,startNames,halfDur){
-    var court=new Set(startNames);var last=0;
-    var evts=[].concat(subs||[]).sort(function(a,b){return parseAtTime(a.atTime)-parseAtTime(b.atTime);});
-    evts.forEach(function(sub){
-      var t=parseAtTime(sub.atTime);
-      if(t<=last||t>halfDur)return;
-      court.forEach(function(n){if(times[n]!==undefined)times[n]+=t-last;});
-      last=t;
-      (sub.off||[]).forEach(function(n){court.delete(n);});
-      (sub.on||[]).forEach(function(n){court.add(n);});
-    });
-    court.forEach(function(n){if(times[n]!==undefined)times[n]+=halfDur-last;});
-  }
-  var h1Start=filtered.slice(0,COURT_SIZE);
-  sim(plan.h1,h1Start,halfSecs);
-  var h2Start=plan.h2Starting5&&plan.h2Starting5.length===COURT_SIZE?plan.h2Starting5:h1Start;
-  sim(plan.h2,h2Start,halfSecs);
-  return times;
-}
-
-// ── Plan D: client-side equal time with 2-player preferred subs ──
-function buildPlanD(adjTargets){
-  var filtered2=S.names.filter(function(n){return n.trim();});
-  var halfSecs2=usesQuarters()?20*60:S.h1Dur*60;
-  var total2=gameTotalSecs();
-  var fair2=Math.round(total2*COURT_SIZE/filtered2.length);
-  var n=filtered2.length;
-  var nBench=n-COURT_SIZE;
-
-  var h2PresetNames2=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE&&S.aiAdheresToPresets
-    ?[...S.h2PresetIds].map(function(i){return filtered2[i];}).filter(Boolean):null;
-  var finPresetNames2=S.useFinalPreset&&S.finalPresetIds.size===COURT_SIZE&&S.aiAdheresToPresets
-    ?[...S.finalPresetIds].map(function(i){return filtered2[i];}).filter(Boolean):null;
-
-  var plan={id:'D',label:'Equal time',
-    rationale:'',h1:[],h2:[],h2Starting5:[],finishing5:[],expectedTimes:{}};
-
-  if(n<=COURT_SIZE){
-    plan.rationale='All players on court — no subs needed.';
-    plan.expectedTimes=Object.fromEntries(filtered2.map(function(nm){
-      return[nm,Math.floor(total2/60)+':'+(String(total2%60).padStart(2,'0'))];
-    }));
-    return plan;
-  }
-
-  // ── Choose interval: 3:20 (200s) or 4:00 (240s) ──
-  // 4:00 for smaller squads (≤8), 3:20 for larger (9+)
-  // Both snap to clean times. Prefer more windows for better distribution.
-  var interval = n<=8 ? 240 : 200; // 4:00 or 3:20
-  var subSize = nBench>=2 ? 2 : 1;  // 2-player preferred; 1-player if only 1 bench
-
-  // ── Rating-proportional targets to spread variance fairly ──
-  // Instead of equal targets (which makes one player bear all rounding),
-  // give a tiny proportional nudge based on rating so variance lands across multiple players.
-  var team3=T.teams.find(function(t){return t.id===T.activeTeamId;});
-  var ratings3={};
-  filtered2.forEach(function(nm){
-    var pl=team3&&team3.players.find(function(p){return playerDisplayName(p)===nm;});
-    var r=pl?getPlayerRatings(T.activeTeamId,pl.id):{};
-    var ovr=0,cnt=0;
-    ['layup','jumpshot','three','passing','dribble','sharing','defplayer','defset',
-     'offdef','reboff','rebdef','setplays','composure','speed','energy'].forEach(function(k){
-      if(r[k]!==undefined){ovr+=Number(r[k]);cnt++;}
-    });
-    ratings3[nm]=cnt>0?ovr/cnt:5;
-  });
-  var maxR3=Math.max.apply(null,Object.values(ratings3).concat([5]));
-  var minR3=Math.min.apply(null,Object.values(ratings3).concat([5]));
-  var rRange3=maxR3-minR3||1;
-
-  // Base from adjTargets (slider deltas + fatigue), then add tiny rating nudge
-  var tgts3={};
-  filtered2.forEach(function(nm){
-    var base=adjTargets&&adjTargets[nm]?adjTargets[nm]:fair2;
-    var normR=(ratings3[nm]-minR3)/rRange3; // 0-1
-    // Nudge: spread ~half a window's worth proportionally across all players
-    var nudge=Math.round((normR-0.5)*(interval/2));
-    tgts3[nm]=base+nudge;
-  });
-  // Normalise so sum = courtTime
-  var tSum=Object.values(tgts3).reduce(function(a,b){return a+b;},0);
-  var tScale=(total2*COURT_SIZE)/tSum;
-  Object.keys(tgts3).forEach(function(nm){tgts3[nm]=Math.round(tgts3[nm]*tScale);});
-
-  // ── Build half with fixed-interval 2-player subs ──
-  function buildHalfD(halfDur,startNames){
-    var halfTgt3={};filtered2.forEach(function(nm){halfTgt3[nm]=tgts3[nm]/2;});
-    var timeOn3={};filtered2.forEach(function(nm){timeOn3[nm]=0;});
-    var lastOffAt3={};filtered2.forEach(function(nm){lastOffAt3[nm]=-1;});
-    var onCourt3=new Set(startNames);
-    var last3=0,subs3=[];
-
-    // Generate window times
-    var winTimes=[];
-    var seen=new Set();
-    for(var t=interval;t<halfDur;t+=interval){
-      var ct=snapToCleanInterval(t);
-      if(ct>0&&ct<halfDur&&!seen.has(ct)){winTimes.push(ct);seen.add(ct);}
-    }
-    winTimes.sort(function(a,b){return a-b;});
-
-    winTimes.forEach(function(wt){
-      filtered2.forEach(function(nm){if(onCourt3.has(nm))timeOn3[nm]+=wt-last3;});
-      last3=wt;
-
-      // Off: highest timeOn/halfTarget ratio — most ahead of target
-      var offCands=[...onCourt3];
-      // On: bench players sorted by lowest ratio (most behind target)
-      var onCands=filtered2.filter(function(nm){
-        if(onCourt3.has(nm))return false;
-        // Respect min bench rest
-        var minB=(S.aiParams&&S.aiParams.minBenchDuration||3)*60;
-        if(lastOffAt3[nm]>=0&&wt-lastOffAt3[nm]<minB)return false;
-        return true;
-      });
-      if(onCands.length<subSize)
-        onCands=filtered2.filter(function(nm){return!onCourt3.has(nm);});
-
-      offCands.sort(function(a,b){
-        var ra=halfTgt3[a]>0?timeOn3[a]/halfTgt3[a]:timeOn3[a];
-        var rb=halfTgt3[b]>0?timeOn3[b]/halfTgt3[b]:timeOn3[b];
-        return rb-ra;
-      });
-      onCands.sort(function(a,b){
-        var ra=halfTgt3[a]>0?timeOn3[a]/halfTgt3[a]:0;
-        var rb=halfTgt3[b]>0?timeOn3[b]/halfTgt3[b]:0;
-        return ra-rb;
-      });
-
-      var cnt=Math.min(subSize,offCands.length,onCands.length);
-      if(!cnt)return;
-      var fOff=offCands.slice(0,cnt);
-      var fOn=onCands.slice(0,cnt);
-      fOff.forEach(function(nm){onCourt3.delete(nm);lastOffAt3[nm]=wt;});
-      fOn.forEach(function(nm){onCourt3.add(nm);});
-      subs3.push({subNum:subs3.length+1,
-        atTime:Math.floor(wt/60)+':'+(String(wt%60).padStart(2,'0')),
-        off:fOff,on:fOn,note:subSize===2?'2-player':'1-player'});
-    });
-
-    // Enforce finishing preset in H2
-    if(finPresetNames2&&finPresetNames2.length===COURT_SIZE){
-      var finSet=new Set(finPresetNames2);
-      var wOff=[...onCourt3].filter(function(nm){return!finSet.has(nm);});
-      var wOn=finPresetNames2.filter(function(nm){return!onCourt3.has(nm);});
-      if(wOff.length&&wOn.length){
-        var cnt2=Math.min(wOff.length,wOn.length);
-        var ft=snapToCleanInterval(halfDur-120);
-        if(!subs3.length||parseAtTime(subs3[subs3.length-1].atTime)<ft-30){
-          subs3.push({subNum:subs3.length+1,
-            atTime:Math.floor(ft/60)+':'+(String(ft%60).padStart(2,'0')),
-            off:wOff.slice(0,cnt2),on:wOn.slice(0,cnt2),note:'Finishing lineup'});
-        }
-      }
-    }
-    return subs3;
-  }
-
-  var h1Start2=filtered2.slice(0,COURT_SIZE);
-  plan.h1=buildHalfD(halfSecs2,h1Start2);
-  var h2Start2=h2PresetNames2||h1Start2;
-  plan.h2Starting5=[].concat(h2Start2);
-  plan.h2=buildHalfD(halfSecs2,h2Start2);
-  if(finPresetNames2)plan.finishing5=[].concat(finPresetNames2);
-
-  // Compute actual times
-  var actual2=calcPlanActualTimes(plan,filtered2);
-  plan.expectedTimes=Object.fromEntries(filtered2.map(function(nm){
-    var t=actual2[nm]||0;
-    return[nm,Math.floor(t/60)+':'+(String(t%60).padStart(2,'0'))];
-  }));
-
-  var maxErr2=Math.max.apply(null,filtered2.map(function(nm){
-    return Math.abs((actual2[nm]||0)-(tgts3[nm]||fair2));
-  }));
-  var intLabel=interval===200?'3:20':'4:00';
-  plan.rationale='2-player subs every '+intLabel+'. Targets spread across all players by rating — no single player bears all the variance.';
-
-  return plan;
-}
-
-
-
-
-function generateAIRotation(){
-  // Null-safety
-  if(!S.aiParams)S.aiParams={};
-  if(!S.aiParams.playerDeltas)S.aiParams.playerDeltas={};
-  if(!S.aiParams.benchConflicts)S.aiParams.benchConflicts=[];
-  if(S.aiParams.minBenchDuration===undefined)S.aiParams.minBenchDuration=3;
-  if(S.aiParams.maxBenchDuration===undefined)S.aiParams.maxBenchDuration=12;
-
-  var filtered=S.names.filter(function(n){return n.trim();});
-  if(filtered.length<COURT_SIZE){alert('Add at least '+COURT_SIZE+' players first.');return;}
-
-  showAIRotationModal(null,true,filtered,0);
-
-  var total=gameTotalSecs();
-  var fair=Math.round(total*COURT_SIZE/filtered.length);
-  var halfSecs=usesQuarters()?20*60:S.h1Dur*60;
-  var courtTime=total*COURT_SIZE;
-
-  // ── Fatigue map ──
-  var fatigueMap={};
-  var team2=T.teams.find(function(t){return t.id===T.activeTeamId;});
-  filtered.forEach(function(n){
-    var pl=team2&&team2.players.find(function(p){return playerDisplayName(p)===n;});
-    var r=pl?getPlayerRatings(T.activeTeamId,pl.id):{};
-    fatigueMap[n]=r.fatigue||'Normal';
-  });
-
-  // ── Get player ratings ──
-  var ratingMap={};
-  var posMap={};   // name → [pos1,pos2,pos3]
-  filtered.forEach(function(n){
-    var pl=team2&&team2.players.find(function(p){return playerDisplayName(p)===n;});
-    var r=pl?getPlayerRatings(T.activeTeamId,pl.id):{};
-    var ovr=0,cnt=0;
-    ['layup','jumpshot','three','passing','dribble','sharing','defplayer','defset',
-     'offdef','reboff','rebdef','setplays','composure','speed','energy'].forEach(function(k){
-      if(r[k]!==undefined){ovr+=Number(r[k]);cnt++;}
-    });
-    ratingMap[n]=cnt>0?ovr/cnt:5;
-    posMap[n]=[+r.position||0,+r.position2||0,+r.position3||0].filter(function(p){return p>0;});
-  });
-
-  // ── Base targets from sliders + fatigue ──
-  var p=S.aiParams;
-  var deltas=p.playerDeltas||{};
-  var baseTgts={};
-  filtered.forEach(function(n){baseTgts[n]=Math.max(0,Math.min(total,fair+(deltas[n]||0)));});
-  // Fatigue caps
-  filtered.forEach(function(n){
-    var fat=fatigueMap[n];
-    if(fat==='Managed Minutes')baseTgts[n]=Math.min(baseTgts[n],Math.round(fair*0.75));
-    if(fat==='Injury Return/Illness')baseTgts[n]=Math.min(baseTgts[n],Math.round(fair*0.60));
-  });
-  function normTgts(raw){
-    var s=Object.values(raw).reduce(function(a,b){return a+b;},0);
-    var sc2=s>0?courtTime/s:1;
-    var out={};Object.keys(raw).forEach(function(k){out[k]=Math.round(raw[k]*sc2);});
-    return out;
-  }
-  baseTgts=normTgts(baseTgts);
-
-  // ── Presets ──
-  var h2PresetNames=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE&&S.aiAdheresToPresets
-    ?[...S.h2PresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
-  var finalPresetNames=S.useFinalPreset&&S.finalPresetIds.size===COURT_SIZE&&S.aiAdheresToPresets
-    ?[...S.finalPresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
-  var h1Start=filtered.slice(0,COURT_SIZE);
-  var h2Start=h2PresetNames||h1Start;
-
-  // ── Min bench rest (seconds) ──
-  var minBenchSecs=(p.minBenchDuration||3)*60;
-  var maxBenchSecs=(p.maxBenchDuration||12)*60;
-  // Preferred sub size from "I SPECIFY" settings (Plan D always uses individual subs)
-  var preferPaired=(!p.aiTiming)&&(p.minSubsPerSub||1)>=2;
-
-  // ── Core half-builder ──
-  function buildHalf(halfDur,startNames,tgts,windowFn,posCheck){
-    var halfTgt={};filtered.forEach(function(nm){halfTgt[nm]=(tgts[nm]||fair)/2;});
-    var timeOn={};filtered.forEach(function(nm){timeOn[nm]=0;});
-    var timeBench={};filtered.forEach(function(nm){timeBench[nm]=0;});
-    var lastOnAt={};filtered.forEach(function(nm){lastOnAt[nm]=startNames.indexOf(nm)>=0?0:-1;});
-    var lastOffAt={};filtered.forEach(function(nm){lastOffAt[nm]=-1;});
-    var onCourt=new Set(startNames);
-    var subs=[];var last=0;
-    var events=windowFn(halfDur);
-    events.forEach(function(ev){
-      var dt=ev.t-last;
-      onCourt.forEach(function(nm){timeOn[nm]+=dt;});
-      filtered.filter(function(nm){return!onCourt.has(nm);}).forEach(function(nm){timeBench[nm]+=dt;});
-      last=ev.t;
-      var size=ev.size||1;
-
-      // Off candidates: any court player — NO time-based blocking
-      // (ratio sort naturally handles rotation order without forced minimums)
-      var offCands=[...onCourt];
-      if(posCheck&&offCands.length>size){
-        var posFiltered=offCands.filter(function(nm){
-          var remaining=new Set(onCourt);remaining.delete(nm);
-          return posCheck(remaining,filtered,posMap);
-        });
-        if(posFiltered.length>=size)offCands=posFiltered;
-      }
-
-      // On candidates: bench players who have rested >= minBenchSecs since coming OFF
-      var onCands=filtered.filter(function(nm){
-        if(onCourt.has(nm))return false;
-        if(lastOffAt[nm]>=0&&ev.t-lastOffAt[nm]<minBenchSecs)return false;
-        return true;
-      });
-      if(onCands.length<size)onCands=filtered.filter(function(nm){return!onCourt.has(nm);});
-
-      // Sort off: highest timeOn/halfTarget ratio (most ahead of target) comes off first
-      offCands.sort(function(a,b){
-        var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:timeOn[a];
-        var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:timeOn[b];
-        return rb-ra;
-      });
-      // Sort on: lowest ratio comes on; overdue players (exceed maxBench) get top priority
-      onCands.sort(function(a,b){
-        var aOverdue=maxBenchSecs>0&&timeBench[a]>=maxBenchSecs;
-        var bOverdue=maxBenchSecs>0&&timeBench[b]>=maxBenchSecs;
-        if(aOverdue&&!bOverdue)return -1;
-        if(bOverdue&&!aOverdue)return 1;
-        var ra=halfTgt[a]>0?timeOn[a]/halfTgt[a]:0;
-        var rb=halfTgt[b]>0?timeOn[b]/halfTgt[b]:0;
-        return ra-rb;
-      });
-
-      var cnt=Math.min(size,offCands.length,onCands.length);
-      if(!cnt)return;
-      var fOff=offCands.slice(0,cnt);
-      var fOn=onCands.slice(0,cnt);
-      fOff.forEach(function(nm){onCourt.delete(nm);timeBench[nm]=0;lastOffAt[nm]=ev.t;});
-      fOn.forEach(function(nm){onCourt.add(nm);lastOnAt[nm]=ev.t;timeBench[nm]=0;});
-
-      var cleanT=snapToCleanInterval(ev.t);
-      if(subs.length){
-        var prev=parseAtTime(subs[subs.length-1].atTime);
-        if(cleanT<=prev)cleanT=snapToCleanInterval(prev+60);
-      }
-      cleanT=Math.max(30,Math.min(halfDur-30,cleanT));
-      subs.push({subNum:subs.length+1,
-        atTime:Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0')),
-        off:fOff,on:fOn,note:ev.note||''});
-    });
-    // Post: enforce finishing5 preset
-    if(finalPresetNames&&finalPresetNames.length===COURT_SIZE){
-      var finalSet=new Set(finalPresetNames);
-      var wrongOff=[...onCourt].filter(function(nm){return!finalSet.has(nm);});
-      var wrongOn=finalPresetNames.filter(function(nm){return!onCourt.has(nm);});
-      if(wrongOff.length&&wrongOn.length){
-        var cnt2=Math.min(wrongOff.length,wrongOn.length);
-        var cleanT=snapToCleanInterval(halfDur-120);
-        if(!subs.length||parseAtTime(subs[subs.length-1].atTime)<cleanT-30){
-          subs.push({subNum:subs.length+1,
-            atTime:Math.floor(cleanT/60)+':'+(String(cleanT%60).padStart(2,'0')),
-            off:wrongOff.slice(0,cnt2),on:wrongOn.slice(0,cnt2),note:'Finishing lineup'});
-        }
-      }
-    }
-    return subs;
-  }
-
-  // ── Window generators ──
-  var n=filtered.length;
-  // stdW: n-1 individual 1-player windows (required for equal time precision)
-  function stdW(halfDur){
-    var ev=[];var sl=halfDur/n;
-    for(var i=1;i<n;i++)ev.push({t:sl*i,size:1});
-    return ev;
-  }
-  // pairedW / blockW: merge adjacent pairs → 2-player windows
-  // For odd squad sizes (7, 9, 11): n-1 is even → all pairs → insufficient transitions.
-  // Add one extra single-player window so total transitions = n (enables near-equal time).
-  function pairedW(halfDur){
-    var raw=[];var sl=halfDur/n;
-    for(var i=1;i<n;i++)raw.push(sl*i);
-    var ev=[];var i=0;
-    while(i<raw.length){
-      if(i+1<raw.length){ev.push({t:(raw[i]+raw[i+1])/2,size:2,note:'2-player sub'});i+=2;}
-      else{ev.push({t:raw[i],size:1,note:'Sub'});i++;}
-    }
-    // Odd squad: n-1 is even so no natural remainder above.
-    // Add a corrective single-player window at the n/(n+1) point to get n total transitions.
-    if(n%2===1){
-      var extraT=halfDur*(n)/(n+1);
-      ev.push({t:extraT,size:1,note:'Balance sub'});
-      ev.sort(function(a,b){return a.t-b.t;});
-    }
-    return ev;
-  }
-  function blockW(halfDur){
-    var raw=[];var sl=halfDur/n;
-    for(var i=1;i<n;i++)raw.push(sl*i);
-    var ev=[];var i=0;
-    while(i<raw.length){
-      if(i+1<raw.length){ev.push({t:(raw[i]+raw[i+1])/2,size:2,note:'Block swap'});i+=2;}
-      else{ev.push({t:raw[i],size:1,note:'Block swap'});i++;}
-    }
-    return ev;
-  }
-  // wFnFor: choose window function per plan
-  // All plans honour user's sub-size preference.
-  // Plan D uses pairedW when preferPaired=true; any rounding excess goes to top-ranked players via targets.
-  // Plan B always uses paired subs for block strategy.
-  function wFnFor(planId){
-    if(planId==='B')return blockW;
-    return preferPaired?pairedW:stdW;
-  }
-  // ── Position check ──
-  function posOK(remaining,all,posMap){
-    var hasBH=false,hasIn=false;
-    remaining.forEach(function(nm){
-      var pp=posMap[nm]||[];
-      if(pp[0]<=2||pp[1]<=2)hasBH=true;
-      if(pp[0]>=4||pp[1]>=4)hasIn=true;
-    });
-    // Only enforce if we actually have those position types in the squad
-    var squadHasBH=all.some(function(nm){var pp=posMap[nm]||[];return pp[0]<=2||pp[1]<=2;});
-    var squadHasIn=all.some(function(nm){var pp=posMap[nm]||[];return pp[0]>=4||pp[1]>=4;});
-    return (!squadHasBH||hasBH)&&(!squadHasIn||hasIn);
-  }
-
-  // ── Rating targets ──
-  var ratings=Object.values(ratingMap);
-  var maxR=Math.max.apply(null,ratings.concat([5]));
-  var minR=Math.min.apply(null,ratings.concat([5]));
-  var rRange=maxR-minR||1;
-
-  // Plan D targets: equal time by default.
-  // When using 2-player subs (preferPaired), paired windows can't achieve perfect equality —
-  // any rounding excess goes to the top-ranked players rather than being arbitrary.
-  function dTgts(){
-    var t={};filtered.forEach(function(n){t[n]=baseTgts[n]||fair;});
-    if(preferPaired){
-      // Sort players by rating descending
-      var ranked=[].concat(filtered).sort(function(a,b){return (ratingMap[b]||5)-(ratingMap[a]||5);});
-      // Top 2-3 get a small nudge (+60s) to absorb rounding; bottom players get correspondingly less
-      var nBoost=Math.min(3,Math.ceil(filtered.length/4));
-      ranked.slice(0,nBoost).forEach(function(n){t[n]+=60;});
-      ranked.slice(-nBoost).forEach(function(n){t[n]-=60;});
-    }
-    return normTgts(t);
-  }
-  function aTgts(){
-    var t={};filtered.forEach(function(n){
-      var normR=(ratingMap[n]-minR)/rRange;
-      t[n]=(baseTgts[n]||fair)+Math.round((normR-0.5)*fair*0.16);
-    });
-    return normTgts(t);
-  }
-  // Plan C: ±35% rating boost, 10min floor
-  function cTgts(){
-    var t={};filtered.forEach(function(n){
-      var normR=(ratingMap[n]-minR)/rRange;
-      t[n]=(baseTgts[n]||fair)+Math.round((normR-0.5)*fair*0.70);
-    });
-    filtered.forEach(function(n){t[n]=Math.max(600,t[n]);});
-    return normTgts(t);
-  }
-
-  // ── Build all 5 plans ──
-  function makePlan(id,label,rationale,tgts,wFn,posCheck){
-    var plan={id:id,label:label,rationale:rationale,
-      h1:[],h2:[],h2Starting5:[],finishing5:[],expectedTimes:{}};
-    plan.h1=buildHalf(halfSecs,h1Start,tgts,wFn,posCheck);
-    plan.h2Starting5=[].concat(h2Start);
-    plan.h2=buildHalf(halfSecs,h2Start,tgts,wFn,posCheck);
-    if(finalPresetNames)plan.finishing5=[].concat(finalPresetNames);
-    var actual=calcPlanActualTimes(plan,filtered);
-    plan.expectedTimes=Object.fromEntries(filtered.map(function(n){
-      var t=actual[n]||0;
-      return[n,Math.floor(t/60)+':'+(String(t%60).padStart(2,'0'))];
-    }));
-    return plan;
-  }
-
-  // Plan D uses its own standalone buildPlanD function (not makePlan)
-  var planDResult=buildPlanD(baseTgts);
-  var at=aTgts(), ct=cTgts();
-  var results=[
-    planDResult,
-    makePlan('A','Balanced',
-      'Even time with a small boost for higher-rated players. '+(preferPaired?'2-player subs as specified.':''),
-      at,wFnFor('A'),null),
-    makePlan('B','Block',
-      '2-player unit swaps keep lineup cohesion. Fewer but larger substitutions.',
-      baseTgts,wFnFor('B'),null),
-    makePlan('C','Strength-first',
-      'Higher-rated players get significantly more time. Every player still gets minimum 10 minutes. '+(preferPaired?'2-player subs as specified.':''),
-      ct,wFnFor('C'),null),
-    makePlan('E','Position-balanced',
-      'Substitutions maintain positional coverage — always a ball-handler and interior player on court. '+(preferPaired?'2-player subs as specified.':''),
-      baseTgts,wFnFor('E'),function(rem){return posOK(rem,filtered,posMap);}),
-  ];
-
-  window._lastAIResult={plans:results};
-  window._lastAIFiltered=filtered;
-  showAIRotationModal({plans:results},false,filtered);
-}
-
-
-
-
-
-
-function applyAIRotation(plan, filtered){
-  const nameToIdx = {};
-  filtered.forEach((n,i)=>{ nameToIdx[n]=i; });
-
-  // Safe fuzzy lookup - prefers exact matches, avoids ambiguous guesses
-  function findIdx(aiName){
-    if(!aiName) return undefined;
-    const s = String(aiName).trim();
-    if(!s) return undefined;
-    // 1. Exact
-    if(nameToIdx[s] !== undefined) return nameToIdx[s];
-    const lower = s.toLowerCase();
-    // 2. Case-insensitive exact
-    for(const [n,i] of Object.entries(nameToIdx)){
-      if(n.toLowerCase()===lower) return i;
-    }
-    // 3. Roster name starts with AI name — safe only if unique match
-    const starts = Object.entries(nameToIdx).filter(([n])=>n.toLowerCase().startsWith(lower));
-    if(starts.length===1) return starts[0][1];
-    if(starts.length>1){
-      const exact = starts.filter(([n])=>n.toLowerCase().split(' ')[0]===lower);
-      if(exact.length===1) return exact[0][1];
-      return undefined; // ambiguous
-    }
-    // 4. AI name exactly matches a player's first word
-    const fw = Object.entries(nameToIdx).filter(([n])=>{
-      const fn = n.toLowerCase().split(' ')[0];
-      return lower===fn || lower.startsWith(fn+' ');
-    });
-    if(fw.length===1) return fw[0][1];
-    return undefined; // no safe match
-  }
-
-  function parseHalf(subs){
-    return (subs||[]).map(sub=>{
-      // Track used indices to prevent duplicate matches collapsing Set size
-      const usedOff=new Set(), usedOn=new Set();
-      const offSet=new Set(), onSet=new Set();
-      (sub.off||[]).forEach(name=>{
-        const idx=findIdx(name);
-        if(idx!==undefined&&!usedOff.has(idx)){offSet.add(idx);usedOff.add(idx);}
-      });
-      (sub.on||[]).forEach(name=>{
-        const idx=findIdx(name);
-        if(idx!==undefined&&!usedOn.has(idx)){onSet.add(idx);usedOn.add(idx);}
-      });
-      // Enforce balance — off and on must be equal to keep 5 on court always
-      while(offSet.size>onSet.size){const l=[...offSet].pop();offSet.delete(l);}
-      while(onSet.size>offSet.size){const l=[...onSet].pop();onSet.delete(l);}
-      return {off:offSet, on:onSet, atTime:sub.atTime||null};
-    });
-  }
-
-  // Auto-adjust sub intervals so slot count matches AI sub count
-  const h1Subs=(plan.h1||[]).length;
-  const h2Subs=(plan.h2||[]).length;
-  const _halfSecs=usesQuarters()?20*60:S.h1Dur*60;
-  if(h1Subs>0){ S.h1Int=Math.max(20,Math.floor(_halfSecs/(h1Subs+1))); }
-  if(h2Subs>0){ S.h2Int=Math.max(20,Math.floor(_halfSecs/(h2Subs+1))); }
-
-  // Apply AI starting 5 — reorder S.names so getCourtAtPlanPoint tracks correctly
-  if(plan.starting5&&plan.starting5.length===COURT_SIZE){
-    const s5Ids=plan.starting5.map(findIdx).filter(i=>i!==undefined);
-    const uniq=[...new Set(s5Ids)];
-    if(uniq.length===COURT_SIZE){
-      const benchIds=filtered.map((_,i)=>i).filter(i=>!uniq.includes(i));
-      S.names=[...uniq,...benchIds].map(i=>filtered[i]);
-    }
-  }
-
-  const newFiltered=S.names.filter(n=>n.trim());
-  const newNameToIdx={};
-  newFiltered.forEach((n,i)=>{ newNameToIdx[n]=i; });
-
-  // Helper: remap original filtered index → new filtered index
-  function remap(origIdx){
-    const name=filtered[origIdx];
-    return name!==undefined?newNameToIdx[name]:undefined;
-  }
-
-  // Apply H2 starting 5
-  if(plan.h2Starting5&&plan.h2Starting5.length===COURT_SIZE){
-    const ids=plan.h2Starting5.map(findIdx).map(remap).filter(i=>i!==undefined);
-    const uniq=[...new Set(ids)];
-    if(uniq.length===COURT_SIZE){S.h2PresetIds=new Set(uniq);S.useH2Preset=true;}
-  }
-
-  // Apply finishing 5
-  if(plan.finishing5&&plan.finishing5.length===COURT_SIZE){
-    const ids=plan.finishing5.map(findIdx).map(remap).filter(i=>i!==undefined);
-    const uniq=[...new Set(ids)];
-    if(uniq.length===COURT_SIZE){S.finalPresetIds=new Set(uniq);S.useFinalPreset=true;}
-  }
-
-  // Parse subs then remap to new order
-  const h1Plan=parseHalf(plan.h1).map(sub=>({
-    off:new Set([...sub.off].map(remap).filter(i=>i!==undefined)),
-    on: new Set([...sub.on ].map(remap).filter(i=>i!==undefined)),
-    atTime: sub.atTime
-  }));
-  const h2Plan=parseHalf(plan.h2).map(sub=>({
-    off:new Set([...sub.off].map(remap).filter(i=>i!==undefined)),
-    on: new Set([...sub.on ].map(remap).filter(i=>i!==undefined)),
-    atTime: sub.atTime
-  }));
-
-  const totalSubs=h1Plan.length+h2Plan.length;
-  const filledSubs=[...h1Plan,...h2Plan].filter(s=>s.off.size>0&&s.on.size>0).length;
-
-  S.subPlan={h1:h1Plan,h2:h2Plan};
-  S.useSubPlan=true;
-  closeAIRotationModal();
-  renderSetup(true);
-
-  if(filledSubs===0&&totalSubs>0){
-    showToast('⚠ Plan loaded but names didn\'t match — check roster');
-  } else {
-    showToast('Plan '+(plan.label||plan.id)+' loaded ✓ ('+filledSubs+'/'+totalSubs+' subs) — tap 🤖 AI Plan to switch');
-  }
-}
-
-function reOpenAIPlans(){
-  if(window._lastAIResult&&window._lastAIFiltered){
-    showAIRotationModal(window._lastAIResult,false,window._lastAIFiltered);
-  }
-}
-
-
-function generatePromptExport(){
-  var filtered=S.names.filter(function(n){return n.trim();});
-  if(filtered.length<COURT_SIZE){alert('Add at least '+COURT_SIZE+' players first.');return;}
-
-  var p=S.aiParams||{};
-  var total=gameTotalSecs();
-  var fair=Math.round(total*COURT_SIZE/filtered.length);
-  var halfSecs=usesQuarters()?20*60:S.h1Dur*60;
-  var isQ=usesQuarters();
-  var halfLabel=isQ?'quarter':'half';
-  var halfMin=Math.round(halfSecs/60);
-  var totalMin=Math.round(total/60);
-
-  // Fatigue + ratings
-  var team2=T.teams.find(function(t){return t.id===T.activeTeamId;});
-  var fatigueMap={},ratingMap={},posMap={};
-  filtered.forEach(function(n){
-    var pl=team2&&team2.players.find(function(q){return playerDisplayName(q)===n;});
-    var r=pl?getPlayerRatings(T.activeTeamId,pl.id):{};
-    fatigueMap[n]=r.fatigue||'Normal';
-    var ovr=0,cnt=0;
-    ['layup','jumpshot','three','passing','dribble','sharing','defplayer','defset',
-     'offdef','reboff','rebdef','setplays','composure','speed','energy'].forEach(function(k){
-      if(r[k]!==undefined){ovr+=Number(r[k]);cnt++;}
-    });
-    ratingMap[n]=cnt>0?Math.round(ovr/cnt*10)/10:5.0;
-    posMap[n]=[+r.position||0,+r.position2||0,+r.position3||0].filter(function(x){return x>0;});
-  });
-
-  // Targets
-  var deltas=p.playerDeltas||{};
-  var rawTgts={};
-  filtered.forEach(function(n){rawTgts[n]=Math.max(0,Math.min(total,fair+(deltas[n]||0)));});
-  filtered.forEach(function(n){
-    var fat=fatigueMap[n];
-    if(fat==='Managed Minutes')rawTgts[n]=Math.min(rawTgts[n],Math.round(fair*0.75));
-    if(fat==='Injury Return/Illness')rawTgts[n]=Math.min(rawTgts[n],Math.round(fair*0.60));
-  });
-  var tgtSum=Object.values(rawTgts).reduce(function(a,b){return a+b;},0);
-  var tgtScale=tgtSum>0?(total*COURT_SIZE)/tgtSum:1;
-  var tgts={};Object.keys(rawTgts).forEach(function(k){tgts[k]=Math.round(rawTgts[k]*tgtScale);});
-
-  // Presets
-  var h2Names=S.useH2Preset&&S.h2PresetIds.size===COURT_SIZE&&S.aiAdheresToPresets
-    ?[...S.h2PresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
-  var finNames=S.useFinalPreset&&S.finalPresetIds.size===COURT_SIZE&&S.aiAdheresToPresets
-    ?[...S.finalPresetIds].map(function(i){return filtered[i];}).filter(Boolean):null;
-  var h1Start=filtered.slice(0,COURT_SIZE);
-  var startPos=assignPositionsToGroup(h1Start);
-  var posNames=['','PG','SG','SF','PF','C'];
-  var conflicts=(p.benchConflicts||[]).map(function(pair){return pair[0]+' and '+pair[1];}).join('; ');
-  var coachNotes=window._aiExtraPrompt&&window._aiExtraPrompt.trim()?window._aiExtraPrompt.trim():'None';
-  var preferPaired=(!p.aiTiming)&&(p.minSubsPerSub||1)>=2;
-  var subPref=preferPaired?'2 players at a time (preferred)':'1 player at a time';
-  var minBench=p.minBenchDuration||3;
-  var maxBench=p.maxBenchDuration||12;
-  var nBench=filtered.length-COURT_SIZE;
-  var minSubsHalf=Math.max(nBench,3);
-
-  // Build the prompt text
-  var lines=[];
-  lines.push('You are an expert basketball rotation planner. Generate a complete substitution plan for one game.');
-  lines.push('');
-  lines.push('═══════════════════════════════════════');
-  lines.push('GAME INFORMATION');
-  lines.push('═══════════════════════════════════════');
-  lines.push('Format: '+totalMin+' minutes ('+(isQ?'4 x '+halfMin+' min quarters':'2 x '+halfMin+' min halves')+')');
-  lines.push('Players on court: '+COURT_SIZE+' at all times');
-  lines.push('Squad size: '+filtered.length+' players ('+nBench+' on bench at any time)');
-  lines.push('Fair share: '+Math.floor(fair/60)+':'+(String(fair%60).padStart(2,'0'))+' per player');
-  lines.push('');
-  lines.push('═══════════════════════════════════════');
-  lines.push('PLAYER ROSTER');
-  lines.push('═══════════════════════════════════════');
-  lines.push('Name         | Positions        | Rating | Fatigue              | Target Time');
-  lines.push('-------------|------------------|--------|----------------------|------------');
-  filtered.forEach(function(n){
-    var pos=(posMap[n]||[]).map(function(p){return p+'('+posNames[p]+')';}).join('/');
-    var fat=fatigueMap[n];
-    var tgt=tgts[n]||fair;
-    var nm=(n+'             ').slice(0,13);
-    var ps=(pos+'                 ').slice(0,18);
-    var rt=(String(ratingMap[n])+'      ').slice(0,8);
-    var ft=(fat+'                     ').slice(0,22);
-    lines.push(nm+'| '+ps+'| '+rt+'| '+ft+'| '+Math.floor(tgt/60)+':'+(String(tgt%60).padStart(2,'0')));
-  });
-  lines.push('');
-  lines.push('═══════════════════════════════════════');
-  lines.push('LINEUPS (MANDATORY)');
-  lines.push('═══════════════════════════════════════');
-  var startDesc=h1Start.map(function(n){var pos=startPos[n];return n+(pos?' ('+posNames[pos]+')':'');}).join(', ');
-  lines.push('Starting 5: '+startDesc);
-  lines.push(h2Names?('Second '+halfLabel+' starting 5: '+h2Names.join(', ')):'Second '+halfLabel+' starting 5: Your choice');
-  lines.push(finNames?('Finishing 5: '+finNames.join(', ')):'Finishing 5: Your choice');
-  lines.push('');
-  lines.push('═══════════════════════════════════════');
-  lines.push('SUBSTITUTION RULES');
-  lines.push('═══════════════════════════════════════');
-  lines.push('Substitution size: '+subPref);
-  lines.push('Minimum subs per '+halfLabel+': '+minSubsHalf);
-  lines.push('Minimum bench rest between stints: '+minBench+' minutes');
-  lines.push('Maximum time on bench without return: '+(maxBench>0?maxBench+' minutes':'no limit'));
-  lines.push(conflicts?'Bench conflicts (prefer not to sit together): '+conflicts:'Bench conflicts: none');
-  lines.push('');
-  lines.push('FATIGUE RULES (hard constraints):');
-  lines.push('- Managed Minutes: max 6-8 min continuous court time, must have regular rest');
-  lines.push('- Injury Return/Illness: max 4-5 min continuous, bench time >= court time, no last 5 min');
-  lines.push('- High Endurance: may play longer stints');
-  lines.push('');
-  if(coachNotes!=='None'){
-    lines.push('═══════════════════════════════════════');
-    lines.push('COACH INSTRUCTIONS (highest priority)');
-    lines.push('═══════════════════════════════════════');
-    lines.push(coachNotes);
-    lines.push('');
-  }
-  lines.push('═══════════════════════════════════════');
-  lines.push('WHAT TO GENERATE');
-  lines.push('═══════════════════════════════════════');
-  lines.push('Generate '+( S.finalsMode?'FINALS MODE (top-rated players get proportionally more time)':'5 rotation plans')+':');
-  lines.push('');
-  lines.push('Plan 1 — EQUAL TIME: As equal as possible. Every player within 2 minutes of their target.');
-  lines.push('Plan 2 — BALANCED: Slightly favour higher-rated players, but still appears fair to spectators.');
-  lines.push('Plan 3 — BLOCK: Keep 5-player units together for 7-10 min blocks. Swap 2-3 at once.');
-  lines.push('Plan 4 — STRENGTH FIRST: Best players significantly more time. Everyone still plays minimum 10 minutes.');
-  lines.push('Plan 5 — POSITION BALANCED: Every lineup must have a ball-handler (PG/SG) and interior player (PF/C). Optimise positions first, time second.');
-  lines.push('');
-  lines.push('═══════════════════════════════════════');
-  lines.push('OUTPUT FORMAT');
-  lines.push('═══════════════════════════════════════');
-  lines.push('For each plan use this exact format:');
-  lines.push('');
-  lines.push('## Plan [N] — [Name]');
-  lines.push('Strategy: [1-2 sentences]');
-  lines.push('');
-  lines.push('FIRST '+halfLabel.toUpperCase()+':');
-  lines.push('Starting on court: [5 names]');
-  lines.push('[Time] — OFF: [names] / ON: [names]');
-  lines.push('[Time] — OFF: [names] / ON: [names]');
-  lines.push('...');
-  lines.push('');
-  lines.push('SECOND '+halfLabel.toUpperCase()+':');
-  lines.push('Starting on court: [5 names]');
-  lines.push('[Time] — OFF: [names] / ON: [names]');
-  lines.push('...');
-  lines.push('');
-  lines.push('PLAYING TIME SUMMARY:');
-  lines.push('[Name]: [total minutes]');
-  lines.push('[Name]: [total minutes]');
-  lines.push('...');
-  lines.push('');
-  lines.push('Sub times must be on clean intervals: prefer :00 and :30, acceptable :20 and :40.');
-  lines.push('Time format is minutes into that half/quarter (e.g. "5:00" = 5 minutes into the half).');
-  lines.push('Always keep exactly '+COURT_SIZE+' players on court. Never sub off a player who is on the bench.');
-
-  var promptText=lines.join('\n');
-
-  // Show modal with copy button
-  var existing=document.getElementById('prompt-export-modal');
-  if(existing)existing.remove();
-  var modal=document.createElement('div');
-  modal.id='prompt-export-modal';
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9600;display:flex;flex-direction:column;';
-
-  var hdr=document.createElement('div');
-  hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:max(env(safe-area-inset-top,0px),44px) 14px 10px;background:#0a0c14;flex-shrink:0;border-bottom:1px solid #1e2130;';
-  hdr.innerHTML='<div style="font-family:Impact,sans-serif;font-size:13px;letter-spacing:2px;color:var(--blue,#60a5fa);flex:1">ROTATION PROMPT</div>';
-
-  var copyBtn=document.createElement('button');
-  copyBtn.textContent='COPY';
-  copyBtn.style.cssText='background:var(--blue,#60a5fa);color:#111;border:none;border-radius:8px;padding:7px 14px;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
-  copyBtn.onclick=function(){
-    if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(promptText).then(function(){
-        copyBtn.textContent='COPIED ✓';copyBtn.style.background='var(--green,#3ecf6e)';
-        setTimeout(function(){copyBtn.textContent='COPY';copyBtn.style.background='var(--blue,#60a5fa)';},2000);
-      });
-    } else {
-      ta.select();document.execCommand('copy');
-      copyBtn.textContent='COPIED ✓';setTimeout(function(){copyBtn.textContent='COPY';},2000);
-    }
-  };
-
-  var closeBtn=document.createElement('button');
-  closeBtn.textContent='CLOSE';
-  closeBtn.style.cssText='background:none;border:1.5px solid #2a2d3e;color:#7a80a0;border-radius:8px;padding:7px 12px;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;flex-shrink:0;';
-  closeBtn.onclick=function(){modal.remove();};
-
-  hdr.appendChild(copyBtn);hdr.appendChild(closeBtn);
-
-  var hint=document.createElement('div');
-  hint.style.cssText='padding:8px 14px;background:rgba(96,165,250,.08);border-bottom:1px solid #1e2130;font-size:11px;color:#60a5fa;flex-shrink:0;line-height:1.5;';
-  hint.textContent='Paste this into Claude.ai, ChatGPT or Gemini. The AI will reply with plain-text rotation plans you can read directly.';
-
-  var ta=document.createElement('textarea');
-  ta.value=promptText;
-  ta.readOnly=true;
-  ta.style.cssText='flex:1;background:#0f1118;color:#c8d0e0;border:none;outline:none;padding:14px 14px calc(env(safe-area-inset-bottom,0px) + 14px);font-family:monospace;font-size:11px;line-height:1.6;resize:none;';
-
-  modal.appendChild(hdr);modal.appendChild(hint);modal.appendChild(ta);
-  document.body.appendChild(modal);
-  ta.focus();ta.select();
-}
-
-function regenerateAIPlans(){
-  // Keep the extra prompt the user typed, then regenerate
-  closeAIRotationModal();
-  generateAIRotation();
-}
-
-function renderPlanBody(plan){
-  if(plan._failed){
-    return '<div style="padding:20px;text-align:center;color:var(--warn);font-size:12px;line-height:1.6">'
-      +'<div style="font-size:16px;margin-bottom:8px">Plan '+plan.id+' failed to generate</div>'
-      +'<div style="font-size:11px;color:var(--dim)">'+plan.rationale+'</div>'
-      +'<div style="font-size:10px;color:var(--dim);margin-top:8px">Check your API key in ⚙ Settings and try regenerating.</div>'
-    +'</div>';
-  }
-  let html = '';
-  // Rationale
-  if(plan.rationale){
-    html += '<div class="ai-rot-section"><div class="ai-rot-section-title">STRATEGY</div>' +
-      '<div style="font-size:12px;color:var(--text);line-height:1.6;">' + plan.rationale + '</div></div>';
-  }
-  // Subs per half
-  ['h1','h2'].forEach(function(half){
-    const subs = plan[half]||[];
-    if(!subs.length) return;
-    const halfLabel = half==='h1'?'1ST HALF':'2ND HALF';
-    let rows = '';
-    subs.forEach(function(s){
-      rows += '<div class="ai-rot-sub-row">' +
-        '<span class="ai-rot-sub-num">SUB ' + s.subNum + '<br><span style="font-size:9px;color:var(--dim)">@' + s.atTime + '</span></span>' +
-        '<span class="ai-rot-off">▼ ' + (s.off||[]).join(', ') + '</span>' +
-        '<span class="ai-rot-on">▲ ' + (s.on||[]).join(', ') + '</span>' +
-        '</div>';
-      if(s.note) rows += '<div style="font-size:10px;color:var(--dim);padding:0 0 4px 52px;font-style:italic">' + s.note + '</div>';
-    });
-    html += '<div class="ai-rot-section"><div class="ai-rot-section-title">' + halfLabel + ' — ' + subs.length + ' SUB' + (subs.length!==1?'S':'') + '</div>' + rows + '</div>';
-  });
-  // Expected times
-  const et = plan.expectedTimes || {};
-  if(Object.keys(et).length){
-    let timeRows = '';
-    Object.entries(et).sort((a,b)=>b[1].localeCompare(a[1])).forEach(function(e){
-      timeRows += '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);">' +
-        '<span style="font-size:12px;color:var(--text);">' + e[0] + '</span>' +
-        '<span style="font-family:Impact,sans-serif;font-size:13px;color:var(--green);">' + e[1] + '</span></div>';
-    });
-    html += '<div class="ai-rot-section"><div class="ai-rot-section-title">EXPECTED PLAYING TIME</div>' + timeRows + '</div>';
-  }
-  return html;
-}
-
-function selectAIPlan(idx){
-  window._aiRotSelectedPlan = idx;
-  const plans = (window._aiRotResult&&window._aiRotResult.plans)||[];
-  // Update tab active state
-  plans.forEach(function(p,i){
-    const tab = document.getElementById('ai-tab-'+i);
-    if(tab) tab.style.background = i===idx ? 'var(--accent)' : 'var(--card)';
-    if(tab) tab.style.color = i===idx ? '#111' : 'var(--dim)';
-  });
-  // Update body
-  const body = document.getElementById('ai-rot-body-inner');
-  if(body && plans[idx]) body.innerHTML = renderPlanBody(plans[idx]);
-}
-
-function showAIRotationModal(result, loading, filtered, progressIdx, progressMsg){
-  const existing = document.getElementById('ai-rot-modal');
-  if(existing) existing.remove();
-
-  const modal = document.createElement('div');
-  modal.id = 'ai-rot-modal';
-  modal.className = 'ai-rot-backdrop';
-  modal.onclick = function(e){ if(e.target===modal) closeAIRotationModal(); };
-
-  let bodyHTML = '';
-  let tabsHTML = '';
-  let footerHTML = '';
-
-  if(loading){
-    const modelDisplay = CFG.geminiModel==='gemini-2.5-flash' ? 'Gemini 2.5 Flash' : CFG.geminiModel==='gemini-3.1-pro-preview' ? 'Gemini 3.1 Pro' : (CFG.geminiModel||'Gemini');
-    const providerName = CFG.aiProvider==='gemini' ? modelDisplay : 'Rotation planner';
-    bodyHTML = '<div class="ai-rot-spinner">' +
-      '<div class="spin">⟳</div>' +
-      '<div class="ai-prog-lbl" style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:6px;">'+(progressMsg||'Starting…')+'</div>' +
-      '<div style="font-size:12px;color:var(--dim);margin-bottom:10px;">Using ' + providerName + ' · plans generated one at a time</div>' +
-      '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">' +
-        ['A: Balanced','B: Block','C: Strength-first','E: Position-balanced'].map(function(lbl, i){
-          return '<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim);">' +
-            '<div data-plan="'+i+'" style="width:12px;height:12px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .3s;"></div>' +
-            '<span>Plan ' + lbl + '</span></div>';
-        }).join('') +
-        '<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--green);">' +
-          '<div style="width:12px;height:12px;border-radius:50%;background:var(--green);flex-shrink:0;"></div>' +
-          '<span>D: Equal Time (instant — always available)</span></div>' +
-      '</div>' +
-      '<div style="font-size:10px;color:var(--dim);line-height:1.5;">Each plan is a separate request.<br>If one fails, others continue.</div>' +
-      '</div>';
-  } else {
-    const plans = (result&&result.plans)||[];
-    const errorNote = plans.length>0 && plans[0]._errorNote
-      ? '<div style="background:rgba(255,85,85,.1);border:1.5px solid rgba(255,85,85,.3);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--red);line-height:1.5;">⚠ AI plans unavailable: '+plans[0]._errorNote+'</div>'
-      : '';
-    if(plans.length > 1){
-      // Render plan tabs
-      tabsHTML = '<div style="display:flex;gap:6px;flex-shrink:0;margin-bottom:2px;">';
-      plans.forEach(function(p,i){
-        tabsHTML += '<button id="ai-tab-'+i+'" onclick="selectAIPlan('+i+')" style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid var(--border);font-family:Impact;font-size:12px;letter-spacing:1px;cursor:pointer;background:'+(i===0?'var(--accent)':'var(--card)')+';color:'+(i===0?'#111':'var(--dim)')+';">' +
-          (p.label||('PLAN '+(p.id||i+1))) + '</button>';
-      });
-      tabsHTML += '</div>';
-      bodyHTML = errorNote + '<div id="ai-rot-body-inner">' + renderPlanBody(plans[0]) + '</div>';
-    } else if(plans.length===1){
-      bodyHTML = errorNote + renderPlanBody(plans[0]);
-    }
-
-    footerHTML =
-      '<div style="background:var(--card);border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:8px;flex-shrink:0;">' +
-        '<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:5px;">Extra instructions (optional)</div>' +
-        '<textarea id="ai-extra-prompt" placeholder="e.g. Give Harper more time, reduce Quinn less" ' +
-          'style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 9px;resize:none;height:52px;box-sizing:border-box;outline:none;font-family:-apple-system,sans-serif;" ' +
-          'oninput="window._aiExtraPrompt=this.value">' + (window._aiExtraPrompt||'') + '</textarea>' +
-      '</div>' +
-      '<div style="display:flex;gap:8px;flex-shrink:0;">' +
-        '<button class="ai-rot-load-btn" onclick="applyAIRotation((window._aiRotResult.plans||[])[window._aiRotSelectedPlan||0], window._aiRotFiltered)">✓ USE THIS PLAN</button>' +
-        '<button onclick="regenerateAIPlans()" style="background:var(--card);border:1.5px solid var(--purple);color:var(--purple);font-family:Impact,sans-serif;font-size:14px;letter-spacing:1px;border-radius:10px;padding:13px 14px;cursor:pointer;flex-shrink:0;">🔄</button>' +
-        '<button class="ai-rot-cancel-btn" onclick="closeAIRotationModal()">✕</button>' +
-      '</div>' +
-      '<div style="font-size:10px;color:var(--dim);text-align:center;">✓ load plan · 🔄 regenerate with optional instructions above</div>' + '<div style="margin-top:8px">' + '<div style="font-size:9px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">ADDITIONAL INSTRUCTIONS FOR REGENERATION</div>' + '<textarea id="ai-regen-instr" rows="2" placeholder="e.g. Give Adele more rest. Nishi must finish." oninput="window._aiRegenInstructions=this.value" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;padding:7px 9px;resize:vertical;outline:none;box-sizing:border-box">' + (window._aiRegenInstructions||'') + '</textarea>' + '</div>';
-  }
-
-  const finalsBtn = !loading ? (
-    '<button onclick="S.finalsMode=!S.finalsMode;var ri=document.getElementById("ai-regen-instr");if(ri&&ri.value.trim())window._aiRegenInstructions=ri.value.trim();closeAIRotationModal();generateAIRotation();" style="background:none;border:1.5px solid '+(S.finalsMode?'var(--accent)':'var(--border)')+';color:'+(S.finalsMode?'var(--accent)':'var(--dim)')+';border-radius:7px;padding:4px 10px;font-size:11px;font-family:Impact,sans-serif;letter-spacing:1px;cursor:pointer;flex-shrink:0;">★ FINALS MODE</button>'
-  ) : '';
-
-  modal.innerHTML =
-    '<div class="ai-rot-box">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">' +
-        '<div class="ai-rot-title">🤖 AI ROTATION PLAN</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;">' +
-          finalsBtn +
-          '<button onclick="closeAIRotationModal()" style="background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;padding:2px;">✕</button>' +
-        '</div>' +
-      '</div>' +
-      (tabsHTML ? tabsHTML : '') +
-      '<div class="ai-rot-body">' + bodyHTML + '</div>' +
-      footerHTML +
-    '</div>';
-
-  if(!loading && result){
-    window._aiRotResult = result;
-    window._aiRotFiltered = filtered;
-    window._aiRotSelectedPlan = 0;
-    // Also store as last result so user can re-open after loading a plan
-    window._lastAIResult = result;
-    window._lastAIFiltered = filtered;
-  }
-
-  document.body.appendChild(modal);
-}
-
-function closeAIRotationModal(){
-  const m = document.getElementById('ai-rot-modal');
-  if(m) m.remove();
-  window._aiRotResult = null;
-  window._aiRotFiltered = null;
 }
 
 function renderSetup(restoreScroll){
@@ -5047,7 +3264,6 @@ function renderSetup(restoreScroll){
   // ── Squad chips: from active team players or manual ──
   const selectedNames = S.names.filter(n=>n.trim());
   const rosterCovered = coveredPositions(selectedNames);
-  const rosterMissingHTML = missingPositionsHTML(selectedNames.slice(0,COURT_SIZE));
 
   const chipRows=activeTeam
     ? activeTeam.players.map(p=>{
@@ -5059,11 +3275,10 @@ function renderSetup(restoreScroll){
     : '';
 
   const nameRows=S.names.map((nm,i)=>{
-    const isStart=i<COURT_SIZE;
     const showRmv=S.names.length>COURT_SIZE;
     return `<div class="pw">
       <span class="pnum">#${i+1}</span>
-      <input class="pi${isStart?' starts':''}" data-idx="${i}" value="${nm.replace(/"/g,'&quot;')}" placeholder="Player ${i+1}" oninput="S.names[this.dataset.idx]=this.value;updateRosterCount()">
+      <input class="pi" data-idx="${i}" value="${escapeHTML(nm)}" placeholder="Player ${i+1}" oninput="editRosterName(+this.dataset.idx,this.value)">
       ${showRmv?`<button class="rmv" onclick="removePlayer(${i})">✕</button>`:''}
     </div>`;
   }).join('');
@@ -5148,22 +3363,22 @@ function renderSetup(restoreScroll){
   <div class="s-sec">
     <div class="s-hdr">ROSTER <span id="roster-count" style="color:#3ecf6e;font-size:12px">${filtered.length} players</span></div>
     ${activeTeam?`<div class="squad-footer"><div class="s-lbl" style="margin:0">Tap to select players for this game</div><div style="display:flex;gap:6px;"><button class="squad-clear" onclick="clearAllPlayers()">Clear</button><button class="squad-clear" style="background:rgba(255,85,85,.12);color:var(--red);border-color:rgba(255,85,85,.3);" onclick="resetAll()">⟳ Reset All</button></div></div><div class="squad-chips">${chipRows}</div>`:''}
-    <div class="s-lbl" style="margin-top:${activeTeam?6:0}px;flex-wrap:wrap;gap:4px;">
-      <span>Order (first ${COURT_SIZE} start on court)</span>
-      ${rosterMissingHTML}
-    </div>
     <div class="pgrid" id="name-grid">${nameRows}
       <button class="addbtn" onclick="addPlayer()">+ Add player</button>
     </div>
   </div>
 
+  <div class="s-sec">
+    <div class="s-hdr">STARTING 5 <span class="optional-label">Optional</span></div>
+    <div id="starting-five">${startingFiveHTML()}</div>
+  </div>
 
   ${(()=>{
     const lg = getActiveLeague();
     const isQ = usesQuarters();
     if(lg) return '<div style="background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.2);border-radius:8px;padding:7px 12px;margin-bottom:2px;font-size:11px;color:var(--blue);">' +
-      (isQ ? '🏀 Quarter format detected ('+lg+') — 4 × '+S.h1Dur+' min. Timeout stops all clocks.' :
-             '🏀 Half format detected ('+lg+') — 2 × '+S.h1Dur+' min. Timeout: game clock keeps running (stops in last 2 min of 2nd half).') +
+      (isQ ? '🏀 '+escapeHTML(lg)+' · 4 × 10 min quarters' :
+             '🏀 Half format detected ('+escapeHTML(lg)+') — 2 × '+S.h1Dur+' min. Timeout: game clock keeps running (stops in last 2 min of 2nd half).') +
       '</div>';
     return '';
   })()}
@@ -5171,7 +3386,7 @@ function renderSetup(restoreScroll){
   <div class="s-sec">
     <div class="s-hdr">${usesQuarters()?'Q1 / Q2':'1ST HALF'}</div>
     <div class="h-grid">
-      <div class="ni-wrap"><div class="s-lbl">${usesQuarters()?'Mins/quarter':'Mins/half'}</div><input class="ni" type="number" min="1" max="60" value="${usesQuarters()?S.h1Dur/2:S.h1Dur}" onchange="if(usesQuarters()){const v=Math.max(1,Math.min(30,parseInt(this.value)||10));S.h1Dur=v*2;S.h2Dur=v*2;}else{S.h1Dur=Math.max(1,Math.min(60,parseInt(this.value)||20));}renderSetup(true)"></div>
+      ${periodDurationHTML('h1Dur')}
       ${stepperHTML('h1Int','Sub every')}
       <div class="ni-wrap"><div class="s-lbl">Per sub</div><input class="ni" type="number" min="1" max="5" value="${S.h1Sps}" onchange="S.h1Sps=Math.max(1,Math.min(5,parseInt(this.value)||2));renderSetup(true)"></div>
     </div>
@@ -5179,17 +3394,17 @@ function renderSetup(restoreScroll){
   <div class="s-sec">
     <div class="s-hdr">${usesQuarters()?'Q3 / Q4':'2ND HALF'}</div>
     <div class="h-grid">
-      <div class="ni-wrap"><div class="s-lbl">Time (min)</div><input class="ni" type="number" min="1" max="60" value="${S.h2Dur}" onchange="S.h2Dur=Math.max(1,Math.min(60,parseInt(this.value)||20));renderSetup(true)"></div>
+      ${periodDurationHTML('h2Dur')}
       ${stepperHTML('h2Int','Sub every')}
       <div class="ni-wrap"><div class="s-lbl">Per sub</div><input class="ni" type="number" min="1" max="5" value="${S.h2Sps}" onchange="S.h2Sps=Math.max(1,Math.min(5,parseInt(this.value)||2));renderSetup(true)"></div>
     </div>
   </div>
 
   <div class="s-sec">
-    <div class="s-hdr">2ND HALF STARTING 5</div>
+    <div class="s-hdr">${usesQuarters()?'Q3':'2ND HALF'} STARTING 5</div>
     <div class="toggle-row">
       <button class="tog${S.useH2Preset?' on':''}" id="h2-tog" onclick="toggleH2PresetMode()"></button>
-      <span class="tog-lbl">Pre-configure 2nd half line-up</span>
+      <span class="tog-lbl">Pre-configure ${usesQuarters()?'Q3':'2nd half'} lineup</span>
     </div>
     <div id="h2-preset-wrap">${h2PresetSection}</div>
   </div>
@@ -5206,15 +3421,10 @@ function renderSetup(restoreScroll){
   <div class="s-sec">
     <div class="s-hdr">SUB PLAN
       <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
-        <button onclick="S.finalsMode=!S.finalsMode;renderSetup(true)" style="background:${S.finalsMode?'rgba(240,140,0,.2)':'none'};color:${S.finalsMode?'var(--accent)':'var(--dim)'};border:1.5px solid ${S.finalsMode?'var(--accent)':'var(--border)'};border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Finals mode: top players get extra court time">★ FINALS</button>
-        <button onclick="S.aiAdheresToPresets=!S.aiAdheresToPresets;renderSetup(true)" style="background:${S.aiAdheresToPresets?'rgba(74,158,255,.15)':'none'};color:${S.aiAdheresToPresets?'var(--blue)':'var(--dim)'};border:1.5px solid ${S.aiAdheresToPresets?'var(--blue)':'var(--border)'};border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Lock: AI respects your Starting 5, H2 Starting 5, and Finishing 5 selections">${S.aiAdheresToPresets?'🔒':'🔓'} PRESETS</button>
-        <button onclick="S.aiParamsOpen=!S.aiParamsOpen;renderSetup(true)" style="background:${S.aiParamsOpen?'rgba(192,132,252,.15)':'none'};color:${S.aiParamsOpen?'var(--purple)':'var(--dim)'};border:1.5px solid ${S.aiParamsOpen?'var(--purple)':'var(--border)'};border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">⚙ PARAMS</button>
         <button onclick="exportSubPlan()" style="background:none;color:var(--dim);border:1.5px solid var(--border);border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Export sub plan to file">⬆</button>
         <button onclick="importSubPlan()" style="background:none;color:var(--dim);border:1.5px solid var(--border);border-radius:7px;padding:3px 7px;font-family:Impact,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;white-space:nowrap;" title="Import sub plan from file">⬇</button>
-        <button onclick="window._lastAIResult?reOpenAIPlans():generateAIRotation()" style="background:var(--purple);color:#fff;border:none;border-radius:7px;padding:4px 10px;font-family:Impact,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;">${window._lastAIResult?'↩ Plans':'🤖 AI Plan'}</button>
       </div>
     </div>
-    ${S.aiParamsOpen ? aiRotationSetupHTML(filtered) : ''}
     <div class="toggle-row">
       <button class="tog${S.useSubPlan?' on':''}" onclick="toggleSubPlan()"></button>
       <span class="tog-lbl">Pre-plan substitutions</span>
@@ -5243,7 +3453,7 @@ function renderSetup(restoreScroll){
   ${autoModeTimeHTML(filtered, S.useSubPlan)}
 
   <button class="startbtn" id="start-btn" onclick="startGame()" ${valid&&h2Ok&&finalOk?'':'disabled'}>
-    ${!valid?`NEED ${COURT_SIZE}+ PLAYERS`:!h2Ok?'SELECT 5 FOR H2':!finalOk?'SELECT FINAL 5':'START NEW GAME'}
+    ${!valid?`NEED ${COURT_SIZE}+ PLAYERS`:!h2Ok?`SELECT 5 FOR ${usesQuarters()?'Q3':'H2'}`:!finalOk?'SELECT FINAL 5':'NEW GAME'}
   </button>
   <div style="display:flex;gap:8px;margin-top:8px;">
     <button onclick="resetSetup()" style="flex:1;background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:10px;padding:11px;font-size:12px;cursor:pointer;" title="Clear roster, sub plan and presets — keeps teams and ratings">↺ Reset Settings</button>
@@ -5401,16 +3611,17 @@ function renderScoreBarHTML(){
 }
 
 function renderGame(){
+  if(S.lineupMode){ renderLineup(); return; }
   const isH2=S.phase==='h2';
   const cp=courtPlayers(), bp=benchPlayers();
   const hiC=highlightCourt(), hiB=highlightBench();
   const {targetTime,remPP}=calcForecast();
   const active=S.players.filter(p=>p.fouls<5).length;
   const totalSecs=gameTotalSecs();
-  const halfRem=getHalfDur()-S.halfTime;
+  const halfRem=getPeriodRemaining();
   const halfC=halfRem<=60?'#ff5555':halfRem<=120?'#ffcc00':'#eef0f8';
   const subC=S.alertState==='sub-now'?'#ff5555':S.alertState==='warning'?'#ffcc00':'#eef0f8';
-  const gameStarted=S.gameTime>0||S.isRunning;
+  const periodEnded=usesQuarters()&&halfRem===0;
 
   const alertHTML=S.alertState==='warning'?`<div id="alert-bar" class="abar warn">⏱ SUB IN 30 SECONDS</div>`
     :S.alertState==='sub-now'?`<div id="alert-bar" class="abar now">🔔 TIME TO SUBSTITUTE!</div>`
@@ -5420,12 +3631,12 @@ function renderGame(){
   const showSub=S.selCourt.size>0||S.selBench.size>0;
   const availableSpots=COURT_SIZE-cp.length;
   const fillingUp=S.selCourt.size===0&&availableSpots>0&&S.selBench.size>0&&S.selBench.size<=availableSpots;
-  const canSub=S.selBench.size>0&&(S.selCourt.size>0||fillingUp);
-  const tooMany=S.selCourt.size===0&&S.selBench.size>availableSpots&&availableSpots>0;
+  const canSub=S.selBench.size>0&&(S.selCourt.size>0||fillingUp)&&cp.length-S.selCourt.size+S.selBench.size<=COURT_SIZE;
+  const tooMany=S.selBench.size>availableSpots+S.selCourt.size;
 
   let subBarInfo='';
   if(fillingUp) subBarInfo=`<strong>${S.selBench.size}</strong> joining court (${cp.length}→${cp.length+S.selBench.size}/5)`;
-  else if(tooMany) subBarInfo=`Only <strong>${availableSpots}</strong> spot${availableSpots!==1?'s':''} free — deselect ${S.selBench.size-availableSpots} player${S.selBench.size-availableSpots!==1?'s':''}`;
+  else if(tooMany) subBarInfo='Select another player to come off or deselect a bench player';
   else subBarInfo=`<strong>${S.selCourt.size}</strong> off · <strong>${S.selBench.size}</strong> on${S.selCourt.size>0&&S.selCourt.size!==S.selBench.size?' <span style="color:#ffcc00">— uneven</span>':''}`;
 
   const subBarHTML=showSub?`
@@ -5450,7 +3661,7 @@ function renderGame(){
   } else if(fillingUp){
     instrTxt=`Tap MAKE SUB to add ${S.selBench.size} player${S.selBench.size!==1?'s':''} to court`;
   } else if(tooMany){
-    instrTxt=`Too many selected — only ${availableSpots} spot${availableSpots!==1?'s':''} available`;
+    instrTxt='Too many players selected to come on';
   } else if(canSub){
     instrTxt=`Tap MAKE SUB — ${S.selCourt.size} off, ${S.selBench.size} on`;
   } else {
@@ -5501,7 +3712,7 @@ function renderGame(){
     }
   }
 
-  const pbtnLabel=!gameStarted?'▶ START':S.isRunning?'⏸ TIMEOUT':'▶ RESUME';
+  const pbtnLabel='⏸ TIMEOUT';
   // Quarter teams need END Q3 during H2 before q3 break happens
   var isQ3Pending = isH2 && usesQuarters() && !S.q3BreakDone;
   var endLabel = isH2
@@ -5518,12 +3729,12 @@ function renderGame(){
       <div id="gclock" class="gclock bb">${fmt(S.gameTime)}</div>
       <div class="glbl">Total</div>
       <div class="hbadge ${isH2?'h2':'h1'}">${usesQuarters()?getCurrentQuarter():(isH2?'2ND HALF':'1ST HALF')}</div>
-      ${S.opponent?`<div style="font-size:9px;color:var(--dim);margin-top:2px">vs <strong style="color:var(--text)">${S.opponent}</strong></div>`:''}
+      ${S.opponent?`<div style="font-size:9px;color:var(--dim);margin-top:2px">vs <strong style="color:var(--text)">${escapeHTML(S.opponent)}</strong></div>`:''}
     </div>
     <div class="ghctr">
-      <div class="glbl">Half remaining</div>
-      <div id="hrem" class="hrem bb" onclick="toggleGameClock()" style="color:${halfC};cursor:pointer;${!S.isClockRunning&&!S.isRunning?'opacity:.5;text-decoration:line-through;':''}" title="Tap to stop/start clock">${halfRem>=0?fmt(halfRem):'+'+fmt(-halfRem)}</div>
-      ${!S.isClockRunning&&!S.isRunning?'<div style="font-size:8px;color:var(--red);letter-spacing:1px;font-weight:700;">⏸ STOPPED — tap time to resume</div>':''}
+      <div class="glbl">${usesQuarters()?'Quarter':'Half'} remaining</div>
+      <div id="hrem" class="hrem bb" ${periodEnded?'':'onclick="toggleGameClock()" title="Tap to stop/start clock"'} style="color:${halfC};${periodEnded?'':'cursor:pointer;'}">${halfRem>=0?fmt(halfRem):'+'+fmt(-halfRem)}</div>
+      ${!periodEnded&&!S.isClockRunning&&!S.isRunning?'<div style="font-size:8px;color:var(--red);font-weight:700;">⏸ STOPPED — tap time to resume</div>':''}
       <div style="display:flex;align-items:center;gap:4px;margin-top:1px">
         <div class="glbl">Sub in</div>
         <div id="scdown" class="stimer bb" style="color:${subC}">${fmt(S.subCountdown)}</div>
@@ -5531,13 +3742,12 @@ function renderGame(){
       ${coverageRowHTML()}
     </div>
     <div class="hbtns">
-      <button id="pbtn" class="pbtn${S.isRunning?' live':''}" onclick="togglePause()">${pbtnLabel}</button>
-      <div id="timeout-clock-note" style="display:${!S.isRunning&&S.isClockRunning?'block':'none'};font-size:9px;color:var(--warn);text-align:center;letter-spacing:.5px;margin-top:1px;">⏱ CLOCK RUNNING</div>
+      <button id="pbtn" class="pbtn${S.isRunning?' live':''}" onclick="togglePause()" ${!S.isRunning?'disabled':''}>${pbtnLabel}</button>
       <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
         <button class="${endCls}" onclick="${endAction}">${endLabel}</button>
         ${window._undoSubSnap&&(Date.now()-window._undoSubSnap.at<120000)?`<button onclick="undoLastSub()" style="background:rgba(255,140,0,.15);border:1.5px solid rgba(255,140,0,.35);color:var(--warn);border-radius:8px;padding:5px 8px;font-size:14px;cursor:pointer;" title="Undo last sub">↩</button>`:''}
         <button onclick="openTimelineModal()" style="background:rgba(74,158,255,.15);border:1.5px solid rgba(74,158,255,.3);color:var(--blue);border-radius:8px;padding:5px 8px;font-size:14px;cursor:pointer;" title="Playing time timeline">📊</button>
-        <button class="sgear" onclick="S._prevPhase='${S.phase}';S.phase='settings';render()" title="Settings">⚙</button>
+        <button class="sgear" onclick="S._prevPhase=S.phase;renderSettings()" title="Settings">⚙</button>
       </div>
     </div>
   </div>
@@ -5557,7 +3767,7 @@ function renderGame(){
   ${renderScoreBarHTML()}
 
   <div class="cols">
-    <div class="col" style="border-right:1px solid var(--border)">
+    <div class="col">
       <div class="chdr court">ON COURT · ${cp.length}/5</div>
       ${cCards}
     </div>
@@ -5569,7 +3779,6 @@ function renderGame(){
 
   <div class="instr">${instrTxt}</div>
   ${livePosBoardHTML}
-  ${pauseOverlayHTML()}
 </div>`;
   // After render: sync bench card height to match court card height
   requestAnimationFrame(syncCardHeights);
@@ -5578,199 +3787,86 @@ function renderGame(){
   if(S.isRunning) startTick();
 }
 
-// Mini playing time bar chart for splash screens
-function miniBarChartHTML(){
-  const players = S.players||[];
-  if(!players.length) return '';
-  const totalSecs=gameTotalSecs();
-  const fairShare=Math.round(totalSecs*COURT_SIZE/Math.max(players.length,COURT_SIZE));
-  const sorted=[...players].sort((a,b)=>b.playTime-a.playTime);
-  const rows=sorted.map(p=>{
-    const pct=Math.min(100,Math.round(p.playTime/totalSecs*100));
-    const targetPct=Math.round(fairShare/totalSecs*100);
-    const diff=p.playTime-fairShare;
-    const col=p.playTime>=fairShare*0.9?'var(--green)':p.playTime>=fairShare*0.6?'var(--warn)':'var(--red)';
-    const onDot=p.onCourt?'<span style="color:var(--green);margin-right:3px;font-size:9px;">▶</span>':'';
-    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'+
-      '<div style="width:60px;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;">'+onDot+p.name.split(' ')[0]+'</div>'+
-      '<div style="flex:1;height:10px;background:var(--border);border-radius:3px;position:relative;overflow:visible;">'+
-        '<div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:3px;transition:width .9s linear;"></div>'+
-        '<div style="position:absolute;top:-2px;bottom:-2px;left:'+targetPct+'%;width:2px;background:rgba(255,255,255,.5);border-radius:1px;"></div>'+
-      '</div>'+
-      '<div style="font-family:Impact,sans-serif;font-size:10px;color:'+col+';flex-shrink:0;width:32px;text-align:right;">'+fmt(p.playTime)+'</div>'+
-    '</div>';
-  }).join('');
-  return '<div style="padding:8px 14px;border-top:1px solid var(--border);background:rgba(0,0,0,.2);">'+
-    '<div style="font-family:Impact,sans-serif;font-size:8px;letter-spacing:1.5px;color:var(--dim);margin-bottom:5px;">PLAYING TIME — white line = fair share</div>'+
-    rows+'</div>';
+function cancelGameStart(){
+  if(S.lineupMode!=='start') return;
+  S.lineupMode=null; S.lineupDraft=null; S.phase='setup';
+  saveState();
+  stopAutoSave();
+  render();
 }
 
-function renderQuarterBreak(){
-  const isQ1Break = S.phase==='q1break';
-  const fromQ = isQ1Break ? 'Q1' : 'Q3';
-  const toQ   = isQ1Break ? 'Q2' : 'Q4';
-  const resumePhase = isQ1Break ? 'q1break' : 'q3break';
-
-  // Build sub selection cards (same style as halftime)
-  const cp=S.players.filter(p=>p.onCourt);
-  const bp=S.players.filter(p=>!p.onCourt);
-  const sel = S.pendingQBreakSubs || {off:new Set(), on:new Set()};
-
-  function toggleQBreakSel(pid, fromCourt){
-    if(!S.pendingQBreakSubs) S.pendingQBreakSubs={off:new Set(),on:new Set()};
-    const s=S.pendingQBreakSubs;
-    if(fromCourt){
-      if(s.off.has(pid)) s.off.delete(pid); else s.off.add(pid);
-    } else {
-      if(s.on.has(pid)) s.on.delete(pid); else s.on.add(pid);
-    }
-    renderQuarterBreak();
-  }
-  window.toggleQBreakSel=toggleQBreakSel;
-
-  const subReady = sel.off.size>0 && sel.on.size===sel.off.size;
-  const subNote = sel.off.size!==sel.on.size && (sel.off.size>0||sel.on.size>0)
-    ? '<div style="font-size:10px;color:var(--warn);margin-top:4px;">Select equal numbers to sub off and on</div>' : '';
-
-  const mkCard=(p,fromCourt)=>{
-    const selSet=fromCourt?sel.off:sel.on;
-    const isSel=selSet.has(p.id);
+function renderLineup(){
+  const first=S.lineupMode==='start';
+  const timeout=S.lineupMode==='timeout';
+  const period=usesQuarters()?(S.phase==='halftime'?'Q3':S.phase==='q1break'?'Q2':S.phase==='q3break'?'Q4':getCurrentQuarter())
+    :(S.phase==='halftime'||S.phase==='h2'?'2ND HALF':'1ST HALF');
+  const title=timeout?'TIMEOUT':S.lineupMode==='resume'?period:S.phase==='halftime'?'HALF TIME':period;
+  const action=first?'START GAME':S.lineupMode?'RESUME GAME':'START '+period;
+  const remaining=S.phase==='halftime'?(usesQuarters()?QUARTER_SECS:S.h2Dur*60)
+    :isBetweenPeriods()?QUARTER_SECS:getPeriodRemaining();
+  const selected=lineupCourt();
+  const limit=lineupLimit(), minimum=lineupMinimum();
+  const ready=selected.size>=minimum&&selected.size<=limit&&selected.size>0;
+  const planned=timeout?getPlanHighlights():null;
+  const suggestedOff=timeout&&!planned?highlightCourt():null;
+  const suggestedOn=timeout&&!planned?highlightBench():null;
+  const card=(p,onCourt)=>{
     const pos=getGamePos(p.id);
-    const cls=pos?(POS_COLOURS[+pos]||''):'';
-    return '<div class="ht-card '+(fromCourt?'court':'bench')+'" style="'+(isSel?'border-color:var(--accent);background:rgba(240,140,0,.1);':'')+'" onclick="toggleQBreakSel('+p.id+','+fromCourt+')">'+
-      '<div style="display:flex;align-items:center;gap:6px;">'+
-        (pos?'<span class="pos-badge '+cls+'" style="font-size:14px;padding:3px 8px;">'+pos+'</span>':'')+
-        '<div class="ht-name">'+(isSel?'✓ ':'')+p.name+'</div>'+
-      '</div>'+
-      '<div class="ht-stat">Played <span>'+fmt(p.playTime)+'</span> · '+p.fouls+' foul'+(p.fouls!==1?'s':'')+'</div>'+
-    '</div>';
+    const canMove=p.fouls<5&&(onCourt||selected.size<limit);
+    const hint=p.fouls>=5?'FOULED OUT':p.onCourt
+      ?planned?.off.has(p.id)?'PLANNED OFF':suggestedOff?.has(p.id)?'SUGGESTED OFF':''
+      :planned?.on.has(p.id)?'PLANNED ON':suggestedOn?.has(p.id)?'SUGGESTED ON':'';
+    return `<div class="ht-card ${onCourt?'court':'bench'}">
+      <button type="button" class="lineup-player" id="lineup-player-${p.id}"
+        aria-label="${escapeHTML(p.name)}: move to ${onCourt?'bench':'court'}"
+        onclick="toggleLineupPlayer(${p.id})" ${canMove?'':'disabled'}>
+        <span class="ht-name">${escapeHTML(p.name)}</span>
+        ${first?'':`<span class="ht-stat">Played <span>${fmt(p.playTime)}</span> · ${p.fouls} fouls</span>`}
+        ${hint?`<span class="lineup-hint">${hint}</span>`:''}
+      </button>
+      ${pos?`<button type="button" class="pos-badge ${POS_COLOURS[+pos]||''}" aria-label="Position for ${escapeHTML(p.name)}" onclick="openPosPicker(${p.id},'${onCourt?'court':'bench'}')">${pos}</button>`:''}
+    </div>`;
   };
-
-  const cCards=cp.map(p=>mkCard(p,true)).join('');
-  const bCards=bp.map(p=>mkCard(p,false)).join('');
-
-  $('app').innerHTML=
-    '<div class="ht">'+
-    '<div class="ht-hdr">'+
-      '<div class="ht-title">'+fromQ+' → '+toQ+'</div>'+
-      '<div class="ht-sub">QUARTER TIME</div>'+
-      '<div class="ht-count" style="color:var(--dim)">'+
-        'Select subs below — or tap screen to start '+toQ+' immediately'+
-      '</div>'+
-      subNote+
-    '</div>'+
-    '<div class="ht-cols">'+
-      '<div class="ht-col" style="border-right:1px solid var(--border)">'+
-        '<div class="ht-chdr court">ON COURT (tap to sub off)</div>'+cCards+
-      '</div>'+
-      '<div class="ht-col">'+
-        '<div class="ht-chdr bench">BENCH (tap to sub on)</div>'+bCards+
-      '</div>'+
-    '</div>'+
-    miniBarChartHTML()+
-    '<div class="ht-footer">'+
-      '<button class="ht-start" onclick="startQuarterResume(\''+resumePhase+'\')">'+
-        '▶ START '+toQ+(subReady?' + MAKE SUB':'')+
-      '</button>'+
-      '<div class="ht-note">Subs will be applied automatically when '+toQ+' starts</div>'+
-    '</div>'+
-    '</div>';
+  const court=S.players.filter(p=>selected.has(p.id));
+  const bench=S.players.filter(p=>!selected.has(p.id));
+  $('app').innerHTML=`
+    <div class="ht lineup">
+      <header class="ht-hdr">
+        ${first?'<button class="tm-back lineup-back" onclick="cancelGameStart()" aria-label="Back to setup">←</button>':''}
+        <div class="ht-title">${title}</div>
+        <div class="ht-sub"><span id="hrem">${fmt(Math.max(0,remaining))}</span> remaining${timeout&&S.isClockRunning?' · CLOCK RUNNING':''}</div>
+        ${timeout?`<div class="ht-sub">Sub in <span id="scdown">${fmt(S.subCountdown)}</span></div>`:''}
+      </header>
+      <div class="ht-cols">
+        <section class="ht-col">
+          <div class="ht-chdr court">ON COURT · ${court.length}/${COURT_SIZE}</div>
+          ${court.map(p=>card(p,true)).join('')||'<div class="lineup-empty">No players on court</div>'}
+        </section>
+        <section class="ht-col">
+          <div class="ht-chdr bench">BENCH · ${bench.length}</div>
+          ${bench.map(p=>card(p,false)).join('')||'<div class="lineup-empty">Empty bench</div>'}
+        </section>
+      </div>
+      <footer class="ht-footer">
+        ${!first&&S.gameTime>0?lineupTimesHTML():''}
+        <div class="lineup-status" role="status">${ready?'':limit===0?'No eligible players':selected.size>limit?'Move a player to the bench':`Select ${minimum-selected.size} more player${minimum-selected.size===1?'':'s'}`}</div>
+        <button type="button" class="ht-start" onclick="finishLineup()" ${ready?'':'disabled'}>▶ ${action}</button>
+      </footer>
+    </div>`;
 }
 
-function renderHalftime(){
-  const court=S.players.filter(p=>S.htOnCourt.has(p.id));
-  const bench=S.players.filter(p=>!S.htOnCourt.has(p.id));
-  const ready=court.length===COURT_SIZE;
-  const need=COURT_SIZE-court.length;
-  const h1Secs=S.h1Dur*60;
-
-  const sortedCourt=[...court].sort((a,b)=>b.playTime-a.playTime);
-  const sortedBench=[...bench].sort((a,b)=>a.playTime-b.playTime);
-
-  const filtered3=S.names.filter(n=>n.trim());
-  const h2PosOverrides=S.presetPositions&&S.presetPositions.h2start||{};
-
-  const cCards=sortedCourt.map(p=>{
-    const heavy=p.playTime>=h1Secs*0.7;
-    const name3=filtered3[p.id];
-    // Use h2start preset position if set, otherwise current game position
-    const presetPos=name3&&h2PosOverrides[name3]?String(parseInt(h2PosOverrides[name3])):null;
-    const pos=presetPos||getGamePos(p.id);
-    const cls=pos?(POS_COLOURS[+pos]||''):'';
-    const isPreset=!!presetPos;
-    return `<div class="ht-card court" onclick="toggleHtPlayer(${p.id})">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:6px;">
-          ${pos?`<span class="pos-badge ${cls}" style="font-size:16px;padding:4px 10px;min-width:36px;text-align:center;cursor:pointer;${isPreset?'box-shadow:0 0 0 1.5px var(--warn);':''}" onclick="event.stopPropagation();openPosPicker(${p.id},'court')">${pos}${isPreset?'<span style="font-size:7px;color:var(--warn)">✎</span>':''}</span>`:''}
-          <div class="ht-name">${p.name}</div>
-        </div>
-        ${heavy?`<span style="font-size:9px;background:rgba(255,140,0,.2);color:var(--amber);padding:1px 6px;border-radius:4px;font-family:Impact,sans-serif;letter-spacing:1px">HEAVY</span>`:''}
-      </div>
-      <div class="ht-stat">Played <span>${fmt(p.playTime)}</span> · ${p.fouls} foul${p.fouls!==1?'s':''}</div>
-    </div>`;
-  }).join('');
-
-  const bCards=sortedBench.map(p=>{
-    const light=p.playTime<h1Secs*0.3;
-    const name4=filtered3[p.id];
-    const presetPos2=name4&&h2PosOverrides[name4]?String(parseInt(h2PosOverrides[name4])):null;
-    const pos=presetPos2||getGamePos(p.id);
-    const allPos=allPositionsForPlayer(p.id);
-    const courtIds=sortedCourt.map(q=>q.id);
-    const covered=new Set(courtIds.map(id=>getGamePos(id)).filter(Boolean));
-    const fills=presetPos2?[presetPos2]:allPos.filter(pp=>!covered.has(pp));
-    const cls=pos?(POS_COLOURS[+pos]||''):'';
-    const isPreset2=!!presetPos2;
-    return `<div class="ht-card bench" onclick="toggleHtPlayer(${p.id})">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:6px;">
-          ${pos?`<span class="pos-badge ${fills.length?(POS_COLOURS[+fills[0]]||cls):cls}" style="font-size:16px;padding:4px 10px;min-width:36px;text-align:center;${fills.length&&!isPreset2?'':'opacity:.8;'}${isPreset2?'box-shadow:0 0 0 1.5px var(--warn);':''}" onclick="event.stopPropagation();openPosPicker(${p.id},'bench')">${fills.length?fills[0]:pos}${fills.length&&!isPreset2?'↑':''}${isPreset2?'<span style="font-size:7px;color:var(--warn)">✎</span>':''}</span>`:''}
-          <div class="ht-name">${p.name}</div>
-        </div>
-        ${light?`<span style="font-size:9px;background:rgba(62,207,110,.2);color:var(--green);padding:1px 6px;border-radius:4px;font-family:Impact,sans-serif;letter-spacing:1px">NEEDS TIME</span>`:''}
-      </div>
-      <div class="ht-stat">Played <span>${fmt(p.playTime)}</span> · ${p.fouls} foul${p.fouls!==1?'s':''}</div>
-    </div>`;
-  }).join('');
-
-  $('app').innerHTML=`
-<div class="ht">
-  <div class="ht-hdr">
-    <div class="ht-title">${usesQuarters()?"HALF TIME":"HALF TIME"}</div>
-    <div class="ht-sub">${usesQuarters()?"Q3/Q4":"H2"}: ${S.h2Dur}min · sub every ${fmtInterval(S.h2Int)} · ${S.h2Sps} per sub</div>
-    <div class="ht-count"><span class="${ready?'ok':'bad'}">${court.length}/5</span> on court for 2nd half${!ready?` · <span style="color:var(--warn)">pick ${need} more</span>`:''}</div>
-    ${(()=>{
-      const covIds = sortedCourt.map(p=>p.id);
-      const covSet = new Set(covIds.map(id=>getGamePos(id)).filter(Boolean));
-      const miss = ['1','2','3','4','5'].filter(n=>!covSet.has(n));
-      const anyR = sortedCourt.some(p=>allPositionsForPlayer(p.id).length>0);
-      if(!anyR) return '';
-      return `<div style="margin-top:4px;display:flex;gap:4px;align-items:center;justify-content:center;">${[1,2,3,4,5].map(n=>`<div class="pos-pip ${covSet.has(String(n))?'filled-'+n:'empty'}" style="width:24px;height:24px;font-size:12px;">${n}</div>`).join('')}${miss.length?`<span style="font-size:11px;color:var(--red);margin-left:6px;">missing ${miss.join(', ')}</span>`:''}</div>`;
-    })()}
-    <div style="font-size:10px;color:var(--dim);margin-top:4px">Sorted by play time · tap position number to reassign · <span style="color:var(--amber)">HEAVY</span> lots of H1 time</div>
-  </div>
-  <div class="ht-cols">
-    <div class="ht-col" style="border-right:1px solid var(--border)">
-      <div class="ht-chdr court">STARTING ${usesQuarters()?"Q3":"H2"} (${court.length})</div>
-      ${cCards||'<div style="text-align:center;color:var(--dim);font-size:12px;padding:12px">None selected</div>'}
-    </div>
-    <div class="ht-col">
-      <div class="ht-chdr bench">BENCH (${bench.length})</div>
-      ${bCards||'<div style="text-align:center;color:var(--dim);font-size:12px;padding:12px">Empty</div>'}
-    </div>
-  </div>
-  ${miniBarChartHTML()}
-  <div class="ht-footer">
-    <button class="ht-start" onclick="startSecondHalf()" ${ready?'':'disabled'}>
-      ${ready?'▶ START 2ND HALF':`SELECT ${need} MORE PLAYER${need!==1?'S':''}`}
-    </button>
-    <div class="ht-note">Tap any player to move between court and bench</div>
-  </div>
-</div>`;
+function lineupTimesHTML(){
+  const target=Math.round(gameTotalSecs()*COURT_SIZE/Math.max(S.players.length,COURT_SIZE));
+  const rows=[...S.players].sort((a,b)=>b.playTime-a.playTime).map(p=>
+    `<div class="lineup-time"><span>${escapeHTML(p.name)}</span><meter min="0" max="${target}"
+      value="${Math.min(p.playTime,target)}" aria-label="Playing time against target"></meter><span>${fmt(p.playTime)}</span></div>`
+  ).join('');
+  return `<details class="lineup-times"><summary>Playing time · target ${fmt(target)}</summary><div class="lineup-time-list">${rows}</div></details>`;
 }
 
 // Sync bench card height to exactly match court card height
 function syncCardHeights(){
+  if(document.documentElement.dataset.layout==='landscape') return;
   const courtCards = document.querySelectorAll('.pc.court-card');
   if(!courtCards.length) return;
   // All court cards are same height (flex:1 divides evenly) — measure the first
@@ -7087,7 +5183,7 @@ function renderRatings(){
     </div>
   </div>
   <div class="ratings-body">
-    <div style="font-size:11px;color:var(--dim);margin-bottom:12px;line-height:1.5;">Rate each attribute 0–10. These ratings are used by the AI to generate optimal rotation plans.</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:12px;line-height:1.5;">Player attributes · 0–10</div>
     ${groupsHTML}
     <button class="rat-save-btn" onclick="saveRatings_player()">SAVE RATINGS</button>
   </div>
@@ -7111,8 +5207,7 @@ function render(){
   else if(S.phase==='teamEdit') renderTeamEdit();
   else if(S.phase==='settings') renderSettings();
   else if(S.phase==='ratings')  renderRatings();
-  else if(S.phase==='halftime') renderHalftime();
-  else if(S.phase==='q1break'||S.phase==='q3break') renderQuarterBreak();
+  else if(isBetweenPeriods())  renderLineup();
   else if(S.phase==='gameover') renderGameover();
   else renderGame();
 }
@@ -7621,42 +5716,13 @@ function renderSettings(){
   </div>
   <div class="settings-body">
     <div class="s-sec">
-      <div class="s-hdr">AI FEATURES</div>
-      <div class="s-lbl">AI Provider</div>
-      <div class="theme-btns" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
-        <div class="theme-btn${CFG.aiProvider==='claude'?' active':''}" onclick="CFG.aiProvider='claude';saveSettings();renderSettings()">
-          <span class="theme-btn-icon">🤖</span>
-          <span class="theme-btn-lbl">Claude (Anthropic)</span>
-        </div>
-        <div class="theme-btn${CFG.aiProvider==='gemini'?' active':''}" onclick="CFG.aiProvider='gemini';saveSettings();renderSettings()">
-          <span class="theme-btn-icon">✦</span>
-          <span class="theme-btn-lbl">Gemini (Google)</span>
-        </div>
-      </div>
-      ${CFG.aiProvider==='claude'?`
-        <div class="s-lbl">Anthropic API Key</div>
-        <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;">Get a free key at <span style="color:var(--blue)">console.anthropic.com</span>. Stored on this device only.</div>
-        <input class="apikey-input" type="password" value="${CFG.apiKey||''}" placeholder="sk-ant-..." oninput="CFG.apiKey=this.value" onchange="saveSettings()">
-        ${CFG.apiKey?'<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ API key saved</div>':''}`:`
-        <div class="s-lbl">Google Gemini API Key</div>
-        <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;">Get a free key at <span style="color:var(--blue)">aistudio.google.com</span>. Stored on this device only.</div>
-        <input class="apikey-input" type="password" value="${CFG.geminiKey||''}" placeholder="AIza..." oninput="CFG.geminiKey=this.value" onchange="saveSettings()">
-        ${CFG.geminiKey?'<div style="font-size:10px;color:var(--green);margin-top:5px;">✓ Gemini key saved</div>':''}
-        ${CFG.geminiKey?`<button onclick="testGeminiKey()" id="gemini-test-btn" style="margin-top:8px;background:var(--card);border:1.5px solid var(--border);color:var(--text);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">🔌 Test Connection</button>
-        <div id="gemini-test-result"></div>`:'<div id="gemini-test-result"></div>'}
-        <div class="s-lbl" style="margin-top:12px;">Gemini Model</div>
-        <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.5;"><strong>2.5 Flash</strong> — free tier, fast, recommended for most users.<br><strong>3.1 Pro Preview</strong> — paid only ($2-12/1M tokens), stronger reasoning, frequent rate limits.</div>
-        <div class="theme-btns" style="grid-template-columns:1fr 1fr;">
-          <div class="theme-btn${(CFG.geminiModel||'gemini-2.5-flash')==='gemini-2.5-flash'?' active':''}" onclick="CFG.geminiModel='gemini-2.5-flash';saveSettings();renderSettings()">
-            <span class="theme-btn-icon">⚡</span><span class="theme-btn-lbl">2.5 Flash (free)</span>
-          </div>
-          <div class="theme-btn${CFG.geminiModel==='gemini-3.1-pro-preview'?' active':''}" onclick="CFG.geminiModel='gemini-3.1-pro-preview';saveSettings();renderSettings()">
-            <span class="theme-btn-icon">🧠</span><span class="theme-btn-lbl">3.1 Pro (paid)</span>
-          </div>
-        </div>`}
-    </div>
-    <div class="s-sec">
       <div class="s-hdr">APPEARANCE</div>
+      <div class="s-lbl">Game layout</div>
+      <div class="theme-btns" role="group" aria-label="Game layout">
+        ${[['auto','Auto'],['portrait','Portrait'],['landscape','Landscape']].map(([value,label])=>
+          `<button type="button" class="theme-btn${CFG.layout===value?' active':''}" aria-pressed="${CFG.layout===value}" onclick="setLayout('${value}')"><span class="theme-btn-lbl">${label}</span></button>`
+        ).join('')}
+      </div>
       <div style="font-size:11px;color:var(--dim);margin:8px 0 6px;">TEXT SIZE</div>
       <div style="display:flex;gap:6px;margin-bottom:12px;">
         ${[['0.9','S'],['1','M'],['1.15','L'],['1.3','XL']].map(([v,l])=>`
@@ -7737,7 +5803,7 @@ function toggleTeamPlayerChip(playerId){
   const dn=playerDisplayName(p);
   const idx=S.names.indexOf(dn);
   if(idx!==-1){
-    S.names.splice(idx,1);
+    removeRosterSlot(idx);
   } else {
     const emptyIdx=S.names.findIndex(n=>!n.trim());
     if(emptyIdx!==-1) S.names[emptyIdx]=dn;
@@ -7746,21 +5812,47 @@ function toggleTeamPlayerChip(playerId){
   renderSetup(true);
 }
 
-function toggleSquadChip(name, jersey){
-  const fullName=`${name} ${jersey}`;
-  const idx=S.names.indexOf(fullName);
-  if(idx!==-1){ S.names.splice(idx,1); }
-  else {
-    const emptyIdx=S.names.findIndex(n=>!n.trim());
-    if(emptyIdx!==-1) S.names[emptyIdx]=fullName;
-    else S.names.push(fullName);
-  }
-  renderSetup(true);
+function startingFiveHTML(){
+  const count=startingPresetIds().length;
+  const rows=S.names.map((name,slot)=>{
+    if(!name.trim()) return '';
+    const chosen=S.startingSlots.has(slot);
+    return `<button type="button" class="chip${chosen?' on':''}" aria-pressed="${chosen}" onclick="toggleStartingPlayer(${slot})" ${!chosen&&count>=COURT_SIZE?'disabled':''}>${escapeHTML(name)}</button>`;
+  }).join('');
+  return `<div class="s-lbl"><span>${count===COURT_SIZE?'Preset ready':count?'Incomplete · choose at tip-off':'Choose at tip-off'}</span>
+    <span>${count}/${COURT_SIZE}</span></div>
+    ${rows?`<div class="chips starting-chips">${rows}</div>`:''}
+    ${count?`<button type="button" class="squad-clear" onclick="clearStartingFive()">Clear preset</button>`:''}`;
 }
 
-function clearAllPlayers(){ S.names=['','','','','']; renderSetup(true); }
+function toggleStartingPlayer(slot){
+  if(!S.names[slot]?.trim()) return;
+  if(!S.startingSlots.delete(slot)){
+    if(startingPresetIds().length>=COURT_SIZE) return;
+    S.startingSlots.add(slot);
+  }
+  saveState();
+  renderSetup(true);
+}
+function clearStartingFive(){
+  S.startingSlots.clear();
+  saveState();
+  renderSetup(true);
+}
+function removeRosterSlot(slot){
+  S.names.splice(slot,1);
+  S.startingSlots=new Set([...S.startingSlots].filter(i=>i!==slot).map(i=>i>slot?i-1:i));
+}
+function editRosterName(slot,value){
+  S.names[slot]=value;
+  if(!value.trim()) S.startingSlots.delete(slot);
+  updateRosterCount();
+  const starting=$('starting-five');
+  if(starting) starting.innerHTML=startingFiveHTML();
+}
+function clearAllPlayers(){ S.names=['','','','','']; S.startingSlots.clear(); saveState(); renderSetup(true); }
 function addPlayer(){ S.names.push(''); renderSetup(true); }
-function removePlayer(i){ S.names.splice(i,1); renderSetup(true); }
+function removePlayer(i){ removeRosterSlot(i); saveState(); renderSetup(true); }
 function updateRosterCount(){
   const c=$('roster-count');
   if(c) c.textContent=S.names.filter(n=>n.trim()).length+' players';
@@ -7768,8 +5860,9 @@ function updateRosterCount(){
   if(btn){
     const valid=S.names.filter(n=>n.trim()).length>=COURT_SIZE;
     const h2Ok=!S.useH2Preset||S.h2PresetIds.size===COURT_SIZE;
-    btn.disabled=!(valid&&h2Ok);
-    btn.textContent=!valid?`NEED ${COURT_SIZE}+ PLAYERS`:!h2Ok?'SELECT 5 FOR H2':'START NEW GAME';
+    const finalOk=!S.useFinalPreset||S.finalPresetIds.size===COURT_SIZE;
+    btn.disabled=!(valid&&h2Ok&&finalOk);
+    btn.textContent=!valid?`NEED ${COURT_SIZE}+ PLAYERS`:!h2Ok?`SELECT 5 FOR ${usesQuarters()?'Q3':'H2'}`:!finalOk?'SELECT FINAL 5':'NEW GAME';
   }
 }
 
@@ -7813,9 +5906,9 @@ function exportSubPlan(){
     return;
   }
   // Serialise: convert Sets to arrays
-  const toArr = half => (half||[]).map(sub=>({
+  const toArr = half => (half||[]).map(sub=>sub?{
     off:[...sub.off], on:[...sub.on], atTime:sub.atTime||null
-  }));
+  }:null);
   const data = {
     version:1,
     exported: new Date().toISOString(),
@@ -7830,7 +5923,7 @@ function exportSubPlan(){
   const json = JSON.stringify(data, null, 2);
   const date = new Date().toISOString().slice(0,10);
   const fname = 'squad-sub-plan-'+date+'.json';
-  if(navigator.share && navigator.canShare({files:[new File([json],'x.json',{type:'application/json'})]})){
+  if(navigator.share && navigator.canShare?.({files:[new File([json],'x.json',{type:'application/json'})]})){
     const file = new File([json],fname,{type:'application/json'});
     navigator.share({files:[file],title:'Sub Plan'}).catch(()=>{});
   } else {
@@ -7851,10 +5944,10 @@ function importSubPlan(){
     reader.onload = ev=>{
       try {
         const data = JSON.parse(ev.target.result);
-        if(!data.h1||!data.h2) throw new Error('Not a valid sub plan file');
-        const fromArr = half => half.map(sub=>({
+        if(!Array.isArray(data.h1)||!Array.isArray(data.h2)) throw new Error('Not a valid sub plan file');
+        const fromArr = half => half.map(sub=>sub?{
           off:new Set(sub.off||[]), on:new Set(sub.on||[]), atTime:sub.atTime||null
-        }));
+        }:null);
         S.subPlan = { h1:fromArr(data.h1), h2:fromArr(data.h2) };
         S.useSubPlan = true;
         if(data.h1Int) S.h1Int=data.h1Int;
@@ -7887,14 +5980,8 @@ function resetAll(){
     useFinalPreset:false, finalPresetIds:new Set(),
     subLog:[], alertState:null, savedGame:null,
     priorityPlayerIds:new Set(), useAutoMode:false,
-    finalsMode:false, aiAdheresToPresets:true, aiParamsOpen:false,
+    startingSlots:new Set(), lineupDraft:null, lineupMode:null,
     finalScore:{us:null,them:null},
-    aiParams:{
-      minSubsPerWindow:1,maxSubsPerWindow:2,
-      minSubGap:180,maxSubGap:360,
-      firstSubDelay:180,minBenchRest:180,maxBenchRest:0,
-      minGameTimeMins:0,minPlayTimePct:85,maxPlayTimePct:115
-    }
   };
   Object.assign(S, defaultS);
   saveState();
@@ -7910,13 +5997,19 @@ const AUTOSAVE_KEY = 'squadmgr_autosave_v1'; // mid-game crash recovery snapshot
 
 function stateToJSON(){
   // Sets aren't JSON-serialisable, convert to arrays
+  const pausedGame=S.savedGame&&['setup','settings','teamList','teamEdit','ratings'].includes(S.phase)?S.savedGame:null;
   return JSON.stringify({
     phase: S.phase,
+    teamId: T.activeTeamId,
+    intervalUnit: 'seconds',
     names: S.names,
     opponent: S.opponent||'',
     h1Dur:S.h1Dur, h2Dur:S.h2Dur,
     h1Int:S.h1Int, h2Int:S.h2Int,
     h1Sps:S.h1Sps, h2Sps:S.h2Sps,
+    startingSlots: [...S.startingSlots],
+    lineupMode: S.lineupMode,
+    lineupDraft: S.lineupDraft?[...S.lineupDraft]:null,
     useH2Preset: S.useH2Preset,
     h2PresetIds: [...S.h2PresetIds],
     useFinalPreset: S.useFinalPreset,
@@ -7942,6 +6035,7 @@ function stateToJSON(){
     manualPositions: S.manualPositions||{},
     q1BreakDone: S.q1BreakDone||false,
     q3BreakDone: S.q3BreakDone||false,
+    ...pausedGame,
   });
 }
 
@@ -7961,20 +6055,22 @@ function saveState(){
   }
 }
 
-function loadStateFromData(d){
+function loadStateFromData(d, offerContinue=true){
   if(!d||!d.players) return;
   try {
-
-    if(!d||!d.players) return;
 
     S.phase = d.phase||'setup';
     S.names = d.names||['','','','',''];
     S.opponent = d.opponent||'';
     S.h1Dur=d.h1Dur||20; S.h2Dur=d.h2Dur||20;
     // Migrate: old saves stored minutes (e.g. 3), new stores seconds (e.g. 180)
-    S.h1Int=d.h1Int>60?d.h1Int:(d.h1Int||3)*60;
-    S.h2Int=d.h2Int>60?d.h2Int:(d.h2Int||3)*60;
+    const storedInterval=value=>value&&(d.intervalUnit==='seconds'||value>60)?value:(value||3)*60;
+    S.h1Int=storedInterval(d.h1Int);
+    S.h2Int=storedInterval(d.h2Int);
     S.h1Sps=d.h1Sps||2;  S.h2Sps=d.h2Sps||2;
+    S.startingSlots=new Set(d.startingSlots||[]);
+    S.lineupMode=['start','resume','timeout'].includes(d.lineupMode)?d.lineupMode:null;
+    S.lineupDraft=Array.isArray(d.lineupDraft)?new Set(d.lineupDraft):null;
     S.useH2Preset=d.useH2Preset||false;
     S.h2PresetIds=new Set(d.h2PresetIds||[]);
     S.useFinalPreset=d.useFinalPreset||false;
@@ -7986,8 +6082,8 @@ function loadStateFromData(d){
     S.finalScore=d.finalScore||{us:null,them:null};
     S.planSubIdx=d.planSubIdx||0;
     S.subPlan={
-      h1: (d.subPlan&&d.subPlan.h1||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on)}:null),
-      h2: (d.subPlan&&d.subPlan.h2||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on)}:null),
+      h1: (d.subPlan&&d.subPlan.h1||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on),atTime:s.atTime||null}:null),
+      h2: (d.subPlan&&d.subPlan.h2||[]).map(s=>s?{off:new Set(s.off),on:new Set(s.on),atTime:s.atTime||null}:null),
     };
     S.players=d.players||[];
     S.gameTime=d.gameTime||0;
@@ -8001,20 +6097,17 @@ function loadStateFromData(d){
     S.manualPositions=d.manualPositions||{};
     S.q1BreakDone=d.q1BreakDone||false;
     S.q3BreakDone=d.q3BreakDone||false;
+    if(usesQuarters()&&((S.phase==='h1'&&S.q1BreakDone)||(S.phase==='h2'&&S.q3BreakDone)))
+      S.halfTime=Math.max(S.halfTime,QUARTER_SECS);
     S.isRunning=false; // never auto-resume
+    S.isClockRunning=false;
     S.selCourt=new Set();
     S.selBench=new Set();
-    S.htOnCourt=new Set();
+    S.savedGame=null;
 
     // If we were mid-game, surface the continue button
-    if(['h1','h2','halftime'].includes(S.phase)){
-      S.savedGame={
-        phase:S.phase, players:S.players, gameTime:S.gameTime,
-        halfTime:S.halfTime, subCountdown:S.subCountdown,
-        alertState:S.alertState, h1Dur:S.h1Dur, h2Dur:S.h2Dur,
-        h1Int:S.h1Int, h2Int:S.h2Int, h1Sps:S.h1Sps, h2Sps:S.h2Sps,
-        subLog:S.subLog,
-      };
+    if(offerContinue&&(['h1','h2'].includes(S.phase)||isBetweenPeriods())){
+      S.savedGame={...JSON.parse(stateToJSON()),teamId:Object.hasOwn(d,'teamId')?d.teamId:T.activeTeamId};
       S.phase='setup';
     }
   } catch(_){}
@@ -8046,8 +6139,7 @@ function stopAutoSave(){
 }
 
 function writeCrashSnapshot(){
-  // Only snapshot during an active game (not setup/gameover)
-  if(S.phase !== 'h1' && S.phase !== 'h2') return;
+  if(S.phase !== 'h1' && S.phase !== 'h2' && !isBetweenPeriods()) return;
   try{
     const snap = {
       savedAt: Date.now(),
@@ -8078,10 +6170,11 @@ function checkCrashSnapshot(){
 
     // Only offer if the snapshot was mid-game (not setup/gameover)
     const snapPhase = snap.phase;
-    if(snapPhase !== 'h1' && snapPhase !== 'h2'){ clearCrashSnapshot(); return; }
+    if(!['h1','h2','halftime','q1break','q3break'].includes(snapPhase)){ clearCrashSnapshot(); return; }
 
     // Don't offer if we're already mid-game (user intentionally resumed)
     if(S.phase === 'h1' || S.phase === 'h2') return;
+    if(S.savedGame&&S.savedGame.gameTime>=snap.gameTime) return;
 
     // Format the time for the prompt
     const savedDate = new Date(snap.savedAt);
@@ -8129,8 +6222,8 @@ function restoreGame(){
     loadStateFromData(d);
     S.isRunning = false;  // always start paused after restore
     S.isClockRunning = false;
-    render();
-    showToast('Game restored — tap ▶ RESUME to continue');
+    continueGame();
+    showToast('Game restored');
     startAutoSave(); // resume autosave
   }catch(e){
     showToast('Could not restore game — starting fresh');
@@ -8147,12 +6240,6 @@ function discardSnapshot(){
 }
 
 // Patch key actions to auto-save
-const _startGame=startGame;
-window.startGame=function(){ _startGame(); saveState(); startAutoSave(); };
-const _endHalf=endHalf;
-window.endHalf=function(){ _endHalf(); saveState(); stopAutoSave(); };
-const _startSecondHalf=startSecondHalf;
-window.startSecondHalf=function(){ _startSecondHalf(); saveState(); startAutoSave(); };
 const _endGame=endGame;
 window.endGame=function(){ _endGame(); saveState(); stopAutoSave(); clearCrashSnapshot(); };
 const _commitSub=commitSub;
@@ -8186,75 +6273,27 @@ function maybeShowBanner(){
 // SERVICE WORKER — Network-first with version-based cache busting
 // ═══════════════════════════════════════════
 function registerSW(){
-  if(!('serviceWorker' in navigator)) return;
-  if(location.protocol === 'file:') return;
-
-  // Network-first strategy: always try to fetch fresh, fall back to cache.
-  // When a new version is detected (CACHE name changes), old cache is deleted.
-  const swCode = `
-const CACHE_NAME = 'squadmgr-${version}';
-
-// Install: skip waiting immediately so new SW takes over right away
-self.addEventListener('install', e => {
-  e.waitUntil(self.skipWaiting());
-});
-
-// Activate: delete ALL old caches, claim all clients immediately
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-    )).then(() => self.clients.claim())
-  );
-});
-
-// Fetch: NETWORK-FIRST. Always try network; only fall back to cache if offline.
-// This ensures fresh code is always served when online.
-self.addEventListener('fetch', e => {
-  if(e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request).then(networkResp => {
-      // Cache successful responses
-      if(networkResp && networkResp.status === 200){
-        caches.open(CACHE_NAME).then(cache => cache.put(e.request, networkResp.clone()));
-      }
-      return networkResp;
-    }).catch(() =>
-      // Offline: serve from cache
-      caches.match(e.request).then(cached =>
-        cached || new Response(
-          '<html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>Squad Manager</h2><p>Offline — connect to internet and reload.</p></body></html>',
-          {headers:{'Content-Type':'text/html'}}
-        )
-      )
-    )
-  );
-});
-
-// Listen for skip-waiting message
-self.addEventListener('message', e => {
-  if(e.data === 'skipWaiting') self.skipWaiting();
-});
-`;
-  try{
-    const blob = new Blob([swCode], {type:'application/javascript'});
-    const url = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(url).catch(()=>{});
-  }catch(_){}
+  if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
 }
 
 // ── Version check against GitHub ──
 // Fetches version.txt from the hosting URL and compares to APP_VERSION.
 // Shows a banner if a newer version is available.
-const VERSION_URL = 'https://transitdork.github.io/squadmanager/version.txt';
+const VERSION_URL = './version.txt';
+
+function gameInProgress(){
+  return ['h1','h2'].includes(S.phase)||isBetweenPeriods()||!!S.savedGame;
+}
 
 async function checkForUpdate(){
-  if(!navigator.onLine) return; // skip if offline
+  if(!navigator.onLine||location.protocol==='file:'||gameInProgress()) return;
   try{
     const resp = await fetch(VERSION_URL + '?t=' + Date.now(), {cache:'no-store'});
     if(!resp.ok) return;
     const remote = (await resp.text()).trim();
-    if(remote && remote !== APP_VERSION){
+    if(/^\d{4}\.\d{2}\.\d{2}\.\d+$/.test(remote)&&remote.localeCompare(APP_VERSION,undefined,{numeric:true})>0&&!gameInProgress()){
       showUpdateBanner(remote);
     }
   }catch(_){} // silently fail — no network, wrong URL, etc.
@@ -8289,6 +6328,8 @@ function showUpdateBanner(remoteVersion){
 }
 
 function applyUpdate(){
+  if(gameInProgress()){ showToast('Finish the game before updating.'); return; }
+  saveState();
   // Safari ignores location.reload(true) for PWA cache.
   // Redirect to the same URL with a version query string to force a fresh fetch.
   const url = location.href.split('?')[0].split('#')[0];
@@ -8379,6 +6420,7 @@ document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible') setTimeout(checkForUpdate, 1000);
 });
 // Guard against accidental refresh/close during a live game
+window.addEventListener('pagehide',saveState);
 window.addEventListener('beforeunload', function(e){
   if(S.phase==='h1'||S.phase==='h2'){
     writeCrashSnapshot();
