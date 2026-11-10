@@ -400,16 +400,13 @@ html[data-layout="portrait"] .col:first-child{border-right:1px solid var(--borde
 }
 html[data-layout="portrait"] .game:has(.score-stat-row) .col{overflow-y:auto;}
 html[data-layout="portrait"] .game:has(.score-stat-row) .court-card{min-height:92px;}
-.stat-picker{width:min(92%,480px);max-height:85dvh;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);overflow-y:auto;}
-.stat-picker::backdrop{background:rgba(0,0,0,.64);}
-.stat-picker-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px;}
-.stat-picker h2{font:700 17px system-ui,sans-serif;margin:0;}
-.stat-picker-time{font-size:12px;color:var(--dim);margin-top:4px;}
-.stat-player-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
-.stat-picker button{min-height:44px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;overflow-wrap:anywhere;cursor:pointer;}
-.stat-picker details{margin-top:10px;color:var(--dim);font-size:13px;}
-.stat-picker details summary{padding:8px 0;cursor:pointer;}
-.stat-picker .stat-unassigned{width:100%;margin-top:10px;}
+.court-name-row{display:flex;align-items:center;gap:4px;}
+.court-name{min-width:0;background:none;border:0;padding:1px 3px;border-radius:4px;color:inherit;font:inherit;text-align:left;white-space:inherit;overflow-wrap:inherit;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+.event-armed .court-name{color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn);}
+#score-bar button[aria-pressed="true"]{outline:2px solid var(--warn);outline-offset:-2px;}
+.pending-event{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px;color:var(--warn);font-size:11px;}
+.pending-event span{flex:1;min-width:100px;}
+.pending-event button{min-height:32px;padding:3px 7px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font:inherit;cursor:pointer;}
 .event-summary{margin:12px 0;break-inside:auto;}
 .event-summary table{width:100%;border-collapse:collapse;font-size:12px;}
 .event-summary caption{text-align:left;font-weight:700;padding:7px;}
@@ -653,7 +650,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.10.2';
+const APP_VERSION = '2026.11.10.3';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -2263,6 +2260,7 @@ function startGame(){
   // Initialise game positions and manual overrides
   S.scoreLog = [];
   S.statLog = [];
+  pendingPlayerEvent=null;
   S.finalScore = {us:null,them:null};
   S.scoreBarExpanded = false;
   S.gamePositions = {};
@@ -2328,6 +2326,7 @@ function toggleGameClock(){
 
 function togglePause(){
   if(S.lineupMode||!S.isRunning) return;
+  pendingPlayerEvent=null;
   unlockAudio();
   S.isClockRunning=!isGameClockStoppedOnTimeout();
   S.isRunning=false;
@@ -2391,6 +2390,7 @@ function commitSub(){
   if(!S.selBench.size||cp.length-S.selCourt.size+S.selBench.size>COURT_SIZE) return;
   if(!fillingUp&&!S.selCourt.size) return;
 
+  pendingPlayerEvent=null;
   snapshotSubForUndo();
   const off=S.players.filter(p=>S.selCourt.has(p.id)).map(p=>p.name);
   const on =S.players.filter(p=>S.selBench.has(p.id)).map(p=>p.name);
@@ -2457,6 +2457,7 @@ function commitSub(){
 function clearSel(){ S.selCourt=new Set(); S.selBench=new Set(); renderGame(); }
 
 function togglePlayerSel(pid, role){
+  if(pendingPlayerEvent) return;
   const p=S.players.find(pl=>pl.id===pid);
   if(!p||p.fouls>=5) return;
   if(role==='court'){
@@ -2528,6 +2529,7 @@ function toggleLineupPlayer(pid){
 }
 
 function endHalf(){
+  pendingPlayerEvent=null;
   stopTick();
   S.isRunning=false; S.isClockRunning=false;
   S.lineupMode=null;
@@ -2595,7 +2597,7 @@ function finishLineup(){
   renderGame();
 }
 
-function endGame(){ stopTick(); releaseWakeLock(); S.isRunning=false; S.isClockRunning=false; S.lineupMode=null; S.lineupDraft=null; S.phase='gameover'; clearCrashSnapshot(); render(); }
+function endGame(){ stopTick(); releaseWakeLock(); S.isRunning=false; S.isClockRunning=false; S.lineupMode=null; S.lineupDraft=null; pendingPlayerEvent=null; S.phase='gameover'; clearCrashSnapshot(); render(); }
 
 function exportReport(){
   const now=new Date();
@@ -2673,6 +2675,8 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
 
   // Position badge — tappable on court cards, recommendation indicator on bench
   const posDisplay = posBadgeForCard(p.id, role, isPlannedOn);
+  const courtName=role==='court'&&!fouledOut;
+  const nameHTML=courtName?`<button type="button" class="court-name" onclick="event.stopPropagation();tapCourtName(${p.id})">${escapeHTML(p.name)}</button>`:escapeHTML(p.name);
 
   let badge='';
   if(fouledOut)         badge=`<span class="cbadge bred">FOULED OUT</span>`;
@@ -2694,7 +2698,7 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
 
   return `
 <div class="pc ${sk}${selClass}${foClass}${selectable}${role==='court'?' court-card':''}" ${click}>
-  <div class="ctop"><div class="cname">${escapeHTML(p.name)}${posDisplay}</div>${badge}</div>
+  <div class="ctop"><div class="cname${courtName?' court-name-row':''}">${nameHTML}${posDisplay}</div>${badge}</div>
   <div class="cstats">
     <div class="stat"><span id="pt-${p.id}" class="sv svg">${fmt(p.playTime)}</span><span class="sk">Played</span></div>
     ${fcHTML}${benchHTML}
@@ -3514,6 +3518,8 @@ function renderSetup(restoreScroll){
 
 
 // ── SCORE TRACKING ─────────────────────────────────────────────
+let pendingPlayerEvent=null;
+
 function calcScoreTotals(){
   var us=0, them=0;
   (S.scoreLog||[]).forEach(function(e){ if(e.who==='us') us+=e.pts; else them+=e.pts; });
@@ -3550,6 +3556,7 @@ function removeFoulEvents(log,pid,count){
 }
 
 function addScoreEvent(who, pts, pid=null, stamp=eventStamp()){
+  if(who==='them') pendingPlayerEvent=null;
   S.scoreLog.push({...stamp,who,pts,...(who==='us'&&pid!=null?{pid}:{})});
   saveTrackedEvent();
 }
@@ -3628,49 +3635,57 @@ function downloadTextFile(text, filename){
 function undoTrackedEvent(){
   const last=lastTrackedEvent();
   if(!last) return;
+  pendingPlayerEvent=null;
   if(last.statIndex<0) S.scoreLog.pop();
   else S.statLog.splice(last.statIndex,1);
   saveTrackedEvent();
 }
 
-function openEventPicker(kind, pts){
-  if(!['h1','h2'].includes(S.phase)||S.lineupMode||$('stat-picker')) return;
-  const scoring=kind==='points';
-  if(!scoring&&!statName(kind)) return;
-  const stamp=eventStamp();
-  const onCourt=S.players.filter(p=>p.onCourt);
-  const bench=S.players.filter(p=>!p.onCourt);
-  const buttons=players=>players.map(p=>
-    `<button type="button" data-pid="${p.id}">${escapeHTML(p.name)}</button>`
-  ).join('');
-  const picker=document.createElement('dialog');
-  picker.id='stat-picker';
-  picker.className='stat-picker';
-  picker.setAttribute('aria-labelledby','stat-picker-title');
-  picker.innerHTML=`
-    <div class="stat-picker-header">
-      <div><h2 id="stat-picker-title">${scoring?`+${pts} US`:statName(kind)}</h2>
-      <div class="stat-picker-time">${stamp.period} · ${fmt(stamp.remaining)} remaining</div></div>
-      <button type="button" data-cancel aria-label="Cancel" autofocus>✕</button>
-    </div>
-    <div class="stat-player-grid" role="group" aria-label="${onCourt.length?'On court':'Roster'}">${buttons(onCourt.length?onCourt:bench)}</div>
-    ${onCourt.length&&bench.length?`<details><summary>Bench players</summary><div class="stat-player-grid">${buttons(bench)}</div></details>`:''}
-    ${scoring?'<button type="button" data-unassigned class="stat-unassigned">Unassigned</button>':''}`;
-  picker.addEventListener('close',()=>picker.remove());
-  picker.addEventListener('click',event=>{
-    const button=event.target.closest('button');
-    if(!button) return;
-    if('cancel' in button.dataset){ picker.close(); return; }
-    const pid='pid' in button.dataset?Number(button.dataset.pid):null;
-    picker.close();
-    if(scoring) addScoreEvent('us',pts,pid,stamp);
-    else {
-      S.statLog.push({...stamp,kind,pid});
-      saveTrackedEvent();
-    }
-  });
-  document.body.appendChild(picker);
-  picker.showModal();
+function armPlayerEvent(kind, pts){
+  if(!['h1','h2'].includes(S.phase)||S.lineupMode) return;
+  if(kind==='points'?![1,2,3].includes(pts):!PLAYER_STATS.some(stat=>stat[0]===kind)) return;
+  if(isPlayerEventArmed(kind,pts)){ cancelPlayerEvent(); return; }
+  pendingPlayerEvent={kind,pts,stamp:eventStamp()};
+  updateScoreBarDOM();
+}
+
+function isPlayerEventArmed(kind, pts){
+  return pendingPlayerEvent?.kind===kind&&pendingPlayerEvent.pts===pts;
+}
+
+function cancelPlayerEvent(){
+  if(!pendingPlayerEvent) return;
+  pendingPlayerEvent=null;
+  updateScoreBarDOM();
+}
+
+function tapCourtName(pid){
+  if(!S.players.some(p=>p.id===pid&&p.onCourt&&p.fouls<5)) return;
+  if(!pendingPlayerEvent){ togglePlayerSel(pid,'court'); return; }
+  assignPlayerEvent(pid);
+}
+
+function assignPlayerEvent(pid=null){
+  if(!pendingPlayerEvent||!['h1','h2'].includes(S.phase)||S.lineupMode) return;
+  const {kind,pts,stamp}=pendingPlayerEvent;
+  if(pid===null ? kind!=='points' : !S.players.some(p=>p.id===pid&&p.onCourt&&p.fouls<5)) return;
+  pendingPlayerEvent=null;
+  const recorded={...stamp,order:eventStamp().order};
+  if(kind==='points') addScoreEvent('us',pts,pid,recorded);
+  else {
+    S.statLog.push({...recorded,kind,pid});
+    saveTrackedEvent();
+  }
+}
+
+function pendingPlayerEventHTML(){
+  if(!pendingPlayerEvent) return '';
+  const {kind,pts}=pendingPlayerEvent;
+  return `<div class="pending-event">
+    <span role="status"><strong>${kind==='points'?('+'+pts+' US'):statName(kind)}</strong> · Tap an on-court name</span>
+    ${kind==='points'?'<button type="button" onclick="assignPlayerEvent()">Unassigned</button>':''}
+    <button type="button" onclick="cancelPlayerEvent()">Cancel</button>
+  </div>`;
 }
 
 function toggleScoreBar(){
@@ -3682,6 +3697,7 @@ function toggleScoreBar(){
 function updateScoreBarDOM(){
   var bar = document.getElementById('score-bar');
   if(bar){
+    bar.closest('.game')?.classList.toggle('event-armed',!!pendingPlayerEvent);
     bar.outerHTML = renderScoreBarHTML();
     requestAnimationFrame(syncCardHeights);
   }
@@ -3740,7 +3756,7 @@ function renderScoreBarHTML(){
       +'<div style="display:flex;align-items:center;gap:6px;">'
         // US side
         +'<div style="font-family:Impact,sans-serif;font-size:22px;color:var(--green);line-height:1;min-width:26px;text-align:center;">'+us+'</div>'
-        +'<button onclick="event.stopPropagation();openEventPicker(\'points\',2)" style="flex:1;background:rgba(46,168,75,.18);border:1.5px solid rgba(46,168,75,.4);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">+2 US</button>'
+        +'<button aria-pressed="'+isPlayerEventArmed('points',2)+'" onclick="event.stopPropagation();armPlayerEvent(\'points\',2)" style="flex:1;background:rgba(46,168,75,.18);border:1.5px solid rgba(46,168,75,.4);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">+2 US</button>'
         // Middle
         +'<button type="button" aria-expanded="false" onclick="event.stopPropagation();toggleScoreBar()" style="display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;flex-shrink:0;padding:4px;border:0;background:none;">'
           +'<span style="font-family:Impact,sans-serif;font-size:11px;color:'+leadCol+';white-space:nowrap;">'+leadTxt+'</span>'
@@ -3750,6 +3766,7 @@ function renderScoreBarHTML(){
         +'<button onclick="event.stopPropagation();addScoreEvent(\'them\',2)" style="flex:1;background:rgba(239,68,68,.18);border:1.5px solid rgba(239,68,68,.4);color:var(--red);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">+2 THEM</button>'
         +'<div style="font-family:Impact,sans-serif;font-size:22px;color:var(--red);line-height:1;min-width:26px;text-align:center;">'+them+'</div>'
       +'</div>'
+      +pendingPlayerEventHTML()
     +'</div>';
   }
 
@@ -3771,7 +3788,7 @@ function renderScoreBarHTML(){
     // +1/+2/+3 buttons
     +'<div style="display:flex;gap:5px;margin-bottom:6px;">'
       +[1,2,3].map(function(p){
-        return '<button onclick="event.stopPropagation();openEventPicker(\'points\','+p+')" style="flex:1;background:rgba(46,168,75,.15);border:1px solid rgba(46,168,75,.35);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">+'+p+' US</button>';
+        return '<button aria-pressed="'+isPlayerEventArmed('points',p)+'" onclick="event.stopPropagation();armPlayerEvent(\'points\','+p+')" style="flex:1;background:rgba(46,168,75,.15);border:1px solid rgba(46,168,75,.35);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">+'+p+' US</button>';
       }).join('')
       +'<div style="width:1px;background:var(--border);margin:0 2px;"></div>'
       +[1,2,3].map(function(p){
@@ -3779,13 +3796,14 @@ function renderScoreBarHTML(){
       }).join('')
     +'</div>'
     +'<div class="score-stat-row" role="group" aria-label="Player stats">'
-      +PLAYER_STATS.map(([kind,label,short])=>`<button type="button" class="score-stat-btn" title="${label}" aria-label="${label}" onclick="openEventPicker('${kind}')"><span class="stat-full">${label}</span><span class="stat-short">${short}</span></button>`).join('')
+      +PLAYER_STATS.map(([kind,label,short])=>`<button type="button" class="score-stat-btn" title="${label}" aria-label="${label}" aria-pressed="${isPlayerEventArmed(kind)}" onclick="armPlayerEvent('${kind}')"><span class="stat-full">${label}</span><span class="stat-short">${short}</span></button>`).join('')
     +'</div>'
     // Undo + collapse
     +'<div style="display:flex;gap:6px;">'
       +(last ? '<button onclick="event.stopPropagation();undoTrackedEvent()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">↩ Undo '+last.label+'</button>' : '<div style="flex:1"></div>')
       +'<button type="button" aria-expanded="true" onclick="event.stopPropagation();toggleScoreBar()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">▲ COLLAPSE</button>'
     +'</div>'
+    +pendingPlayerEventHTML()
   +'</div>';
 }
 
@@ -3902,7 +3920,7 @@ function renderGame(){
   var endAction = (isH2 && !isQ3Pending) ? 'confirmEndGame()' : 'confirmEndHalf()';
 
   $('app').innerHTML=`
-<div class="game">
+<div class="game${pendingPlayerEvent?' event-armed':''}">
   <div class="ghdr">
     <div class="hll">
       <div id="gclock" class="gclock bb">${fmt(S.gameTime)}</div>
@@ -5879,6 +5897,7 @@ function deleteSavedReport(idx){
 }
 
 function renderSettings(){
+  pendingPlayerEvent=null;
   const prevPhase = S._prevPhase || 'setup';
   const colorFields=[
     {key:'accent',  label:'Accent / Headings'},
@@ -6287,6 +6306,7 @@ function loadStateFromData(d, offerContinue=true){
     S.subLog=d.subLog||[];
     S.scoreLog=d.scoreLog||[];
     S.statLog=d.statLog||[];
+    pendingPlayerEvent=null;
     S.scoreBarExpanded=!!d.scoreBarExpanded;
     S.gamePositions=d.gamePositions||{};
     S.manualPositions=d.manualPositions||{};
@@ -6614,6 +6634,9 @@ document.addEventListener('visibilitychange', () => {
 });
 // Guard against accidental refresh/close during a live game
 window.addEventListener('pagehide',saveState);
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape') cancelPlayerEvent();
+});
 window.addEventListener('beforeunload', function(e){
   if(S.phase==='h1'||S.phase==='h2'){
     writeCrashSnapshot();
