@@ -389,6 +389,32 @@ html[data-layout="portrait"] .col:first-child{border-right:1px solid var(--borde
 .lineup-time span:first-child{overflow-wrap:anywhere;}
 .lineup-time meter{width:100%;accent-color:var(--green);}
 .pbtn:disabled{opacity:.5;cursor:default;}
+.score-stat-row{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:3px;margin-bottom:6px;}
+.score-stat-btn{min-width:0;min-height:44px;padding:4px 1px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:10px;font-weight:600;line-height:1.15;overflow-wrap:anywhere;cursor:pointer;}
+.score-stat-btn .stat-full{display:none;}
+@media (min-width:900px){
+  .score-stat-row{gap:6px;}
+  .score-stat-btn{font-size:12px;padding:4px;}
+  .score-stat-btn .stat-full{display:inline;}
+  .score-stat-btn .stat-short{display:none;}
+}
+html[data-layout="portrait"] .game:has(.score-stat-row) .col{overflow-y:auto;}
+html[data-layout="portrait"] .game:has(.score-stat-row) .court-card{min-height:92px;}
+.stat-picker{width:min(92%,480px);max-height:85dvh;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);overflow-y:auto;}
+.stat-picker::backdrop{background:rgba(0,0,0,.64);}
+.stat-picker-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px;}
+.stat-picker h2{font:700 17px system-ui,sans-serif;margin:0;}
+.stat-picker-time{font-size:12px;color:var(--dim);margin-top:4px;}
+.stat-player-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+.stat-picker button{min-height:44px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;overflow-wrap:anywhere;cursor:pointer;}
+.stat-picker details{margin-top:10px;color:var(--dim);font-size:13px;}
+.stat-picker details summary{padding:8px 0;cursor:pointer;}
+.stat-picker .stat-unassigned{width:100%;margin-top:10px;}
+.event-summary{margin:12px 0;break-inside:auto;}
+.event-summary table{width:100%;border-collapse:collapse;font-size:12px;}
+.event-summary caption{text-align:left;font-weight:700;padding:7px;}
+.event-summary th,.event-summary td{padding:5px 7px;border-bottom:1px solid var(--border,#ddd);text-align:left;overflow-wrap:anywhere;}
+.event-summary :is(th,td):last-child{text-align:right;}
 
 /* ── GAME OVER ── */
 .go{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
@@ -627,8 +653,18 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.10.1';
+const APP_VERSION = '2026.11.10.2';
 const COURT_SIZE = 5;
+const PLAYER_STATS = [
+  ['miss','Missed Shot','Miss'],
+  ['assist','Assist','Ast'],
+  ['dreb','Defensive Rebound','D Reb'],
+  ['oreb','Offensive Rebound','O Reb'],
+  ['steal','Steal','Stl'],
+  ['tpass','Turnover Pass','TO Pass'],
+  ['tsteal','Turnover Steal','TO Steal'],
+  ['ttravel','Turnover Travel','TO Travel'],
+];
 const QUARTER_SECS = 10*60;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -911,7 +947,8 @@ const S = {
   subCountdown: 0,
   alertState: null,
   isRunning: false,       // player timers running
-  scoreLog: [],           // [{t, who:'us'|'them', pts}] — scoring events
+  scoreLog: [],           // Team scoring events, with an optional player ID for our team
+  statLog: [],            // Player events other than scoring
   scoreBarExpanded: false, // score bar toggle
   gamePositions: {},      // playerId→activePosition ('1'-'5') for current game only
   subPlanPositions: {},   // {h1:{0:{name:pos,...},...}, h2:{...}} — per-sub lineup positions
@@ -2225,6 +2262,8 @@ function startGame(){
   unlockAudio();
   // Initialise game positions and manual overrides
   S.scoreLog = [];
+  S.statLog = [];
+  S.finalScore = {us:null,them:null};
   S.scoreBarExpanded = false;
   S.gamePositions = {};
   S.q1BreakDone = false; S.q3BreakDone = false;
@@ -2311,7 +2350,7 @@ function undoLastSub(){
   const accrued={};
   S.players.forEach(function(p){
     const old=snap.players.find(function(q){return q.id===p.id;});
-    if(old) accrued[p.id]={play:p.playTime-old.playTime,h1:p.h1PlayTime-old.h1PlayTime,h2:p.h2PlayTime-old.h2PlayTime,bench:p.benchTime-old.benchTime};
+    if(old) accrued[p.id]={play:p.playTime-old.playTime,h1:p.h1PlayTime-old.h1PlayTime,h2:p.h2PlayTime-old.h2PlayTime,bench:p.benchTime-old.benchTime,fouls:p.fouls};
   });
   S.players=snap.players.map(function(p){
     // The time since the sub was spent in the WRONG state — reassign it to the restored state
@@ -2319,6 +2358,8 @@ function undoLastSub(){
     const elapsed=Math.max(a.play,a.bench,0);
     if(p.onCourt){ p.playTime+=elapsed; if(S.phase==='h2')p.h2PlayTime+=elapsed; else p.h1PlayTime+=elapsed; }
     else { p.benchTime+=elapsed; p.benchStint+=elapsed; }
+    p.fouls=a.fouls??p.fouls;
+    if(p.fouls>=5) p.onCourt=false;
     return p;
   });
   S.subLog.length=snap.subLogLen;
@@ -2434,10 +2475,16 @@ function toggleFoul(pid, dot){
   const p=S.players.find(pl=>pl.id===pid);
   if(!p) return;
   const newFouls=p.fouls>dot?dot:dot+1;
-  const wasOut=p.fouls>=5;
+  if(newFouls>p.fouls){
+    for(let count=p.fouls;count<newFouls;count++) S.statLog.push({...eventStamp(),kind:'foul',pid});
+  } else {
+    S.statLog=removeFoulEvents(S.statLog,pid,p.fouls-newFouls);
+  }
   p.fouls=newFouls;
   if(newFouls>=5&&p.onCourt){ p.onCourt=false; }
   S.selCourt.delete(pid); S.selBench.delete(pid);
+  saveState();
+  writeCrashSnapshot();
   renderGame();
 }
 
@@ -2575,6 +2622,7 @@ function exportReport(){
       txt+=`${pad(fmt(e.gameTime),10)}${pad('H'+e.half,6)}${pad(fmt(e.halfTime),10)}${pad(e.on.join(', '),22)}${e.off.join(', ')}\n`;
     });
   }
+  txt+=eventReportText(S.players,S.scoreLog,S.statLog);
   const filename=`squad_report_${now.toISOString().slice(0,10)}.txt`;
   const blob=new Blob([txt],{type:'text/plain'});
   if(navigator.canShare){
@@ -3483,32 +3531,160 @@ function buildScoreDiff(){
   return pts;
 }
 
-function addScoreEvent(who, pts){
-  if(!S.scoreLog) S.scoreLog=[];
-  S.scoreLog.push({t:S.gameTime, who:who, pts:pts});
+function eventStamp(){
+  return {
+    t:S.gameTime, period:getCurrentQuarter(), remaining:Math.max(0,getPeriodRemaining()),
+    order:Math.max(S.scoreLog.at(-1)?.order||0,S.statLog.at(-1)?.order||0)+1,
+  };
+}
+
+function statName(kind){
+  return kind==='foul'?'Foul':PLAYER_STATS.find(stat=>stat[0]===kind)?.[1];
+}
+
+function removeFoulEvents(log,pid,count){
+  return log.slice().reverse().filter(e=>{
+    if(count>0&&e.pid===pid&&e.kind==='foul'){ count--; return false; }
+    return true;
+  }).reverse();
+}
+
+function addScoreEvent(who, pts, pid=null, stamp=eventStamp()){
+  S.scoreLog.push({...stamp,who,pts,...(who==='us'&&pid!=null?{pid}:{})});
+  saveTrackedEvent();
+}
+
+function saveTrackedEvent(){
   saveState();
-  // Update DOM directly without full re-render
   updateScoreBarDOM();
   writeCrashSnapshot();
 }
 
-function undoScoreEvent(){
-  if(!S.scoreLog||!S.scoreLog.length) return;
-  S.scoreLog.pop();
-  saveState();
-  updateScoreBarDOM();
+function lastTrackedEvent(){
+  const score=S.scoreLog.at(-1);
+  let statIndex=S.statLog.length-1;
+  while(statIndex>=0&&S.statLog[statIndex].kind==='foul') statIndex--;
+  const stat=S.statLog[statIndex];
+  if(stat&&(!score||(stat.order||0)>(score.order||0))) return {statIndex,label:statName(stat.kind)};
+  return score?{statIndex:-1,label:'Score'}:null;
+}
+
+function eventSummaryRows(players, scores, stats){
+  const totals=new Map(players.map((p,i)=>[p.id??i,{name:p.name,points:0,fouls:p.fouls||0,counts:{}}]));
+  let unassigned=0;
+  for(const e of scores){
+    if(e.who!=='us') continue;
+    const player=totals.get(e.pid);
+    if(player) player.points+=e.pts;
+    else unassigned+=e.pts;
+  }
+  for(const e of stats){
+    if(e.kind==='foul') continue;
+    const counts=totals.get(e.pid)?.counts;
+    if(counts&&statName(e.kind)) counts[e.kind]=(counts[e.kind]||0)+1;
+  }
+  const rows=[...totals.values()].flatMap(({name,points,fouls,counts})=>[
+    [name,'Points',points],
+    [name,'Fouls',fouls],
+    ...PLAYER_STATS.filter(([kind])=>counts[kind]).map(([kind,label])=>[name,label,counts[kind]]),
+  ]);
+  if(unassigned) rows.push(['Unassigned','Points',unassigned]);
+  return rows;
+}
+
+function eventSummaryHTML(players, scores, stats){
+  const rows=eventSummaryRows(players,scores,stats);
+  if(!rows.length) return '';
+  return `<section class="event-summary"><table>
+    <caption>Player Events</caption>
+    <thead><tr><th scope="col">Name</th><th scope="col">Event</th><th scope="col">Total</th></tr></thead>
+    <tbody>${rows.map(([name,label,count])=>`<tr><td>${escapeHTML(name)}</td><td>${label}</td><td>${count}</td></tr>`).join('')}</tbody>
+  </table></section>`;
+}
+
+function eventReportText(players, scores, stats){
+  const names=new Map(players.map((p,i)=>[p.id??i,p.name]));
+  const rows=eventSummaryRows(players,scores,stats).map(row=>row.join('\t'));
+  const events=[
+    ...scores.map(e=>({...e,name:e.who==='us'?(names.get(e.pid)||'Unassigned (US)'):'Opponent',label:'Points',count:e.pts})),
+    ...stats.filter(e=>statName(e.kind)).map(e=>({...e,name:names.get(e.pid)||'Unknown player',label:statName(e.kind),count:1})),
+  ].sort((a,b)=>a.t-b.t||(a.order||0)-(b.order||0));
+  const lines=['','PLAYER EVENTS','Name\tEvent\tTotal',...rows,'','TIMESTAMPED EVENT LOG',
+    'Game elapsed\tPeriod\tClock remaining\tName\tEvent\tCount',
+    ...events.map(e=>[fmt(e.t),e.period||'',e.remaining==null?'':fmt(e.remaining),e.name,e.label,e.count].join('\t'))];
+  if(players.reduce((sum,p)=>sum+(p.fouls||0),0)>stats.filter(e=>e.kind==='foul').length)
+    lines.push('Some fouls were recorded or adjusted without a timestamp.');
+  return lines.join('\n')+'\n';
+}
+
+function downloadTextFile(text, filename){
+  const url=URL.createObjectURL(new Blob([text],{type:'text/plain'}));
+  const link=document.createElement('a');
+  link.href=url; link.download=filename;
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function undoTrackedEvent(){
+  const last=lastTrackedEvent();
+  if(!last) return;
+  if(last.statIndex<0) S.scoreLog.pop();
+  else S.statLog.splice(last.statIndex,1);
+  saveTrackedEvent();
+}
+
+function openEventPicker(kind, pts){
+  if(!['h1','h2'].includes(S.phase)||S.lineupMode||$('stat-picker')) return;
+  const scoring=kind==='points';
+  if(!scoring&&!statName(kind)) return;
+  const stamp=eventStamp();
+  const onCourt=S.players.filter(p=>p.onCourt);
+  const bench=S.players.filter(p=>!p.onCourt);
+  const buttons=players=>players.map(p=>
+    `<button type="button" data-pid="${p.id}">${escapeHTML(p.name)}</button>`
+  ).join('');
+  const picker=document.createElement('dialog');
+  picker.id='stat-picker';
+  picker.className='stat-picker';
+  picker.setAttribute('aria-labelledby','stat-picker-title');
+  picker.innerHTML=`
+    <div class="stat-picker-header">
+      <div><h2 id="stat-picker-title">${scoring?`+${pts} US`:statName(kind)}</h2>
+      <div class="stat-picker-time">${stamp.period} · ${fmt(stamp.remaining)} remaining</div></div>
+      <button type="button" data-cancel aria-label="Cancel" autofocus>✕</button>
+    </div>
+    <div class="stat-player-grid" role="group" aria-label="${onCourt.length?'On court':'Roster'}">${buttons(onCourt.length?onCourt:bench)}</div>
+    ${onCourt.length&&bench.length?`<details><summary>Bench players</summary><div class="stat-player-grid">${buttons(bench)}</div></details>`:''}
+    ${scoring?'<button type="button" data-unassigned class="stat-unassigned">Unassigned</button>':''}`;
+  picker.addEventListener('close',()=>picker.remove());
+  picker.addEventListener('click',event=>{
+    const button=event.target.closest('button');
+    if(!button) return;
+    if('cancel' in button.dataset){ picker.close(); return; }
+    const pid='pid' in button.dataset?Number(button.dataset.pid):null;
+    picker.close();
+    if(scoring) addScoreEvent('us',pts,pid,stamp);
+    else {
+      S.statLog.push({...stamp,kind,pid});
+      saveTrackedEvent();
+    }
+  });
+  document.body.appendChild(picker);
+  picker.showModal();
 }
 
 function toggleScoreBar(){
   S.scoreBarExpanded = !S.scoreBarExpanded;
-  var bar = document.getElementById('score-bar');
-  if(bar) bar.outerHTML = renderScoreBarHTML();
+  updateScoreBarDOM();
 }
 
 // Fast DOM update for score bar without full game re-render
 function updateScoreBarDOM(){
   var bar = document.getElementById('score-bar');
-  if(bar) bar.outerHTML = renderScoreBarHTML();
+  if(bar){
+    bar.outerHTML = renderScoreBarHTML();
+    requestAnimationFrame(syncCardHeights);
+  }
 }
 
 // Mini differential SVG for score bar
@@ -3556,7 +3732,7 @@ function renderScoreBarHTML(){
   var lead = us - them;
   var leadTxt = lead>0 ? '+'+lead+' US' : lead<0 ? Math.abs(lead)+' THEM' : 'LEVEL';
   var leadCol = lead>0 ? 'var(--green)' : lead<0 ? 'var(--red)' : 'var(--dim)';
-  var hasScores = S.scoreLog && S.scoreLog.length > 0;
+  const last=lastTrackedEvent();
 
   if(!S.scoreBarExpanded){
     // ── COLLAPSED ──
@@ -3564,12 +3740,12 @@ function renderScoreBarHTML(){
       +'<div style="display:flex;align-items:center;gap:6px;">'
         // US side
         +'<div style="font-family:Impact,sans-serif;font-size:22px;color:var(--green);line-height:1;min-width:26px;text-align:center;">'+us+'</div>'
-        +'<button onclick="event.stopPropagation();addScoreEvent(\'us\',2)" style="flex:1;background:rgba(46,168,75,.18);border:1.5px solid rgba(46,168,75,.4);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">+2 US</button>'
+        +'<button onclick="event.stopPropagation();openEventPicker(\'points\',2)" style="flex:1;background:rgba(46,168,75,.18);border:1.5px solid rgba(46,168,75,.4);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">+2 US</button>'
         // Middle
-        +'<div onclick="event.stopPropagation();toggleScoreBar()" style="display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;flex-shrink:0;padding:0 4px;">'
-          +'<div style="font-family:Impact,sans-serif;font-size:11px;color:'+leadCol+';letter-spacing:1px;white-space:nowrap;">'+leadTxt+'</div>'
-          +'<div style="font-size:8px;color:#374151;letter-spacing:.5px;">▼ MORE</div>'
-        +'</div>'
+        +'<button type="button" aria-expanded="false" onclick="event.stopPropagation();toggleScoreBar()" style="display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;flex-shrink:0;padding:4px;border:0;background:none;">'
+          +'<span style="font-family:Impact,sans-serif;font-size:11px;color:'+leadCol+';white-space:nowrap;">'+leadTxt+'</span>'
+          +'<span style="font-size:9px;color:var(--dim);">▼ MORE</span>'
+        +'</button>'
         // THEM side
         +'<button onclick="event.stopPropagation();addScoreEvent(\'them\',2)" style="flex:1;background:rgba(239,68,68,.18);border:1.5px solid rgba(239,68,68,.4);color:var(--red);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">+2 THEM</button>'
         +'<div style="font-family:Impact,sans-serif;font-size:22px;color:var(--red);line-height:1;min-width:26px;text-align:center;">'+them+'</div>'
@@ -3595,17 +3771,20 @@ function renderScoreBarHTML(){
     // +1/+2/+3 buttons
     +'<div style="display:flex;gap:5px;margin-bottom:6px;">'
       +[1,2,3].map(function(p){
-        return '<button onclick="event.stopPropagation();addScoreEvent(\'us\','+p+')" style="flex:1;background:rgba(46,168,75,.15);border:1px solid rgba(46,168,75,.35);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">+'+p+' US</button>';
+        return '<button onclick="event.stopPropagation();openEventPicker(\'points\','+p+')" style="flex:1;background:rgba(46,168,75,.15);border:1px solid rgba(46,168,75,.35);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">+'+p+' US</button>';
       }).join('')
       +'<div style="width:1px;background:var(--border);margin:0 2px;"></div>'
       +[1,2,3].map(function(p){
         return '<button onclick="event.stopPropagation();addScoreEvent(\'them\','+p+')" style="flex:1;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.35);color:var(--red);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">+'+p+' THEM</button>';
       }).join('')
     +'</div>'
+    +'<div class="score-stat-row" role="group" aria-label="Player stats">'
+      +PLAYER_STATS.map(([kind,label,short])=>`<button type="button" class="score-stat-btn" title="${label}" aria-label="${label}" onclick="openEventPicker('${kind}')"><span class="stat-full">${label}</span><span class="stat-short">${short}</span></button>`).join('')
+    +'</div>'
     // Undo + collapse
     +'<div style="display:flex;gap:6px;">'
-      +(hasScores ? '<button onclick="event.stopPropagation();undoScoreEvent()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">↩ UNDO LAST</button>' : '<div style="flex:1"></div>')
-      +'<button onclick="event.stopPropagation();toggleScoreBar()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">▲ COLLAPSE</button>'
+      +(last ? '<button onclick="event.stopPropagation();undoTrackedEvent()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">↩ Undo '+last.label+'</button>' : '<div style="flex:1"></div>')
+      +'<button type="button" aria-expanded="true" onclick="event.stopPropagation();toggleScoreBar()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">▲ COLLAPSE</button>'
     +'</div>'
   +'</div>';
 }
@@ -4342,9 +4521,11 @@ function exportGamePDF(){
   // ── Assemble pages ────────────────────────────────────────
   var css='*{box-sizing:border-box;margin:0;padding:0}'
     +'body{font-family:Arial,sans-serif;color:#222;background:#fff}'
+    +'.event-summary table{border-collapse:collapse;width:100%;font-size:11px}.event-summary caption{text-align:left;font-weight:700;padding-bottom:8px}'
+    +'.event-summary th,.event-summary td{text-align:left;border-bottom:1px solid #ddd;padding:5px 7px}.event-summary tr{break-inside:avoid}'
     +'@page{size:A4;margin:0}'
     +'@media print{'
-      +'.page{page-break-after:always;padding:'+MARGIN+'px!important}'
+      +'.page{padding:'+MARGIN+'px!important}.page:not(:last-child){page-break-after:always}'
       +'body{-webkit-print-color-adjust:exact;print-color-adjust:exact}'
     +'}';
 
@@ -4359,16 +4540,19 @@ function exportGamePDF(){
         +statsTableHTML()
       +'</div>'
     +'</div>'
-    +footer.replace('</div>','&nbsp;&middot; Page 1 of '+(S.subLog.length?'2':'1')+'</div>')
+    +footer
   +'</div>';
 
   var p2=S.subLog.length?'<div class="page" style="width:'+PAGE_W+'px;padding:'+MARGIN+'px;min-height:1123px">'
     +hdr
     +subLogHTML()
-    +footer.replace('</div>',' &middot; Page 2 of 2</div>')
+    +footer
   +'</div>':'';
 
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Game Report \u2014 '+teamName+'</title><style>'+css+'</style></head><body>'+p1+p2+'</body></html>';
+  const summary=eventSummaryHTML(S.players,S.scoreLog,S.statLog);
+  const eventPage=summary?'<div class="page" style="width:'+PAGE_W+'px;padding:'+MARGIN+'px">'+hdr+summary+footer+'</div>':'';
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Game Report \u2014 '+teamName+'</title><style>'+css+'</style></head><body>'+p1+p2+eventPage+'</body></html>';
+  const aiText=buildAIText();
 
   // Show in-app preview modal — user chooses when to print/share
   var existing=document.getElementById('pdf-preview-modal');
@@ -4406,8 +4590,7 @@ function exportGamePDF(){
   shareBtn.onclick=function(){
     var htmlBlob=new Blob([html],{type:'text/html'});
     var htmlFile=new File([htmlBlob],teamName.replace(/\s+/g,'_')+'_game_report.html',{type:'text/html'});
-    var aiTxt=buildAIText();
-    var txtBlob=new Blob([aiTxt],{type:'text/plain'});
+    var txtBlob=new Blob([aiText],{type:'text/plain'});
     var txtFile=new File([txtBlob],teamName.replace(/\s+/g,'_')+'_AI_summary.txt',{type:'text/plain'});
     // Try to share BOTH files together (report + AI summary)
     if(navigator.canShare&&navigator.canShare({files:[htmlFile,txtFile]})){
@@ -4461,14 +4644,14 @@ function exportGamePDF(){
         lines.push(fmt(e.gameTime).padEnd(8)+(e.isHalftime?'HALF':'H'+e.half)+'  ▲ '+e.on.join(', ')+'  ▼ '+e.off.join(', '));
       });
     }
-    lines.push('');
+    lines.push(eventReportText(S.players,S.scoreLog,S.statLog));
     lines.push('--------------------------------------------');
     lines.push('Suggested questions: Who needs more court time next game? Were minutes distributed fairly? Any players at foul trouble?');
     return lines.join('\n');
   }
 
   function shareAIText(){
-    var txt=buildAIText();
+    var txt=aiText;
     var fname=teamName.replace(/\s+/g,'_')+'_ai_report.txt';
     var blob=new Blob([txt],{type:'text/plain'});
     var file=new File([blob],fname,{type:'text/plain'});
@@ -4534,6 +4717,7 @@ function saveGameReport(){
     // Substitution and scoring logs for chart reconstruction
     subLog: S.subLog||[],
     scoreLog: S.scoreLog||[],
+    statLog: S.statLog||[],
     // Game format
     gameSecs: S.gameTime,
     h1Dur: S.h1Dur, h2Dur: S.h2Dur,
@@ -4577,13 +4761,7 @@ function uploadToClaudeModal(){
     const dStr=(d>=0?'+':'')+fmt(Math.abs(d));
     txt+=(p.name.padEnd(18)+fmt(p.h1PlayTime).padEnd(8)+fmt(p.h2PlayTime).padEnd(8)+fmt(p.playTime).padEnd(8)+dStr+' | '+p.fouls+'f\n');
   });
-  if(S.scoreLog&&S.scoreLog.length){
-    const st=calcScoreTotals();
-    txt+='\nSCORING LOG ('+S.scoreLog.length+' events | Final: '+st.us+' – '+st.them+')\n'+'─'.repeat(50)+'\n';
-    S.scoreLog.forEach(function(e){
-      txt+=fmt(e.t)+' '+e.who.toUpperCase()+' +'+e.pts+'\n';
-    });
-  }
+  txt+=eventReportText(S.players,S.scoreLog,S.statLog);
   if(S.subLog.length){
     txt+='\nSUBSTITUTION LOG ('+S.subLog.length+' entries)\n'+'─'.repeat(50)+'\n';
     S.subLog.forEach(function(e){
@@ -4606,7 +4784,11 @@ function uploadToClaudeModal(){
   closeBtn.textContent='✕';
   closeBtn.style.cssText='background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:8px;width:36px;height:36px;font-size:20px;cursor:pointer;flex-shrink:0;';
   closeBtn.onclick=function(){ document.getElementById('claude-report-modal').remove(); };
-  hdr.appendChild(title); hdr.appendChild(closeBtn);
+  const downloadBtn=document.createElement('button');
+  downloadBtn.textContent='Download TXT';
+  downloadBtn.className='exp-btn';
+  downloadBtn.onclick=()=>downloadTextFile(txt,'squad_ai_report.txt');
+  hdr.appendChild(title); hdr.appendChild(downloadBtn); hdr.appendChild(closeBtn);
 
   const instructions=document.createElement('div');
   instructions.style.cssText='font-size:12px;color:var(--dim);line-height:1.7;flex-shrink:0;';
@@ -5046,6 +5228,7 @@ function renderGameover(){
       <thead><tr><th>Player</th><th>${h1Label}</th><th>${h2Label}</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
+    ${eventSummaryHTML(S.players,S.scoreLog,S.statLog)}
     ${diffChartHTML}
     ${rotChartHTML}
     ${barChartHTML}
@@ -5292,6 +5475,7 @@ function viewSavedReport(idx){
     if(!r.players) r.players=[];
     if(!r.subLog) r.subLog=[];
     if(!r.scoreLog) r.scoreLog=[];
+    if(!r.statLog) r.statLog=[];
     if(!r.score) r.score={us:null,them:null};
     const rPlayers=r.players.map(function(p,i){
       return {id:i,name:p.name||'?',onCourt:!!p.onCourt,
@@ -5419,6 +5603,7 @@ function viewSavedReport(idx){
           +'<thead><tr><th>Player</th><th>'+h1Label+'</th><th>'+h2Label+'</th><th>Total</th><th>vs Fair</th><th>Fouls</th></tr></thead>'
           +'<tbody>'+rows+'</tbody>'
         +'</table>'
+        +eventSummaryHTML(r.players,r.scoreLog,r.statLog)
         +buildRotationChart(rPlayers,rSubLog)
         +buildBarsChart(rPlayers)
         +'<div style="padding:8px 12px;">'
@@ -5457,6 +5642,7 @@ function viewSavedReport(idx){
           +'var pl=window._reportPlayers.find(function(q){return q.id==='+pid+';});'
           +'if(pl){pl.h1PlayTime=h1;pl.h2PlayTime=h2;pl.playTime=h1+h2;pl.fouls=fouls;}'
           +'var rp=window._reportRef;'
+          +'if(rp.players['+pid+']) rp.statLog=removeFoulEvents(rp.statLog,rp.players['+pid+'].id??'+pid+',rp.players['+pid+'].fouls-fouls);'
           +'if(rp.players['+pid+']){rp.players['+pid+'].h1PlayTime=h1;rp.players['+pid+'].h2PlayTime=h2;rp.players['+pid+'].playTime=h1+h2;rp.players['+pid+'].fouls=fouls;}'
           +'window._saveReport();window._rebuildBody();this.closest(\'div[style*=\"inset:0\"]\').remove();">'
           +'SAVE</button>';
@@ -5516,18 +5702,18 @@ function viewSavedReport(idx){
     // ── PDF export from saved report ───────────────────────────
     function exportSavedPDF(){
       // Swap S state temporarily
-      const sv={players:S.players,scoreLog:S.scoreLog,subLog:S.subLog,
+      const sv={players:S.players,scoreLog:S.scoreLog,statLog:S.statLog,subLog:S.subLog,
         gameTime:S.gameTime,h1Dur:S.h1Dur,h2Dur:S.h2Dur,finalScore:S.finalScore,names:S.names};
-      S.players=rPlayers.map(function(p,i){return Object.assign({id:i},p);});
+      S.players=rPlayers.map((p,i)=>({...p,id:r.players[i].id??i}));
       S.scoreLog=r.scoreLog||[];
+      S.statLog=r.statLog||[];
       S.subLog=r.subLog||[];
       S.gameTime=r.gameSecs||rTotal;
       S.h1Dur=r.h1Dur||20; S.h2Dur=r.h2Dur||20;
       S.finalScore={us:r.score&&r.score.us!=null?r.score.us:null,
                     them:r.score&&r.score.them!=null?r.score.them:null};
       S.names=rPlayers.map(function(p){return p.name;});
-      exportGamePDF();
-      Object.assign(S,sv);
+      try{ exportGamePDF(); }finally{ Object.assign(S,sv); }
     }
 
     // ── Claude/ChatGPT export ──────────────────────────────────
@@ -5546,6 +5732,7 @@ function viewSavedReport(idx){
         var diffStr=(diff>=0?'+':'')+fmtMMSS(Math.abs(diff));
         txt+=p.name.padEnd(20)+fmtMMSS(p.playTime).padStart(6)+'  '+diffStr.padStart(7)+'  '+p.fouls+'f\n';
       });
+      txt+=eventReportText(r.players,r.scoreLog,r.statLog);
       if(r.subLog&&r.subLog.length){
         txt+='\nSUBSTITUTIONS ('+r.subLog.length+')\n'+'─'.repeat(48)+'\n';
         r.subLog.forEach(function(e){
@@ -5575,7 +5762,11 @@ function viewSavedReport(idx){
       eClose.textContent='CLOSE';
       eClose.style.cssText='background:none;border:1.5px solid #2a2d3e;color:#7a80a0;border-radius:8px;padding:7px 12px;font-family:Impact,sans-serif;font-size:12px;cursor:pointer;';
       eClose.onclick=function(){bdrop.remove();};
-      ehdr.appendChild(eTitle);ehdr.appendChild(eCopyBtn);ehdr.appendChild(eClose);
+      const eDownload=document.createElement('button');
+      eDownload.textContent='Download TXT';
+      eDownload.className='exp-btn';
+      eDownload.onclick=()=>downloadTextFile(txt,'squad_ai_report.txt');
+      ehdr.appendChild(eTitle);ehdr.appendChild(eCopyBtn);ehdr.appendChild(eDownload);ehdr.appendChild(eClose);
       const eHint=document.createElement('div');
       eHint.style.cssText='padding:8px calc(env(safe-area-inset-right,0px)+14px);background:rgba(167,139,250,.08);border-bottom:1px solid #1e2130;font-size:11px;color:#a78bfa;flex-shrink:0;line-height:1.5;';
       eHint.textContent='Paste into Claude.ai, ChatGPT or Gemini and add your question.';
@@ -5978,7 +6169,7 @@ function resetAll(){
     subPlan:{h1:[],h2:[]}, useSubPlan:false,
     useH2Preset:false, h2PresetIds:new Set(),
     useFinalPreset:false, finalPresetIds:new Set(),
-    subLog:[], alertState:null, savedGame:null,
+    subLog:[], scoreLog:[], statLog:[], alertState:null, savedGame:null,
     priorityPlayerIds:new Set(), useAutoMode:false,
     startingSlots:new Set(), lineupDraft:null, lineupMode:null,
     finalScore:{us:null,them:null},
@@ -6031,6 +6222,8 @@ function stateToJSON(){
     alertState: S.alertState,
     subLog: S.subLog,
     scoreLog: S.scoreLog||[],
+    statLog: S.statLog||[],
+    scoreBarExpanded: S.scoreBarExpanded,
     gamePositions: S.gamePositions||{},
     manualPositions: S.manualPositions||{},
     q1BreakDone: S.q1BreakDone||false,
@@ -6093,6 +6286,8 @@ function loadStateFromData(d, offerContinue=true){
     prevAlert=d.alertState||null;
     S.subLog=d.subLog||[];
     S.scoreLog=d.scoreLog||[];
+    S.statLog=d.statLog||[];
+    S.scoreBarExpanded=!!d.scoreBarExpanded;
     S.gamePositions=d.gamePositions||{};
     S.manualPositions=d.manualPositions||{};
     S.q1BreakDone=d.q1BreakDone||false;
@@ -6244,8 +6439,6 @@ const _endGame=endGame;
 window.endGame=function(){ _endGame(); saveState(); stopAutoSave(); clearCrashSnapshot(); };
 const _commitSub=commitSub;
 window.commitSub=function(){ _commitSub(); saveState(); };
-const _toggleFoul=toggleFoul;
-window.toggleFoul=function(pid,dot){ _toggleFoul(pid,dot); saveState(); };
 const _newGame=newGame;
 window.newGame=function(){ _newGame(); saveState(); stopAutoSave(); clearCrashSnapshot(); };
 
