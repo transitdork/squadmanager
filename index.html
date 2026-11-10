@@ -674,7 +674,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.10.9';
+const APP_VERSION = '2026.11.10.10';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -1086,9 +1086,11 @@ function getActiveLeague(){
   return ((team&&team.league)||'').toUpperCase().trim();
 }
 function isEDJBL(){ const l=getActiveLeague(); return l.includes('EDJBL')||l.includes('EDJ'); }
-function isVJBL(){  const l=getActiveLeague(); return l.includes('VJBL'); }
-function isEDL(){   const l=getActiveLeague(); return l.includes('EDL')&&!l.includes('EDJBL'); }
-function usesQuarters(){ return isVJBL()||isEDL(); }
+function leagueUsesQuarters(league){
+  const label=(league||'').toUpperCase();
+  return label.includes('VJBL')||(label.includes('EDL')&&!label.includes('EDJBL'));
+}
+function usesQuarters(){ return leagueUsesQuarters(getActiveLeague()); }
 
 // During a timeout:
 // EDJBL: game clock keeps running; player clocks stop. EXCEPT last 2min of H2 → everything stops.
@@ -3555,20 +3557,20 @@ function renderSetup(restoreScroll){
 // ── SCORE TRACKING ─────────────────────────────────────────────
 let pendingPlayerEvent=null;
 
-function calcScoreTotals(){
+function calcScoreTotals(scores=S.scoreLog){
   var us=0, them=0;
-  (S.scoreLog||[]).forEach(function(e){ if(e.who==='us') us+=e.pts; else them+=e.pts; });
+  (scores||[]).forEach(function(e){ if(e.who==='us') us+=e.pts; else them+=e.pts; });
   return {us:us, them:them};
 }
 
-function buildScoreDiff(){
+function buildScoreDiff(scores=S.scoreLog,total=gameTotalSecs()){
   var pts=[{t:0,d:0}];
   var us=0, them=0;
-  (S.scoreLog||[]).forEach(function(e){
+  (scores||[]).forEach(function(e){
     if(e.who==='us') us+=e.pts; else them+=e.pts;
     pts.push({t:e.t, d:us-them});
   });
-  if(pts[pts.length-1].t<gameTotalSecs()) pts.push({t:gameTotalSecs(), d:us-them});
+  if(pts[pts.length-1].t<total) pts.push({t:total, d:us-them});
   return pts;
 }
 
@@ -4313,26 +4315,30 @@ function buildStintHTML(){
 }
 
 // ── Game report: PDF export via print ──
-function exportGamePDF(){
+function exportGamePDF(saved=null){
   const team=T.teams.find(t=>t.id===T.activeTeamId);
-  const teamName=team?(team.club+' '+(team.ageBracket||'')).trim():'Squad Manager';
-  const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
-  const total=gameTotalSecs();
+  const teamName=saved?(saved.teamName||'Squad Manager'):(team?(team.club+' '+(team.ageBracket||'')).trim():'Squad Manager');
+  const {players=[],scoreLog=[],statLog=[],subLog=[],opponent='',h1Dur=20,h2Dur=20}=saved||S;
+  const gameTime=saved?saved.gameSecs||0:S.gameTime;
+  const finalScore=saved?saved.score:S.finalScore;
+  const sorted=[...players].sort((a,b)=>b.playTime-a.playTime);
+  const isQ=saved?leagueUsesQuarters(saved.league):usesQuarters();
+  const total=isQ?40*60:(h1Dur+h2Dur)*60;
   const fairShare=Math.round(total*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
-  const isQ=usesQuarters();
   const h1L=isQ?'Q1+Q2':'H1', h2L=isQ?'Q3+Q4':'H2';
-  const h1Secs=isQ?20*60:S.h1Dur*60;
-  const hasScores=S.scoreLog&&S.scoreLog.length>0;
-  const trackedTotals=calcScoreTotals();
-  const scoreUs=S.finalScore.us!==null?S.finalScore.us:(hasScores?trackedTotals.us:null);
-  const scoreThem=S.finalScore.them!==null?S.finalScore.them:(hasScores?trackedTotals.them:null);
+  const h1Secs=isQ?20*60:h1Dur*60;
+  const hasScores=scoreLog.length>0;
+  const trackedTotals=calcScoreTotals(scoreLog);
+  const scoreUs=finalScore?.us??(hasScores?trackedTotals.us:null);
+  const scoreThem=finalScore?.them??(hasScores?trackedTotals.them:null);
   const finalScoreStr=(scoreUs!==null&&scoreThem!==null)?(scoreUs+' \u2013 '+scoreThem):'';
 
   // ── Shared chart geometry ─────────────────────────────────
-  // ALL three charts use identical PAGE_W, MARGIN, LP, RP so axes align perfectly
-  const PAGE_W=794, MARGIN=48;
+  // All three charts share a view box width so their axes stay aligned.
+  const CHART_W=698;
   const LP=58, RP=0;
-  const CW=PAGE_W-MARGIN*2-LP-RP; // drawable width (equal for all charts)
+  const CW=CHART_W-LP-RP;
+  const chart=(height,overflow='hidden')=>`<svg class="report-chart" width="${CHART_W}" height="${height}" viewBox="0 0 ${CHART_W} ${height}" style="overflow:${overflow}">`;
   const TICK_EVERY=120; // 2-min minor ticks
   function xf(t){return LP+(Math.min(t,total)/total)*CW;}
 
@@ -4381,7 +4387,7 @@ function exportGamePDF(){
   }
   function svgScoreLines(chartTop,chartH,usLabelY,themLabelY){
     if(!hasScores)return'';
-    return (S.scoreLog||[]).map(function(ev){
+    return scoreLog.map(function(ev){
       var x=xf(ev.t),isUs=ev.who==='us',col=isUs?'#2ea84b':'#cc3333';
       var usTxt=usLabelY!=null&&isUs?'<text x="'+x+'" y="'+usLabelY+'" text-anchor="middle" fill="'+col+'" font-size="7" font-family="Arial" font-weight="bold">+'+ev.pts+'</text>':'';
       var thTxt=themLabelY!=null&&!isUs?'<text x="'+x+'" y="'+themLabelY+'" text-anchor="middle" fill="'+col+'" font-size="7" font-family="Arial" font-weight="bold">+'+ev.pts+'</text>':'';
@@ -4392,8 +4398,8 @@ function exportGamePDF(){
   // ── Chart 1: Score differential ───────────────────────────
   function diffChartSVG(){
     if(!hasScores)return'';
-    const diff=buildScoreDiff();
-    const lTots=calcScoreTotals();
+    const diff=buildScoreDiff(scoreLog,total);
+    const lTots=trackedTotals;
     const lead=lTots.us-lTots.them;
     const US_H=14,H=72,AX_H=18;
     const svgH=US_H+H+AX_H;
@@ -4427,7 +4433,7 @@ function exportGamePDF(){
         +'<span style="font-size:9px;font-weight:700;color:#444;letter-spacing:.5px;text-transform:uppercase">Score Differential</span>'
         +'<span style="font-size:11px;font-weight:700;color:'+leadCol+'">Final: '+lTots.us+' \u2013 '+lTots.them+' ('+leadTxt+')</span>'
       +'</div>'
-      +'<svg width="'+(LP+CW+RP)+'" height="'+svgH+'" style="display:block;overflow:visible">'
+      +chart(svgH,'visible')
         +'<rect x="'+LP+'" y="'+US_H+'" width="'+CW+'" height="'+H+'" fill="#f7f8fa" rx="2"/>'
         +yTicks
         +'<line x1="'+LP+'" y1="'+zeroY+'" x2="'+(LP+CW)+'" y2="'+zeroY+'" stroke="#bbb" stroke-width="1.5"/>'
@@ -4445,7 +4451,7 @@ function exportGamePDF(){
         +'<span style="color:rgba(204,51,51,.7)">\u2588 Them ahead</span>'
         +'<span style="color:#2563eb">\u2501 differential</span>'
         +(hasScores?'<span style="color:#2ea84b">| our scores (+pts above)</span><span style="color:#cc3333">| their scores</span>':'')
-        +'<span>'+( S.scoreLog?S.scoreLog.length:0)+' events</span>'
+        +'<span>'+scoreLog.length+' events</span>'
       +'</div>'
     +'</div>';
   }
@@ -4457,16 +4463,16 @@ function exportGamePDF(){
     const svgH=US_H+H+THEM_H+AX_H;
 
     function pStints(pname){
-      const firstSub=S.subLog.find(function(e){return e.on.includes(pname)||e.off.includes(pname);});
-      const pObj=S.players.find(function(p){return p.name===pname;});
+      const firstSub=subLog.find(function(e){return e.on.includes(pname)||e.off.includes(pname);});
+      const pObj=players.find(function(p){return p.name===pname;});
       var cur=firstSub?(firstSub.on.includes(pname)?false:true):(pObj?pObj.onCourt:false);
       var start=0; var stints=[];
-      S.subLog.forEach(function(sub){
+      subLog.forEach(function(sub){
         if(sub.isHalftime){var will=sub.on.includes(pname)?true:sub.off.includes(pname)?false:cur;if(will!==cur){stints.push({s:start,e:sub.gameTime,on:cur});start=sub.gameTime;cur=will;}return;}
         if(sub.on.includes(pname)&&!cur){stints.push({s:start,e:sub.gameTime,on:false});start=sub.gameTime;cur=true;}
         if(sub.off.includes(pname)&&cur){stints.push({s:start,e:sub.gameTime,on:true});start=sub.gameTime;cur=false;}
       });
-      stints.push({s:start,e:S.gameTime,on:cur});
+      stints.push({s:start,e:gameTime,on:cur});
       return stints;
     }
 
@@ -4489,7 +4495,7 @@ function exportGamePDF(){
         +'<span style="font-size:9px;font-weight:700;color:#444;letter-spacing:.5px;text-transform:uppercase">Rotation Timeline</span>'
         +(hasScores?'<span style="font-size:8px;color:#888"><span style="color:#2ea84b">+pts above</span> = us &nbsp;<span style="color:#cc3333">+pts below</span> = them</span>':'')
       +'</div>'
-      +'<svg width="'+(LP+CW+RP)+'" height="'+svgH+'" style="display:block;overflow:visible">'
+      +chart(svgH,'visible')
         +'<rect x="'+LP+'" y="'+US_H+'" width="'+CW+'" height="'+H+'" fill="#f7f8fa" rx="2"/>'
         +svgMinorTicks(US_H,H)
         +svgPeriodLines(US_H,H,true)
@@ -4525,7 +4531,7 @@ function exportGamePDF(){
         +'<span style="font-size:9px;font-weight:700;color:#444;letter-spacing:.5px;text-transform:uppercase">Playing Time</span>'
         +'<span style="font-size:8px;color:#888">\u2503 = fair share ('+fmt(fairShare)+')</span>'
       +'</div>'
-      +'<svg width="'+(LP+CW+RP)+'" height="'+svgH+'" style="display:block">'
+      +chart(svgH)
         +'<rect x="'+LP+'" y="0" width="'+CW+'" height="'+H+'" fill="#f7f8fa" rx="2"/>'
         +svgMinorTicks(0,H)
         +svgPeriodLines(0,H,false)
@@ -4562,25 +4568,27 @@ function exportGamePDF(){
 
   // ── Substitutions and player events ────────────────────────
   function subLogHTML(){
-    if(!S.subLog.length)return'';
-    const entries=S.subLog.map(e=>{
+    if(!subLog.length)return'';
+    const entries=subLog.map(e=>{
       const period=e.isHalftime?'Half time':('H'+e.half+' \u00b7 '+fmt(e.halfTime));
       return `<tr${e.isHalftime?' class="sub-halftime"':''}><td>${fmt(e.gameTime)}</td>
         <td>${period}</td><td>${escapeHTML(e.on.join(', '))}</td><td>${escapeHTML(e.off.join(', '))}</td></tr>`;
     }).join('');
     return `<table class="report-sub-log">
-      <caption>Substitution Log \u00b7 ${S.subLog.length} entries</caption>
+      <caption>Substitution Log \u00b7 ${subLog.length} entries</caption>
       <thead><tr><th scope="col">Elapsed</th><th scope="col">Period</th><th scope="col">On</th><th scope="col">Off</th></tr></thead>
       <tbody>${entries}</tbody>
     </table>`;
   }
 
   // ── Page header ───────────────────────────────────────────
-  var gameDate=new Date().toLocaleDateString('en-AU',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const gameDate=saved?.date||new Date().toLocaleDateString('en-AU',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const gameFormat=isQ?'4 × 10 min quarters':h1Dur===h2Dur?`2 × ${h1Dur} min halves`:`${h1Dur} + ${h2Dur} min halves`;
+  const reportMeta=`${escapeHTML(gameDate)} · ${sorted.length} players · ${fmt(gameTime)} played · ${gameFormat}`;
   var scoreLine=finalScoreStr?'<div style="text-align:right"><div style="font-size:9px;color:#888;margin-bottom:1px">FINAL SCORE</div><div style="font-size:24px;font-weight:700;letter-spacing:4px;color:#111;line-height:1">'+finalScoreStr+'</div></div>':'';
   var hdr='<div style="border-bottom:2px solid #222;padding-bottom:10px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start">'
-    +'<div><div style="font-size:17px;font-weight:700;color:#111;letter-spacing:.3px">'+teamName+'</div>'
-    +'<div style="font-size:10px;color:#666;margin-top:3px">'+gameDate+'&nbsp;&middot;&nbsp;'+sorted.length+' players&nbsp;&middot;&nbsp;'+fmt(S.gameTime)+' played&nbsp;&middot;&nbsp;'+(isQ?'4 \u00d7 10 min quarters':'2 \u00d7 20 min halves')+'</div></div>'
+    +'<div><div style="font-size:17px;font-weight:700;color:#111;letter-spacing:.3px">'+escapeHTML(teamName)+'</div>'
+    +'<div class="report-meta">'+reportMeta+'</div></div>'
     +scoreLine+'</div>';
 
   var footer='<div style="font-size:8px;color:#bbb;margin-top:16px;text-align:center;border-top:1px solid #eee;padding-top:8px">Generated by Squad Manager &middot; '+new Date().toLocaleString()+'</div>';
@@ -4588,6 +4596,9 @@ function exportGamePDF(){
   // ── Assemble pages ────────────────────────────────────────
   var css='*{box-sizing:border-box;margin:0;padding:0}'
     +'body{font-family:Arial,sans-serif;color:#222;background:#fff}'
+    +'.page{width:100%;padding:clamp(12px,3vw,32px)}.report-chart{display:block;width:100%;height:auto}'
+    +'.report-meta{font-size:10px;color:#666;margin-top:3px}'
+    +'.event-matrix-scroll{overflow-x:auto}.event-summary table{min-width:640px}'
     +'.details-header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:12px;padding-bottom:5px;margin-bottom:10px;border-bottom:1px solid #ccc}'
     +'.details-header span{white-space:nowrap}.report-sub-log + .event-summary{margin-top:12px}'
     +'.report-sub-log,.event-summary table{border-collapse:collapse;table-layout:fixed;width:100%;font-size:9px}'
@@ -4597,14 +4608,15 @@ function exportGamePDF(){
     +'.report-sub-log{text-align:left}.report-sub-log thead{background:#f0f0f0}.report-sub-log th:first-child{width:9%}.report-sub-log th:nth-child(2){width:13%}'
     +'.report-sub-log .sub-halftime{background:#fffbea}.event-summary th,.event-summary td{text-align:center}'
     +'.event-summary th:first-child{width:14%;text-align:left}.event-summary thead{background:#f0f0f0}'
-    +'@page{size:A4 portrait;margin:12.5mm}'
+    +'@page{size:A4 portrait;margin:10mm}'
     +'@media print{'
-      +'.page{width:auto!important;min-height:0!important;padding:0!important}.page + .page{break-before:page;page-break-before:always}'
+      +'.page{padding:0}.page + .page{break-before:page;page-break-before:always}'
+      +'.event-matrix-scroll{overflow:visible}.event-summary table{min-width:0}'
       +'body{-webkit-print-color-adjust:exact;print-color-adjust:exact}'
     +'}';
 
-  var p1='<div class="page" style="width:'+PAGE_W+'px;padding:'+MARGIN+'px;min-height:1123px">'
-    +hdr.replace('Page 1','')
+  var p1='<div class="page">'
+    +hdr
     +'<div style="display:flex;flex-direction:column;gap:16px">'
       +(hasScores?diffChartSVG():'')
       +'<div style="border-top:1px solid #eee;padding-top:14px">'+rotationChartSVG()+'</div>'
@@ -4617,12 +4629,12 @@ function exportGamePDF(){
     +footer
   +'</div>';
 
-  const summary=eventSummaryHTML(S.players,S.scoreLog,S.statLog);
+  const summary=eventSummaryHTML(players,scoreLog,statLog);
   const substitutions=subLogHTML();
-  const detailHeader=`<div class="details-header"><strong>${escapeHTML(teamName)}</strong>${finalScoreStr?`<span>Final score: ${finalScoreStr}</span>`:''}</div>`;
-  const detailsPage=(substitutions||summary)?'<div class="page page-details" style="width:'+PAGE_W+'px;padding:'+MARGIN+'px">'
+  const detailHeader=`<div class="details-header"><div><strong>${escapeHTML(teamName)}</strong><div class="report-meta">${reportMeta}</div></div>${finalScoreStr?`<span>Final score: ${finalScoreStr}</span>`:''}</div>`;
+  const detailsPage=(substitutions||summary)?'<div class="page page-details">'
     +detailHeader+substitutions+summary+footer+'</div>':'';
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Game Report \u2014 '+teamName+'</title><style>'+css+'</style></head><body>'+p1+detailsPage+'</body></html>';
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Game Report \u2014 '+escapeHTML(teamName)+'</title><style>'+css+'</style></head><body>'+p1+detailsPage+'</body></html>';
   const aiText=buildAIText();
 
   // Show in-app preview modal — user chooses when to print/share
@@ -4693,11 +4705,10 @@ function exportGamePDF(){
   function buildAIText(){
     var lines=[];
     lines.push('SQUAD MANAGER — GAME REPORT');
-    lines.push(teamName+(S.opponent?' vs '+S.opponent:''));
-    var su=S.finalScore.us, st=S.finalScore.them;
-    lines.push('Final score: '+((su!=null&&st!=null)?(su+' – '+st):'Not recorded'));
-    lines.push('Duration: '+Math.round(S.gameTime/60)+' min');
-    var fair=Math.round(S.gameTime*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
+    lines.push(teamName+(opponent?' vs '+opponent:''));
+    lines.push('Final score: '+(finalScoreStr||'Not recorded'));
+    lines.push('Duration: '+Math.round(gameTime/60)+' min');
+    var fair=Math.round(gameTime*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
     lines.push('Fair share: '+fmt(fair)+' per player');
     lines.push('');
     lines.push('PLAYING TIME');
@@ -4707,15 +4718,15 @@ function exportGamePDF(){
       var ds=(diff>=0?'+':'-')+fmt(Math.abs(diff));
       lines.push(p.name.padEnd(20)+fmt(p.playTime).padStart(6)+'  '+ds.padStart(7)+'  '+p.fouls+'f');
     });
-    if(S.subLog&&S.subLog.length){
+    if(subLog.length){
       lines.push('');
-      lines.push('SUBSTITUTIONS ('+S.subLog.length+')');
+      lines.push('SUBSTITUTIONS ('+subLog.length+')');
       lines.push('--------------------------------------------');
-      S.subLog.forEach(function(e){
+      subLog.forEach(function(e){
         lines.push(fmt(e.gameTime).padEnd(8)+(e.isHalftime?'HALF':'H'+e.half)+'  ▲ '+e.on.join(', ')+'  ▼ '+e.off.join(', '));
       });
     }
-    lines.push(eventReportText(S.players,S.scoreLog,S.statLog));
+    lines.push(eventReportText(players,scoreLog,statLog));
     lines.push('--------------------------------------------');
     lines.push('Suggested questions: Who needs more court time next game? Were minutes distributed fairly? Any players at foul trouble?');
     return lines.join('\n');
@@ -4776,6 +4787,7 @@ function saveGameReport(){
     teamId: T.activeTeamId,
     teamName: team?(team.club+' '+(team.ageBracket||'')).trim():'Unknown',
     league: team&&team.league||'',
+    opponent: S.opponent||'',
     date: new Date().toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',year:'numeric'}),
     score: {us: S.finalScore&&S.finalScore.us!==null ? S.finalScore.us : null,
             them: S.finalScore&&S.finalScore.them!==null ? S.finalScore.them : null},
@@ -5563,9 +5575,7 @@ function viewSavedReport(idx){
     });
     const rTotal=r.gameSecs>0?r.gameSecs:((r.h1Dur||20)+(r.h2Dur||20))*60;
     const rFairShare=Math.round(rTotal*COURT_SIZE/Math.max(rPlayers.length,COURT_SIZE));
-    const isQ=(r.league||'').toUpperCase().includes('VJBL')||
-               ((r.league||'').toUpperCase().includes('EDL')&&
-               !(r.league||'').toUpperCase().includes('EDJBL'));
+    const isQ=leagueUsesQuarters(r.league);
     const h1Label=isQ?'Q1+Q2':'H1', h2Label=isQ?'Q3+Q4':'H2';
     const CW=320,LP=58,RP=0,cw=CW-LP-RP;
     function xf(t){return LP+(Math.min(t,rTotal)/rTotal)*cw;}
@@ -5775,19 +5785,7 @@ function viewSavedReport(idx){
 
     // ── PDF export from saved report ───────────────────────────
     function exportSavedPDF(){
-      // Swap S state temporarily
-      const sv={players:S.players,scoreLog:S.scoreLog,statLog:S.statLog,subLog:S.subLog,
-        gameTime:S.gameTime,h1Dur:S.h1Dur,h2Dur:S.h2Dur,finalScore:S.finalScore,names:S.names};
-      S.players=rPlayers.map((p,i)=>({...p,id:r.players[i].id??i}));
-      S.scoreLog=r.scoreLog||[];
-      S.statLog=r.statLog||[];
-      S.subLog=r.subLog||[];
-      S.gameTime=r.gameSecs||rTotal;
-      S.h1Dur=r.h1Dur||20; S.h2Dur=r.h2Dur||20;
-      S.finalScore={us:r.score&&r.score.us!=null?r.score.us:null,
-                    them:r.score&&r.score.them!=null?r.score.them:null};
-      S.names=rPlayers.map(function(p){return p.name;});
-      try{ exportGamePDF(); }finally{ Object.assign(S,sv); }
+      exportGamePDF({...r,players:rPlayers.map((p,i)=>({...p,id:r.players[i].id??i})),subLog:rSubLog});
     }
 
     // ── Claude/ChatGPT export ──────────────────────────────────

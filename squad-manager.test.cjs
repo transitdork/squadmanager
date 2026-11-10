@@ -430,8 +430,10 @@ test('the A4 export keeps the overview first and flows the complete sub log and 
       isHalftime:i===32,on:[i===64?'Final <Sub>':'Fran'],off:['Ada']}));
     endGame(); exportGamePDF()`);
   const printHtml=mounted.get('pdf-preview-modal').children[1].contentDocument.html;
-  assert.match(printHtml,/@page\{size:A4 portrait;margin:12\.5mm\}/);
-  assert.match(printHtml,/\.page\{width:auto!important;min-height:0!important;padding:0!important\}/);
+  assert.match(printHtml,/@page\{size:A4 portrait;margin:10mm\}/);
+  assert.match(printHtml,/\.page\{width:100%;/);
+  assert.match(printHtml,/\.report-chart\{display:block;width:100%;height:auto\}/);
+  assert.equal((printHtml.match(/class="report-chart"[^>]+viewBox="0 0 698 /g)||[]).length,3);
   assert.equal((printHtml.match(/class="page(?: page-details)?"/g)||[]).length,2);
   const [overview,details]=printHtml.split('<div class="page page-details"');
   assert.match(overview,/Score Differential/);
@@ -442,6 +444,25 @@ test('the A4 export keeps the overview first and flows the complete sub log and 
   assert.match(details,/class="sub-halftime"/);
   assert.match(details,/Final &lt;Sub&gt;[\s\S]*<caption>Player Events<\/caption>/);
   assert.doesNotMatch(details,/min-height:1123px/);
+});
+
+test('a saved export uses the selected game instead of the current game or team', () => {
+  const session=app();
+  const {run,mounted}=session;
+  run(`${leagueCode}; ${rosterCode}; startGame(); ${setLineup}; finishLineup();
+    S.gameTime=654; addScoreEvent('us',2,0); addScoreEvent('them',1);
+    togglePlayerSel(0,'court'); togglePlayerSel(5,'bench'); commitSub(); endGame(); saveGameReport();
+    T.activeTeamId='other'; T.teams.push({id:'other',club:'Different Team',league:'EDJBL',players:[]});
+    S.gameTime=9; S.scoreLog=[]; S.subLog=[]; viewSavedReport(0)`);
+  mounted.get('saved-report-modal').children[1].children[0].onclick();
+  const printHtml=mounted.get('pdf-preview-modal').children[1].contentDocument.html;
+  assert.match(printHtml,/10:54 played · 4 × 10 min quarters/);
+  assert.match(printHtml,/Final score: 2 – 1/);
+  assert.match(printHtml,/Substitution Log · 1 entries/);
+  assert.match(printHtml,/Score Differential/);
+  assert.doesNotMatch(printHtml,/Different Team|0:09 played/);
+  assert.equal(run('S.gameTime'),9);
+  assert.equal(run('S.scoreLog.length'),0);
 });
 
 test('reopening Full Time at XL text size keeps the export actions separate from the scrolling report', () => {
