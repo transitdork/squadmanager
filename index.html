@@ -367,9 +367,9 @@ html[data-layout="portrait"] .col:first-child{border-right:1px solid var(--borde
 .starting-chips .chip:disabled{opacity:.55;cursor:default;}
 .fixed-duration{display:grid;place-items:center;}
 .game{height:100vh;height:100dvh;}
-/* Keep the viewport frame unscaled so text zoom cannot push Start below the screen. */
-html:has(#app > .lineup){zoom:1!important;}
-.lineup{position:fixed;inset:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:var(--bg);}
+/* Scale text inside the frame, not the viewport that holds the action bar. */
+html:has(#app > .viewport-frame){zoom:1!important;}
+.viewport-frame{position:fixed;inset:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;background:var(--bg);}
 .lineup .ht-hdr{position:relative;}
 .lineup .ht-title{font-size:calc(36px * var(--ui-scale,1));letter-spacing:0;}
 .lineup .ht-sub{font-size:calc(11px * var(--ui-scale,1));}
@@ -424,7 +424,8 @@ html[data-layout="portrait"] .game:has(.score-stat-row) .court-card{min-height:9
 .event-summary td{font-variant-numeric:tabular-nums;}
 
 /* ── GAME OVER ── */
-.go{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+.go{grid-template-rows:minmax(0,1fr) auto;}
+.go-scroll{min-height:0;overflow:auto;overscroll-behavior:contain;}
 .go-hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top,0px) + 14px) calc(env(safe-area-inset-right,0px) + 13px) 14px calc(env(safe-area-inset-left,0px) + 13px);text-align:center;flex-shrink:0;}
 .go-title{font-family:Impact,sans-serif;font-size:54px;letter-spacing:4px;color:#f08c00;line-height:1;}
 .go-sub{color:#7a80a0;font-size:11px;margin-top:3px;}
@@ -440,6 +441,18 @@ html[data-layout="portrait"] .game:has(.score-stat-row) .court-card{min-height:9
 .go-footer{background:var(--surface);border-top:1px solid var(--border);padding:9px calc(env(safe-area-inset-right, 0px) + 13px) calc(env(safe-area-inset-bottom, 0px) + 9px) calc(env(safe-area-inset-left, 0px) + 13px);display:flex;gap:7px;flex-shrink:0;}
 .exp-btn{flex:1;background:#f08c00;color:#111;font-family:Impact,sans-serif;font-size:19px;letter-spacing:2px;border:none;border-radius:10px;padding:12px;cursor:pointer;}
 .new-btn{background:#222736;border:1.5px solid #2e3350;color:#eef0f8;font-family:Impact,sans-serif;font-size:17px;letter-spacing:1px;border-radius:10px;padding:12px 14px;cursor:pointer;}
+.go .go-title{font-size:calc(44px * var(--ui-scale,1));letter-spacing:0;}
+.go .go-sub,.go .stats-tbl{font-size:calc(11px * var(--ui-scale,1));}
+.go .event-summary table{font-size:calc(12px * var(--ui-scale,1));}
+.go .go-body{overflow:visible;}
+.go .go-footer{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));}
+.go-footer button{min-width:0;min-height:44px;padding:6px 4px;border-radius:8px;font-size:calc(14px * var(--ui-scale,1));letter-spacing:0;overflow-wrap:anywhere;}
+@media (max-width:460px){
+  .go .go-title{font-size:calc(36px * var(--ui-scale,1));}
+  .go .go-footer{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;}
+  .go-footer .new-btn{grid-column:1/-1;}
+  .go-footer button{font-size:calc(12px * var(--ui-scale,1));}
+}
 
 /* ── PLAN BUILDER ── */
 .plan-slot{background:#1a1e2a;border:1.5px solid #2e3350;border-radius:10px;padding:8px 10px;margin-bottom:7px;}
@@ -660,7 +673,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.10.6';
+const APP_VERSION = '2026.11.10.7';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -4068,7 +4081,7 @@ function renderLineup(){
   const court=S.players.filter(p=>selected.has(p.id));
   const bench=S.players.filter(p=>!selected.has(p.id));
   $('app').innerHTML=`
-    <div class="ht lineup">
+    <div class="ht lineup viewport-frame">
       <header class="ht-hdr">
         ${first?'<button class="tm-back lineup-back" onclick="cancelGameStart()" aria-label="Back to setup">←</button>':''}
         <div class="ht-title">${title}</div>
@@ -5260,7 +5273,8 @@ function renderGameover(){
   })();
 
   $('app').innerHTML=`
-<div class="go">
+<div class="go viewport-frame">
+  <div class="go-scroll">
   <div class="go-hdr">
     <div class="go-title">FULL TIME</div>
     <div class="go-sub">${sorted.length} players · ${fmt(S.gameTime)} played</div>
@@ -5294,13 +5308,14 @@ function renderGameover(){
     ${barChartHTML}
     ${logHTML}
   </div>
-  <div class="go-footer">
+  </div>
+  <footer class="go-footer">
     <button class="exp-btn" onclick="exportReport()">⬆ TXT</button>
     <button class="exp-btn" onclick="exportGamePDF()" style="background:rgba(74,158,255,.15);border-color:rgba(74,158,255,.3);color:var(--blue);">📄 PDF</button>
     <button class="exp-btn" onclick="saveGameReport()" style="background:rgba(62,207,110,.1);border-color:rgba(62,207,110,.3);color:var(--green);">💾 SAVE</button>
     <button class="exp-btn" onclick="uploadToClaudeModal()" style="background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.3);color:var(--purple);">🤖 CLAUDE</button>
     <button class="new-btn" onclick="newGame()">NEW GAME</button>
-  </div>
+  </footer>
 </div>`;
 }
 

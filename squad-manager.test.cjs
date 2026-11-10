@@ -405,6 +405,22 @@ test('the exact stats matrix survives reopening and reaches the summary, PDF and
   assert.match(savedTxt,/0:08\tH1\t19:52\tAda\tAssist\t1/);
 });
 
+test('reopening Full Time at XL text size keeps the export actions separate from the scrolling report', () => {
+  const first=app();
+  first.run(`${rosterCode}; CFG.uiScale=1.3; saveSettings();
+    startGame(); ${setLineup}; finishLineup(); addScoreEvent('us',2,0); endGame()`);
+  const {run,view,root,storage}=app(first.storage);
+  assert.equal(run('S.phase'),'gameover');
+  assert.equal(root.style['--ui-scale'],'1.3');
+  assert.match(view.innerHTML,/<div class="go viewport-frame">\s*<div class="go-scroll">/);
+  const footer=view.innerHTML.match(/<\/div>\s*<\/div>\s*<footer class="go-footer">([\s\S]*?)<\/footer>/)?.[1];
+  assert.ok(footer);
+  const actions=[...footer.matchAll(/onclick="([^"]+)"/g)].map(match=>match[1]);
+  assert.deepEqual(actions,['exportReport()','exportGamePDF()','saveGameReport()','uploadToClaudeModal()','newGame()']);
+  run(actions[2]);
+  assert.equal(JSON.parse(storage.get('squadmgr_reports_v1'))[0].score.us,2);
+});
+
 test('switching actions replaces the selection; a timeout clears it without recording', () => {
   const {run, data}=app();
   run(`${rosterCode}; startGame(); ${setLineup}; finishLineup(); armPlayerEvent('assist'); armPlayerEvent('dreb'); tapCourtName(0)`);
