@@ -673,7 +673,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.10.7';
+const APP_VERSION = '2026.11.10.8';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -4558,26 +4558,19 @@ function exportGamePDF(){
       +'</tr></thead><tbody>'+rows+'</tbody></table>';
   }
 
-  // ── Sub log (page 2) ──────────────────────────────────────
+  // ── Substitutions and player events ────────────────────────
   function subLogHTML(){
     if(!S.subLog.length)return'';
-    var entries=S.subLog.map(function(e){
-      var ht=e.isHalftime;
-      var bg=ht?'#fffbea':'#fafafa';
-      var bl=ht?'3px solid #f59e0b':'3px solid #e0e0e0';
-      var period=ht?'HALF TIME':('H'+e.half+' \u00b7 '+fmt(e.halfTime));
-      return '<div style="display:flex;gap:12px;padding:5px 8px;margin-bottom:3px;border-radius:4px;background:'+bg+';border-left:'+bl+'">'
-        +'<div style="font-family:monospace;font-size:11px;font-weight:700;color:'+(ht?'#d97706':'#555')+';flex-shrink:0;width:36px">'+fmt(e.gameTime)+'</div>'
-        +'<div style="font-size:9px;color:#888;flex-shrink:0;width:72px;align-self:center">'+period+'</div>'
-        +'<div style="font-size:11px">'
-          +'<span style="color:#2ea84b;font-weight:700">\u25b2 '+e.on.join(', ')+'</span>'
-          +'<span style="color:#aaa;margin:0 8px">\u2190</span>'
-          +'<span style="color:#cc3333;font-weight:700">\u25bc '+e.off.join(', ')+'</span>'
-        +'</div>'
-      +'</div>';
+    const entries=S.subLog.map(e=>{
+      const period=e.isHalftime?'Half time':('H'+e.half+' \u00b7 '+fmt(e.halfTime));
+      return `<tr${e.isHalftime?' class="sub-halftime"':''}><td>${fmt(e.gameTime)}</td>
+        <td>${period}</td><td>${escapeHTML(e.on.join(', '))}</td><td>${escapeHTML(e.off.join(', '))}</td></tr>`;
     }).join('');
-    return '<div style="font-size:11px;font-weight:700;color:#444;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid #ddd;padding-bottom:4px">'
-      +'Substitution Log \u00b7 '+S.subLog.length+' entries</div>'+entries;
+    return `<table class="report-sub-log">
+      <caption>Substitution Log \u00b7 ${S.subLog.length} entries</caption>
+      <thead><tr><th scope="col">Elapsed</th><th scope="col">Period</th><th scope="col">On</th><th scope="col">Off</th></tr></thead>
+      <tbody>${entries}</tbody>
+    </table>`;
   }
 
   // ── Page header ───────────────────────────────────────────
@@ -4593,12 +4586,18 @@ function exportGamePDF(){
   // ── Assemble pages ────────────────────────────────────────
   var css='*{box-sizing:border-box;margin:0;padding:0}'
     +'body{font-family:Arial,sans-serif;color:#222;background:#fff}'
-    +'.event-summary table{border-collapse:collapse;table-layout:fixed;width:100%;font-size:9px}.event-summary caption{text-align:left;font-weight:700;padding-bottom:8px}'
-    +'.event-summary th,.event-summary td{text-align:center;border-bottom:1px solid #ddd;padding:5px 3px;overflow-wrap:anywhere}.event-summary tr{break-inside:avoid}'
+    +'.details-header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:12px;padding-bottom:5px;margin-bottom:10px;border-bottom:1px solid #ccc}'
+    +'.details-header span{white-space:nowrap}.report-sub-log + .event-summary{margin-top:12px}'
+    +'.report-sub-log,.event-summary table{border-collapse:collapse;table-layout:fixed;width:100%;font-size:9px}'
+    +'.report-sub-log caption,.event-summary caption{text-align:left;font-size:11px;font-weight:700;padding-bottom:4px;break-after:avoid}'
+    +'.report-sub-log th,.report-sub-log td,.event-summary th,.event-summary td{border-bottom:1px solid #ddd;padding:4px 3px;overflow-wrap:anywhere}'
+    +'.report-sub-log tr,.event-summary tr{break-inside:avoid;page-break-inside:avoid}'
+    +'.report-sub-log{text-align:left}.report-sub-log thead{background:#f0f0f0}.report-sub-log th:first-child{width:9%}.report-sub-log th:nth-child(2){width:13%}'
+    +'.report-sub-log .sub-halftime{background:#fffbea}.event-summary th,.event-summary td{text-align:center}'
     +'.event-summary th:first-child{width:14%;text-align:left}.event-summary thead{background:#f0f0f0}'
-    +'@page{size:A4;margin:0}'
+    +'@page{size:A4 portrait;margin:12.5mm}'
     +'@media print{'
-      +'.page{padding:'+MARGIN+'px!important}.page:not(:last-child){page-break-after:always}'
+      +'.page{width:auto!important;min-height:0!important;padding:0!important}.page + .page{break-before:page;page-break-before:always}'
       +'body{-webkit-print-color-adjust:exact;print-color-adjust:exact}'
     +'}';
 
@@ -4616,15 +4615,12 @@ function exportGamePDF(){
     +footer
   +'</div>';
 
-  var p2=S.subLog.length?'<div class="page" style="width:'+PAGE_W+'px;padding:'+MARGIN+'px;min-height:1123px">'
-    +hdr
-    +subLogHTML()
-    +footer
-  +'</div>':'';
-
   const summary=eventSummaryHTML(S.players,S.scoreLog,S.statLog);
-  const eventPage=summary?'<div class="page" style="width:'+PAGE_W+'px;padding:'+MARGIN+'px">'+hdr+summary+footer+'</div>':'';
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Game Report \u2014 '+teamName+'</title><style>'+css+'</style></head><body>'+p1+p2+eventPage+'</body></html>';
+  const substitutions=subLogHTML();
+  const detailHeader=`<div class="details-header"><strong>${escapeHTML(teamName)}</strong>${finalScoreStr?`<span>Final score: ${finalScoreStr}</span>`:''}</div>`;
+  const detailsPage=(substitutions||summary)?'<div class="page page-details" style="width:'+PAGE_W+'px;padding:'+MARGIN+'px">'
+    +detailHeader+substitutions+summary+footer+'</div>':'';
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Game Report \u2014 '+teamName+'</title><style>'+css+'</style></head><body>'+p1+detailsPage+'</body></html>';
   const aiText=buildAIText();
 
   // Show in-app preview modal — user chooses when to print/share

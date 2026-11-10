@@ -387,7 +387,10 @@ test('the exact stats matrix survives reopening and reaches the summary, PDF and
   assert.equal(saved.scoreLog[0].pid,0);
   assert.equal(saved.statLog.length,3);
   run('exportGamePDF()');
-  assert.match(mounted.get('pdf-preview-modal').children[1].contentDocument.html,adaRow);
+  const printHtml=mounted.get('pdf-preview-modal').children[1].contentDocument.html;
+  assert.match(printHtml,adaRow);
+  assert.equal((printHtml.match(/class="page(?: page-details)?"/g)||[]).length,2);
+  assert.doesNotMatch(printHtml,/<table class="report-sub-log">/);
   run('uploadToClaudeModal()');
   const modal=mounted.get('claude-report-modal');
   const txt=modal.children.find(el=>el.tag==='textarea').value;
@@ -403,6 +406,27 @@ test('the exact stats matrix survives reopening and reaches the summary, PDF and
   report.children[1].children[1].onclick();
   const savedTxt=mounted.get('saved-ai-export').children.find(el=>el.tag==='textarea').value;
   assert.match(savedTxt,/0:08\tH1\t19:52\tAda\tAssist\t1/);
+});
+
+test('the A4 export keeps the overview first and flows the complete sub log and stats together', () => {
+  const {run,mounted}=app();
+  run(`${rosterCode}; startGame(); ${setLineup}; finishLineup(); addScoreEvent('us',2,0);
+    S.subLog=Array.from({length:65},(_,i)=>({gameTime:20+i*30,halfTime:20+i*30,half:1,
+      isHalftime:i===32,on:[i===64?'Final <Sub>':'Fran'],off:['Ada']}));
+    endGame(); exportGamePDF()`);
+  const printHtml=mounted.get('pdf-preview-modal').children[1].contentDocument.html;
+  assert.match(printHtml,/@page\{size:A4 portrait;margin:12\.5mm\}/);
+  assert.match(printHtml,/\.page\{width:auto!important;min-height:0!important;padding:0!important\}/);
+  assert.equal((printHtml.match(/class="page(?: page-details)?"/g)||[]).length,2);
+  const [overview,details]=printHtml.split('<div class="page page-details"');
+  assert.match(overview,/Score Differential/);
+  assert.match(overview,/Rotation Timeline/);
+  assert.match(overview,/Player Statistics/);
+  assert.doesNotMatch(overview,/<table class="report-sub-log">/);
+  assert.match(details,/<table class="report-sub-log">[\s\S]*?<caption>Substitution Log · 65 entries<\/caption>/);
+  assert.match(details,/class="sub-halftime"/);
+  assert.match(details,/Final &lt;Sub&gt;[\s\S]*<caption>Player Events<\/caption>/);
+  assert.doesNotMatch(details,/min-height:1123px/);
 });
 
 test('reopening Full Time at XL text size keeps the export actions separate from the scrolling report', () => {
