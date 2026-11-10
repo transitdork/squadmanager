@@ -203,7 +203,7 @@ body{
 .ib-dismiss{background:#2e3350;color:#7a80a0;}
 
 /* ── SETUP ── */
-.setup{height:100dvh;height:100vh;overflow-y:auto;padding:calc(env(safe-area-inset-top, 0px) + 18px) calc(env(safe-area-inset-right, 0px) + 13px) 40px calc(env(safe-area-inset-left, 0px) + 13px);max-width:540px;margin:0 auto;}
+.setup{padding:calc(env(safe-area-inset-top, 0px) + 18px) calc(env(safe-area-inset-right, 0px) + 13px) calc(env(safe-area-inset-bottom, 0px) + 40px) calc(env(safe-area-inset-left, 0px) + 13px);max-width:540px;margin:0 auto;zoom:var(--ui-scale,1);}
 .setup-title{font-family:Impact,sans-serif;font-size:46px;letter-spacing:3px;color:#f08c00;line-height:1;}
 .setup-sub{color:#7a80a0;font-size:12px;margin-top:3px;margin-bottom:20px;}
 .s-sec{margin-bottom:18px;}
@@ -367,9 +367,10 @@ html[data-layout="portrait"] .col:first-child{border-right:1px solid var(--borde
 .starting-chips .chip:disabled{opacity:.55;cursor:default;}
 .fixed-duration{display:grid;place-items:center;}
 .game{height:100vh;height:100dvh;}
-/* Scale text inside the frame, not the viewport that holds the action bar. */
+/* Scale content inside the frame, not the viewport that holds scrolling and actions. */
 html:has(#app > .viewport-frame){zoom:1!important;}
 .viewport-frame{position:fixed;inset:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;background:var(--bg);}
+.setup-screen.viewport-frame{display:block;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;}
 .lineup .ht-hdr{position:relative;}
 .lineup .ht-title{font-size:calc(36px * var(--ui-scale,1));letter-spacing:0;}
 .lineup .ht-sub{font-size:calc(11px * var(--ui-scale,1));}
@@ -673,7 +674,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.10.8';
+const APP_VERSION = '2026.11.10.9';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -3309,8 +3310,8 @@ function autoModeTimeHTML(filtered, hasSubPlan){
 }
 
 function renderSetup(restoreScroll){
-  // Save scroll from the .setup div inside #app (that's the actual scrollable element)
-  const savedScroll = restoreScroll ? ($('app').querySelector('.setup')||{scrollTop:0}).scrollTop : 0;
+  const app=$('app');
+  const savedScroll=restoreScroll?(app.querySelector('.setup-screen')?.scrollTop||0):0;
   const filtered=S.names.filter(n=>n.trim());
   const valid=filtered.length>=COURT_SIZE;
   const h2Ok=!S.useH2Preset||S.h2PresetIds.size===COURT_SIZE;  const activeTeam=T.teams.find(t=>t.id===T.activeTeamId);
@@ -3423,7 +3424,8 @@ function renderSetup(restoreScroll){
       </button>
     </div>`:'';
 
-  $('app').innerHTML=`
+  app.innerHTML=`
+<div class="setup-screen viewport-frame">
 <div class="setup">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
     <div class="setup-title">SQUAD<br>MANAGER</div>
@@ -3544,9 +3546,9 @@ function renderSetup(restoreScroll){
     <button onclick="resetSetup()" style="flex:1;background:none;border:1.5px solid var(--border);color:var(--dim);border-radius:10px;padding:11px;font-size:12px;cursor:pointer;" title="Clear roster, sub plan and presets — keeps teams and ratings">↺ Reset Settings</button>
     <button onclick="resetAll()" style="flex:1;background:rgba(255,85,85,.08);border:1.5px solid rgba(255,85,85,.25);color:var(--red);border-radius:10px;padding:11px;font-size:12px;cursor:pointer;" title="Full reset — clears everything including in-progress game">⟳ Reset App</button>
   </div>
+</div>
 </div>`;
-  // Restore scroll position to the .setup div after re-render
-  if(savedScroll){ const el=$('app').querySelector('.setup'); if(el) el.scrollTop=savedScroll; }
+  if(savedScroll) app.querySelector('.setup-screen').scrollTop=savedScroll;
 }
 
 

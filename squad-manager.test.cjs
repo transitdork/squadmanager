@@ -81,6 +81,21 @@ test('optional starting five: empty court until five are chosen and Start is pre
   assert.equal(run('S.subLog.length'), 0);
 });
 
+test('setup uses a full-width scroll frame and keeps scroll position after roster edits', () => {
+  const {run,view}=app();
+  const previous={scrollTop:275};
+  const next={scrollTop:0};
+  const frames=[previous,next];
+  view.querySelector=selector=>{
+    assert.equal(selector,'.setup-screen');
+    return frames.shift();
+  };
+  run(`${rosterCode}; renderSetup(true)`);
+  assert.match(view.innerHTML,/<div class="setup-screen viewport-frame">\s*<div class="setup">/);
+  assert.match(view.innerHTML,/id="start-btn" onclick="startGame\(\)"\s*>\s*NEW GAME/);
+  assert.equal(next.scrollTop,275);
+});
+
 test('a preset is editable and follows roster slots without reordering the roster', () => {
   const {run, data, storage} = app();
   run(`${rosterCode}; [1,2,3,4,6].forEach(toggleStartingPlayer); removePlayer(0)`);
