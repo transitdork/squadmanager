@@ -340,13 +340,13 @@ html[data-layout="portrait"] .col:first-child{border-right:1px solid var(--borde
 .instr{background:var(--surface);border-top:1px solid var(--border);padding:4px calc(env(safe-area-inset-right, 0px) + 10px) calc(env(safe-area-inset-bottom, 0px) + 4px) calc(env(safe-area-inset-left, 0px) + 10px);text-align:center;font-size:10px;color:var(--dim);flex-shrink:0;}
 
 /* ── HALFTIME ── */
-.ht{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+.ht{overflow:hidden;}
 .ht-hdr{background:#1a0d2e;border-bottom:2px solid rgba(192,132,252,.27);padding:calc(env(safe-area-inset-top,0px) + 14px) calc(env(safe-area-inset-right,0px) + 13px) 11px calc(env(safe-area-inset-left,0px) + 13px);text-align:center;flex-shrink:0;}
 .ht-title{font-family:Impact,sans-serif;font-size:54px;letter-spacing:4px;color:#c084fc;line-height:1;}
 .ht-sub{color:#7a80a0;font-size:11px;margin-top:3px;}
 .ht-count{font-family:Impact,sans-serif;font-size:16px;color:#eef0f8;margin-top:5px;letter-spacing:.05em;}
 .ht-count .ok{color:#3ecf6e;} .ht-count .bad{color:#ffcc00;}
-.ht-cols{flex:1;display:flex;overflow:hidden;}
+.ht-cols{min-height:0;display:flex;overflow:hidden;}
 .ht-col{flex:1;padding:7px 5px;display:flex;flex-direction:column;gap:5px;overflow-y:auto;}
 .ht-chdr{font-family:Impact,sans-serif;font-size:11px;letter-spacing:2px;text-align:center;padding:3px;border-radius:5px;flex-shrink:0;}
 .ht-chdr.court{background:rgba(62,207,110,.12);color:#3ecf6e;}
@@ -366,9 +366,13 @@ html[data-layout="portrait"] .col:first-child{border-right:1px solid var(--borde
 .starting-chips .chip{font:inherit;min-height:36px;overflow-wrap:anywhere;text-align:left;}
 .starting-chips .chip:disabled{opacity:.55;cursor:default;}
 .fixed-duration{display:grid;place-items:center;}
-.lineup,.game{height:100vh;height:100dvh;}
+.game{height:100vh;height:100dvh;}
+/* Keep the viewport frame unscaled so text zoom cannot push Start below the screen. */
+html:has(#app > .lineup){zoom:1!important;}
+.lineup{position:fixed;inset:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:var(--bg);}
 .lineup .ht-hdr{position:relative;}
-.lineup .ht-title{font-size:36px;letter-spacing:0;}
+.lineup .ht-title{font-size:calc(36px * var(--ui-scale,1));letter-spacing:0;}
+.lineup .ht-sub{font-size:calc(11px * var(--ui-scale,1));}
 .lineup-back{position:absolute;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);}
 .lineup .ht-col{min-width:0;padding:8px;overscroll-behavior:contain;}
 .lineup .ht-col + .ht-col{border-left:1px solid var(--border);}
@@ -377,19 +381,22 @@ html[data-layout="portrait"] .col:first-child{border-right:1px solid var(--borde
 .lineup .ht-chdr.bench{background:var(--blueDim);color:var(--blue);}
 .lineup-player{flex:1;min-width:0;min-height:48px;padding:8px 5px;color:var(--text);background:none;border:none;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:left;cursor:pointer;overflow-wrap:anywhere;}
 .lineup-player:disabled{cursor:default;}
+.lineup .ht-name{font-size:calc(13px * var(--ui-scale,1));}
+.lineup .ht-stat{font-size:calc(10px * var(--ui-scale,1));}
+.lineup .ht-stat span{font-size:calc(12px * var(--ui-scale,1));}
 .lineup .pos-badge{min-width:32px;min-height:32px;cursor:pointer;}
 .lineup-hint{font-size:9px;color:var(--warn);font-weight:700;margin-top:3px;}
 .lineup-empty,.lineup-status{font-size:12px;color:var(--dim);text-align:center;padding:5px;}
 .lineup-status:empty{display:none;}
-.lineup .ht-start{min-height:52px;border-radius:8px;letter-spacing:0;}
+.lineup .ht-start{min-height:52px;border-radius:8px;font-size:calc(22px * var(--ui-scale,1));letter-spacing:0;}
 .lineup-times{padding:4px 8px 8px;color:var(--dim);font-size:12px;}
 .lineup-times summary{width:max-content;cursor:pointer;}
-.lineup-time-list{max-height:120px;overflow:auto;margin-top:6px;display:grid;gap:4px;}
+.lineup-time-list{max-height:120px;max-height:min(120px,22dvh);overflow:auto;margin-top:6px;display:grid;gap:4px;}
 .lineup-time{display:grid;grid-template-columns:minmax(65px,1fr) 3fr 42px;align-items:center;gap:8px;}
 .lineup-time span:first-child{overflow-wrap:anywhere;}
 .lineup-time meter{width:100%;accent-color:var(--green);}
 .pbtn:disabled{opacity:.5;cursor:default;}
-.score-stat-row{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:3px;margin-bottom:6px;}
+.score-stat-row{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:2px;margin-bottom:6px;}
 .score-stat-btn{min-width:0;min-height:44px;padding:4px 1px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:10px;font-weight:600;line-height:1.15;overflow-wrap:anywhere;cursor:pointer;}
 .score-stat-btn .stat-full{display:none;}
 @media (min-width:900px){
@@ -408,10 +415,13 @@ html[data-layout="portrait"] .game:has(.score-stat-row) .court-card{min-height:9
 .pending-event span{flex:1;min-width:100px;}
 .pending-event button{min-height:32px;padding:3px 7px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font:inherit;cursor:pointer;}
 .event-summary{margin:12px 0;break-inside:auto;}
-.event-summary table{width:100%;border-collapse:collapse;font-size:12px;}
+.event-matrix-scroll{overflow-x:auto;}
+.event-summary table{width:100%;min-width:880px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:12px;}
 .event-summary caption{text-align:left;font-weight:700;padding:7px;}
-.event-summary th,.event-summary td{padding:5px 7px;border-bottom:1px solid var(--border,#ddd);text-align:left;overflow-wrap:anywhere;}
-.event-summary :is(th,td):last-child{text-align:right;}
+.event-summary th,.event-summary td{padding:6px 5px;border-bottom:1px solid var(--border);text-align:center;overflow-wrap:anywhere;}
+.event-summary thead{font-size:11px;background:var(--surface);}
+.event-summary th:first-child{width:14%;position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;}
+.event-summary td{font-variant-numeric:tabular-nums;}
 
 /* ── GAME OVER ── */
 .go{height:100dvh;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
@@ -615,7 +625,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
   html[data-layout="landscape"] .lineup .ht-col{grid-template-columns:repeat(5,minmax(0,1fr));}
   html[data-layout="landscape"] .cols .pc{min-height:130px;}
   html[data-layout="landscape"] .cols .fd{width:22px;height:22px;}
-  html[data-layout="landscape"] .lineup .ht-name{font-size:16px;}
+  html[data-layout="landscape"] .lineup .ht-name{font-size:calc(16px * var(--ui-scale,1));}
 }
 @media (min-width:1080px){
   html[data-layout="landscape"] .cols .pc{min-height:150px;padding:12px;}
@@ -650,7 +660,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.10.3';
+const APP_VERSION = '2026.11.10.6';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -661,7 +671,10 @@ const PLAYER_STATS = [
   ['tpass','Turnover Pass','TO Pass'],
   ['tsteal','Turnover Steal','TO Steal'],
   ['ttravel','Turnover Travel','TO Travel'],
+  ['missft','Missed Foul Shot','Miss FT'],
+  ['shotclock','Shot Clock Violation','Shot Clock'],
 ];
+const EVENT_MATRIX_STATS=['assist','oreb','steal','dreb','miss','missft','tpass','tsteal','ttravel','shotclock'];
 const QUARTER_SECS = 10*60;
 const TEAMS_KEY = 'squadmgr_teams_v1';
 const SETTINGS_KEY = 'squadmgr_settings_v1';
@@ -2507,10 +2520,15 @@ function lineupLimit(){
 }
 
 function lineupMinimum(){
+  if(isBetweenPeriods()) return 1;
   const alreadyOnCourt=currentCourtIds().size;
   if((S.lineupMode==='timeout'||S.lineupMode==='resume')&&alreadyOnCourt>0)
     return Math.min(lineupLimit(),alreadyOnCourt);
   return lineupLimit();
+}
+
+function canStartLineup(count){
+  return count>0&&count>=lineupMinimum()&&count<=lineupLimit();
 }
 
 function toggleLineupPlayer(pid){
@@ -2552,7 +2570,7 @@ function endHalf(){
 function finishLineup(){
   if(!S.lineupMode&&!isBetweenPeriods()) return;
   const court=lineupCourt();
-  if(court.size<lineupMinimum()||court.size>lineupLimit()||!court.size) return;
+  if(!canStartLineup(court.size)) return;
 
   const phase=S.phase;
   const firstStart=S.lineupMode==='start';
@@ -2565,9 +2583,11 @@ function finishLineup(){
   unlockAudio();
   if(halftime){
     S.phase='h2';
+    if(usesQuarters()){ S.q1BreakDone=true; S.q3BreakDone=false; }
     S.halfTime=0; S.subCountdown=S.h2Int; S.planSubIdx=0;
   } else if(isBreak){
-    S.phase=phase==='q1break'?'h1':'h2';
+    if(phase==='q1break'){ S.phase='h1'; S.q1BreakDone=true; }
+    else { S.phase='h2'; S.q3BreakDone=true; }
     S.halfTime=getQuarterBreakTime();
   }
   if(!firstStart&&(off.length||on.length)){
@@ -3548,6 +3568,10 @@ function statName(kind){
   return kind==='foul'?'Foul':PLAYER_STATS.find(stat=>stat[0]===kind)?.[1];
 }
 
+function statPlayerIds(event){
+  return event.pids||[event.pid];
+}
+
 function removeFoulEvents(log,pid,count){
   return log.slice().reverse().filter(e=>{
     if(count>0&&e.pid===pid&&e.kind==='foul'){ count--; return false; }
@@ -3586,27 +3610,31 @@ function eventSummaryRows(players, scores, stats){
     else unassigned+=e.pts;
   }
   for(const e of stats){
-    if(e.kind==='foul') continue;
-    const counts=totals.get(e.pid)?.counts;
-    if(counts&&statName(e.kind)) counts[e.kind]=(counts[e.kind]||0)+1;
+    if(!EVENT_MATRIX_STATS.includes(e.kind)) continue;
+    for(const pid of statPlayerIds(e)){
+      const counts=totals.get(pid)?.counts;
+      if(counts) counts[e.kind]=(counts[e.kind]||0)+1;
+    }
   }
-  const rows=[...totals.values()].flatMap(({name,points,fouls,counts})=>[
-    [name,'Points',points],
-    [name,'Fouls',fouls],
-    ...PLAYER_STATS.filter(([kind])=>counts[kind]).map(([kind,label])=>[name,label,counts[kind]]),
+  const rows=[...totals.values()].map(({name,points,fouls,counts})=>[
+    name,points,fouls,...EVENT_MATRIX_STATS.map(kind=>counts[kind]||0),
   ]);
-  if(unassigned) rows.push(['Unassigned','Points',unassigned]);
+  if(unassigned) rows.push(['Unassigned',unassigned,0,...EVENT_MATRIX_STATS.map(()=>0)]);
   return rows;
+}
+
+function eventSummaryHeaders(){
+  return ['Name','Points','Fouls',...EVENT_MATRIX_STATS.map(kind=>kind==='assist'?'Assists':statName(kind))];
 }
 
 function eventSummaryHTML(players, scores, stats){
   const rows=eventSummaryRows(players,scores,stats);
   if(!rows.length) return '';
-  return `<section class="event-summary"><table>
+  return `<section class="event-summary"><div class="event-matrix-scroll" tabindex="0" role="region" aria-label="Player stats matrix"><table>
     <caption>Player Events</caption>
-    <thead><tr><th scope="col">Name</th><th scope="col">Event</th><th scope="col">Total</th></tr></thead>
-    <tbody>${rows.map(([name,label,count])=>`<tr><td>${escapeHTML(name)}</td><td>${label}</td><td>${count}</td></tr>`).join('')}</tbody>
-  </table></section>`;
+    <thead><tr>${eventSummaryHeaders().map(label=>`<th scope="col">${label}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(([name,...counts])=>`<tr><th scope="row">${escapeHTML(name)}</th>${counts.map(count=>`<td>${count}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div></section>`;
 }
 
 function eventReportText(players, scores, stats){
@@ -3614,9 +3642,13 @@ function eventReportText(players, scores, stats){
   const rows=eventSummaryRows(players,scores,stats).map(row=>row.join('\t'));
   const events=[
     ...scores.map(e=>({...e,name:e.who==='us'?(names.get(e.pid)||'Unassigned (US)'):'Opponent',label:'Points',count:e.pts})),
-    ...stats.filter(e=>statName(e.kind)).map(e=>({...e,name:names.get(e.pid)||'Unknown player',label:statName(e.kind),count:1})),
+    ...stats.filter(e=>statName(e.kind)).map(e=>({...e,
+      name:statPlayerIds(e).map(pid=>names.get(pid)||'Unknown player').join(', '),
+      label:statName(e.kind),count:1,
+    })),
   ].sort((a,b)=>a.t-b.t||(a.order||0)-(b.order||0));
-  const lines=['','PLAYER EVENTS','Name\tEvent\tTotal',...rows,'','TIMESTAMPED EVENT LOG',
+  const lines=['','PLAYER EVENTS',eventSummaryHeaders().join('\t'),...rows,'','TIMESTAMPED EVENT LOG',
+    ...(stats.some(e=>e.kind==='shotclock')?['Each Shot Clock Violation is one incident counted against every listed player.']:[]),
     'Game elapsed\tPeriod\tClock remaining\tName\tEvent\tCount',
     ...events.map(e=>[fmt(e.t),e.period||'',e.remaining==null?'':fmt(e.remaining),e.name,e.label,e.count].join('\t'))];
   if(players.reduce((sum,p)=>sum+(p.fouls||0),0)>stats.filter(e=>e.kind==='foul').length)
@@ -3643,6 +3675,14 @@ function undoTrackedEvent(){
 
 function armPlayerEvent(kind, pts){
   if(!['h1','h2'].includes(S.phase)||S.lineupMode) return;
+  if(kind==='shotclock'){
+    const pids=[...currentCourtIds()];
+    if(!pids.length) return;
+    pendingPlayerEvent=null;
+    S.statLog.push({...eventStamp(),kind,pids});
+    saveTrackedEvent();
+    return;
+  }
   if(kind==='points'?![1,2,3].includes(pts):!PLAYER_STATS.some(stat=>stat[0]===kind)) return;
   if(isPlayerEventArmed(kind,pts)){ cancelPlayerEvent(); return; }
   pendingPlayerEvent={kind,pts,stamp:eventStamp()};
@@ -4003,7 +4043,8 @@ function renderLineup(){
     :isBetweenPeriods()?QUARTER_SECS:getPeriodRemaining();
   const selected=lineupCourt();
   const limit=lineupLimit(), minimum=lineupMinimum();
-  const ready=selected.size>=minimum&&selected.size<=limit&&selected.size>0;
+  const ready=canStartLineup(selected.size);
+  const shortStart=ready&&isBetweenPeriods()&&selected.size<COURT_SIZE;
   const planned=timeout?getPlanHighlights():null;
   const suggestedOff=timeout&&!planned?highlightCourt():null;
   const suggestedOn=timeout&&!planned?highlightBench():null;
@@ -4047,7 +4088,7 @@ function renderLineup(){
       <footer class="ht-footer">
         ${!first&&S.gameTime>0?lineupTimesHTML():''}
         <div class="lineup-status" role="status">${ready?'':limit===0?'No eligible players':selected.size>limit?'Move a player to the bench':`Select ${minimum-selected.size} more player${minimum-selected.size===1?'':'s'}`}</div>
-        <button type="button" class="ht-start" onclick="finishLineup()" ${ready?'':'disabled'}>▶ ${action}</button>
+        <button type="button" class="ht-start" onclick="finishLineup()" ${ready?'':'disabled'}>▶ ${action}${shortStart?' WITH '+selected.size:''}</button>
       </footer>
     </div>`;
 }
@@ -4539,8 +4580,9 @@ function exportGamePDF(){
   // ── Assemble pages ────────────────────────────────────────
   var css='*{box-sizing:border-box;margin:0;padding:0}'
     +'body{font-family:Arial,sans-serif;color:#222;background:#fff}'
-    +'.event-summary table{border-collapse:collapse;width:100%;font-size:11px}.event-summary caption{text-align:left;font-weight:700;padding-bottom:8px}'
-    +'.event-summary th,.event-summary td{text-align:left;border-bottom:1px solid #ddd;padding:5px 7px}.event-summary tr{break-inside:avoid}'
+    +'.event-summary table{border-collapse:collapse;table-layout:fixed;width:100%;font-size:9px}.event-summary caption{text-align:left;font-weight:700;padding-bottom:8px}'
+    +'.event-summary th,.event-summary td{text-align:center;border-bottom:1px solid #ddd;padding:5px 3px;overflow-wrap:anywhere}.event-summary tr{break-inside:avoid}'
+    +'.event-summary th:first-child{width:14%;text-align:left}.event-summary thead{background:#f0f0f0}'
     +'@page{size:A4;margin:0}'
     +'@media print{'
       +'.page{padding:'+MARGIN+'px!important}.page:not(:last-child){page-break-after:always}'
@@ -5403,6 +5445,7 @@ function saveRatings_player(){
 
 function render(){
   stopTick();
+  if(S.phase!=='setup'||S.savedGame) hideInstallBanner();
   if(S.phase==='setup')         renderSetup(true);
   else if(S.phase==='teamList') renderTeamList();
   else if(S.phase==='teamEdit') renderTeamEdit();
@@ -6254,7 +6297,10 @@ function stateToJSON(){
 let _quotaWarned=false;
 
 function applyUiScale(){
-  try{ document.documentElement.style.zoom=String(CFG.uiScale||1); }catch(_){}
+  const scale=[0.9,1,1.15,1.3].includes(Number(CFG.uiScale))?Number(CFG.uiScale):1;
+  const style=document.documentElement.style;
+  style.zoom=String(scale);
+  style.setProperty('--ui-scale',String(scale));
 }
 
 function saveState(){
@@ -6465,12 +6511,18 @@ window.newGame=function(){ _newGame(); saveState(); stopAutoSave(); clearCrashSn
 // ═══════════════════════════════════════════
 // INSTALL BANNER
 // ═══════════════════════════════════════════
+function hideInstallBanner(){
+  const banner=$('install-banner');
+  if(banner) banner.style.display='none';
+}
+
 function dismissBanner(persist){
-  document.getElementById('install-banner').style.display='none';
+  hideInstallBanner();
   if(persist) try{ localStorage.setItem('sqm_installed','1'); }catch(_){}
 }
 
 function maybeShowBanner(){
+  if(S.phase!=='setup'||S.savedGame) return;
   // Don't show if already in standalone mode or dismissed before
   const standalone = window.navigator.standalone === true
     || window.matchMedia('(display-mode: standalone)').matches;
@@ -6479,7 +6531,10 @@ function maybeShowBanner(){
   // Only show in Safari on iOS
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   if(!isIOS) return;
-  setTimeout(()=>{ document.getElementById('install-banner').style.display='block'; }, 2500);
+  setTimeout(()=>{
+    const banner=$('install-banner');
+    if(banner&&S.phase==='setup'&&!S.savedGame) banner.style.display='block';
+  },2500);
 }
 
 // ═══════════════════════════════════════════
