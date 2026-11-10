@@ -256,7 +256,11 @@ body{
 .hbadge{font-family:Impact,sans-serif;font-size:10px;letter-spacing:2px;padding:2px 6px;border-radius:4px;margin-top:2px;display:inline-block;}
 .hbadge.h1{background:rgba(74,158,255,.13);color:#4a9eff;}
 .hbadge.h2{background:rgba(192,132,252,.13);color:#c084fc;}
-.ghctr{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;}
+.ghctr{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0;}
+.game-clocks{display:flex;align-items:stretch;justify-content:center;gap:clamp(6px,2%,18px);width:100%;}
+.game-clock{display:grid;grid-template-rows:auto 1fr;justify-items:center;gap:2px;text-align:center;min-width:0;}
+.game-clock .glbl{letter-spacing:0;line-height:1.1;}
+.game-clock .hrem,.game-clock .stimer{align-self:end;white-space:nowrap;line-height:1;letter-spacing:0;}
 .hrem{font-family:Impact,sans-serif;font-size:26px;line-height:1;letter-spacing:.05em;}
 .stimer{font-family:Impact,sans-serif;font-size:13px;letter-spacing:.05em;}
 .hbtns{display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
@@ -409,7 +413,10 @@ html:has(#app > .viewport-frame){zoom:1!important;}
 html[data-layout="portrait"] .game:has(.score-stat-row) .col{overflow-y:auto;}
 html[data-layout="portrait"] .game:has(.score-stat-row) .court-card{min-height:92px;}
 .court-name-row{display:flex;align-items:center;gap:4px;}
-.court-name{min-width:0;background:none;border:0;padding:1px 3px;border-radius:4px;color:inherit;font:inherit;text-align:left;white-space:inherit;overflow-wrap:inherit;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+.player-label{display:flex;align-items:baseline;gap:.24em;min-width:0;max-width:100%;white-space:nowrap;line-height:1.12;}
+.player-name-text{overflow:hidden;text-overflow:ellipsis;}
+.player-jersey{flex:none;}
+.court-name{background:none;border:0;padding:1px 2px;border-radius:4px;color:inherit;font:inherit;text-align:left;cursor:pointer;}
 .event-armed .court-name{color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn);}
 #score-bar button[aria-pressed="true"]{outline:2px solid var(--warn);outline-offset:-2px;}
 .pending-event{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px;color:var(--warn);font-size:11px;}
@@ -597,17 +604,6 @@ html[data-layout="portrait"] .game:has(.score-stat-row) .court-card{min-height:9
 .pos-4{background:rgba(240,140,0,.25);color:#f08c00;border:1px solid rgba(240,140,0,.4);}
 .pos-5{background:rgba(62,207,110,.25);color:#3ecf6e;border:1px solid rgba(62,207,110,.4);}
 .pos-gap{background:rgba(255,85,85,.18);color:#ff5555;border:1px solid rgba(255,85,85,.35);}
-/* Coverage row in game header */
-.pos-coverage{display:flex;align-items:center;gap:5px;justify-content:center;padding:3px 0;}
-.pos-pip{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;
-  justify-content:center;font-family:Impact,sans-serif;font-size:13px;font-weight:700;
-  transition:all .25s;}
-.pos-pip.filled-1{background:rgba(0,207,180,.25);color:#00cfb4;border:1px solid rgba(0,207,180,.5);}
-.pos-pip.filled-2{background:rgba(74,158,255,.25);color:#7ab8ff;border:1px solid rgba(74,158,255,.5);}
-.pos-pip.filled-3{background:rgba(167,139,250,.25);color:#a78bfa;border:1px solid rgba(167,139,250,.5);}
-.pos-pip.filled-4{background:rgba(240,140,0,.25);color:#f08c00;border:1px solid rgba(240,140,0,.5);}
-.pos-pip.filled-5{background:rgba(62,207,110,.25);color:#3ecf6e;border:1px solid rgba(62,207,110,.5);}
-.pos-pip.empty{background:rgba(255,85,85,.1);color:#ff5555;border:1px solid rgba(255,85,85,.3);}
 /* Position picker bottom sheet */
 .pos-picker-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:5000;
   display:flex;align-items:flex-end;backdrop-filter:blur(2px);}
@@ -621,35 +617,59 @@ html[data-layout="portrait"] .game:has(.score-stat-row) .court-card{min-height:9
   transition:transform .1s;}
 .pos-picker-btn:active{transform:scale(.95);}
 .pos-picker-recommend{font-size:11px;color:var(--green);margin-top:-6px;}
-html[data-layout="landscape"] .cols,
 html[data-layout="landscape"] .ht-cols{flex-direction:column;gap:12px;overflow-y:auto;padding:8px max(8px,env(safe-area-inset-right,0px)) 8px max(8px,env(safe-area-inset-left,0px));}
+html[data-layout="landscape"]:has(#app > .game){zoom:1!important;}
+html[data-layout="landscape"] .game{position:fixed;inset:0;height:auto;}
+html[data-layout="landscape"] .game .ghdr{padding:max(9px,env(safe-area-inset-top,0px)) max(10px,env(safe-area-inset-right,0px)) 7px max(10px,env(safe-area-inset-left,0px));gap:8px;}
+html[data-layout="landscape"] .game .gclock,
+html[data-layout="landscape"] .game .hrem{font-size:36px;}
+html[data-layout="landscape"] .game .stimer{font-size:27px;}
+html[data-layout="landscape"] .game .pbtn{min-width:0;padding:6px 10px;font-size:16px;}
+html[data-layout="landscape"] .game .endbtn{padding:5px 8px;font-size:13px;}
+html[data-layout="landscape"] .game .target-val{font-size:17px;}
+html[data-layout="landscape"] .game .sub-go{padding:6px 10px;font-size:15px;}
+html[data-layout="landscape"] .game .sub-clr{padding:5px 8px;font-size:12px;}
+html[data-layout="landscape"] .game .abar{padding:4px;font-size:13px;}
+html[data-layout="landscape"] .game .instr{font-size:11px;}
+html[data-layout="landscape"] .score-expanded{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;align-items:center;}
+html[data-layout="landscape"] .score-expanded .score-overview{grid-row:1;margin-bottom:0!important;justify-content:flex-start!important;gap:8px;}
+html[data-layout="landscape"] .score-expanded .score-chart{flex:0 1 auto!important;flex-direction:row!important;margin:0!important;gap:6px!important;}
+html[data-layout="landscape"] .score-chart svg{height:20px;width:auto;}
+html[data-layout="landscape"] .score-chart-axis{display:none!important;}
+html[data-layout="landscape"] .score-expanded .score-actions{grid-row:1;grid-column:2;}
+html[data-layout="landscape"] .score-actions button{padding:5px 8px!important;white-space:nowrap;}
+html[data-layout="landscape"] .score-points,html[data-layout="landscape"] .score-stat-row,html[data-layout="landscape"] .score-expanded .pending-event{grid-column:1/-1;margin:0!important;}
+html[data-layout="landscape"] .score-stat-btn{min-height:34px;font-size:11px;}
+html[data-layout="landscape"] .cols{min-height:0;display:grid;grid-template-rows:minmax(0,max-content) minmax(0,max-content);align-content:start;gap:6px;padding:4px max(6px,env(safe-area-inset-right,0px)) 4px max(6px,env(safe-area-inset-left,0px));}
 html[data-layout="landscape"] .cols .col,
 html[data-layout="landscape"] .lineup .ht-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:none;align-content:start;overflow:visible;padding:0;border:0;}
+html[data-layout="landscape"] .cols .col{min-width:0;min-height:0;overflow-y:auto;gap:4px;padding:2px;overscroll-behavior:contain;}
 html[data-layout="landscape"] :is(.chdr,.ht-chdr){grid-column:1/-1;}
-html[data-layout="landscape"] .cols .pc{height:auto;min-height:112px;border-radius:8px;padding:8px;gap:5px;}
-html[data-layout="landscape"] .cols .cname{font-size:17px;white-space:normal;overflow-wrap:anywhere;}
-html[data-layout="landscape"] .cols .sv{font-size:20px;letter-spacing:0;}
+html[data-layout="landscape"] .cols .chdr{font-size:11px;padding:3px;}
+html[data-layout="landscape"] .cols .pc{height:auto;min-height:0;border-radius:8px;padding:5px 7px;gap:4px;justify-content:start;}
+html[data-layout="landscape"] .cols .ctop,html[data-layout="landscape"] .cols .cstats{margin:0;}
+html[data-layout="landscape"] .cols .cname{font-size:17px;}
+html[data-layout="landscape"] .cols .sv{font-size:18px;letter-spacing:0;line-height:1;}
 html[data-layout="landscape"] .cols .sk{font-size:8px;letter-spacing:0;}
 html[data-layout="landscape"] .cols .cstats{flex-wrap:wrap;gap:4px 8px;overflow:visible;}
 html[data-layout="landscape"] .cols .fr{flex-wrap:wrap;gap:3px;}
-html[data-layout="landscape"] .cols .fd{width:20px;height:20px;}
+html[data-layout="landscape"] .cols .fd{width:19px;height:19px;}
 html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 @media (min-width:768px){
   html[data-layout="landscape"] .cols .col,
   html[data-layout="landscape"] .lineup .ht-col{grid-template-columns:repeat(5,minmax(0,1fr));}
-  html[data-layout="landscape"] .cols .pc{min-height:130px;}
-  html[data-layout="landscape"] .cols .fd{width:22px;height:22px;}
+  html[data-layout="landscape"] .cols .fd{width:20px;height:20px;}
   html[data-layout="landscape"] .lineup .ht-name{font-size:calc(16px * var(--ui-scale,1));}
 }
-@media (min-width:1080px){
-  html[data-layout="landscape"] .cols .pc{min-height:150px;padding:12px;}
-  html[data-layout="landscape"] .cols .cname{font-size:23px;}
-  html[data-layout="landscape"] .cols .sv{font-size:28px;}
-  html[data-layout="landscape"] .cols .fd{width:26px;height:26px;}
+@media (min-width:1080px) and (min-height:680px){
+  html[data-layout="landscape"] .cols .cname{font-size:20px;}
+  html[data-layout="landscape"] .cols .sv{font-size:22px;}
+  html[data-layout="landscape"] .cols .fd{width:22px;height:22px;}
 }
 @media (max-height:650px){
   html[data-layout="portrait"] .cols .col{overflow-y:auto;}
-  html[data-layout="portrait"] .cols .pc{flex:none;min-height:90px;}
+  html[data-layout="portrait"] .game .col .pc.court-card,
+  html[data-layout="portrait"] .game .col .pc.bench-card{flex:none;height:auto;min-height:0;justify-content:start;gap:3px;padding:5px 7px;}
 }
 </style>
 </head>
@@ -674,7 +694,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.10.10';
+const APP_VERSION = '2026.11.11.1';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -1760,7 +1780,6 @@ function setGamePos(pid, pos){
     badge.className = 'pos-badge ' + (POS_COLOURS[+pos]||'');
     badge.innerHTML = posBadgeContent(pid, pos);
   }
-  updateCoverageRow();
   saveState();
   // Re-render the active screen so all badges/tiles reflect the change
   if(isBetweenPeriods()) renderLineup();
@@ -1777,9 +1796,6 @@ function courtCoverage(){
   });
   return covered;
 }
-
-// Update coverage row in header without full re-render
-
 
 // Apply preset position overrides to S.gamePositions for a given preset key
 // presetKey: 'h1start' | 'h2start' | 'finish'
@@ -1869,58 +1885,6 @@ function openPosPicker(pid, role){
   </div>`;
 
   document.body.appendChild(modal);
-}
-
-// Who on court can fill a missing position?
-function whoCanFillGap(posStr){
-  if(!S.players) return null;
-  const onCourt = S.players.filter(p=>p.onCourt);
-  const fillers = onCourt.filter(p=>{
-    const pos = getGamePos(p.id);
-    if(pos === posStr) return false; // already assigned there
-    const allPos = allPositionsForPlayer(p.id);
-    return allPos.includes(posStr);
-  });
-  return fillers.length ? fillers[0] : null; // return best candidate
-}
-
-// Coverage row HTML — gaps show who could move there
-function coverageRowHTML(){
-  const covered = courtCoverage();
-  const pips = [1,2,3,4,5].map(n=>{
-    const ns = String(n);
-    if(covered[ns]){
-      return `<div class="pos-pip filled-${n}" data-pos="${n}">${n}</div>`;
-    }
-    // Gap — find who on court can fill it
-    const filler = whoCanFillGap(ns);
-    const hint = filler ? '<span style="font-size:7px;display:block;line-height:1;margin-top:1px;color:inherit;opacity:.8;">'+(S.names[filler.id]||'').split(' ')[0].slice(0,4)+'→</span>' : '';
-    const clickFn = filler ? 'event.stopPropagation();openPosPicker('+filler.id+',\'court\')' : 'event.stopPropagation()';
-    return '<div class="pos-pip empty" data-pos="'+n+'" style="width:'+(filler?'40px':'28px')+';height:'+(filler?'40px':'28px')+';cursor:'+(filler?'pointer':'default')+';" onclick="'+clickFn+'">'+n+hint+'</div>';
-  }).join('');
-  return `<div class="pos-coverage" id="pos-coverage-row">${pips}</div>`;
-}
-
-function updateCoverageRow(){
-  const row = document.getElementById('pos-coverage-row');
-  if(!row) return;
-  const covered = courtCoverage();
-  let html = '';
-  [1,2,3,4,5].forEach(function(n){
-    const ns = String(n);
-    if(covered[ns]){
-      html += '<div class="pos-pip filled-'+n+'" data-pos="'+n+'">'+n+'</div>';
-    } else {
-      const filler = whoCanFillGap(ns);
-      const name4 = filler ? (S.names[filler.id]||'').split(' ')[0].slice(0,4) : '';
-      const hint = filler ? '<span style="font-size:7px;display:block;line-height:1;margin-top:1px;opacity:.8;">'+name4+'→</span>' : '';
-      const w = filler ? '40px' : '28px';
-      const cursor = filler ? 'pointer' : 'default';
-      const onclick = filler ? 'event.stopPropagation();openPosPicker('+filler.id+',\'court\')' : 'event.stopPropagation()';
-      html += '<div class="pos-pip empty" data-pos="'+n+'" style="width:'+w+';height:'+w+';cursor:'+cursor+';" onclick="'+onclick+'">'+n+hint+'</div>';
-    }
-  });
-  row.innerHTML = html;
 }
 
 // Build position badge HTML for a card (tappable)
@@ -2689,6 +2653,11 @@ function foulDotsHTML(pid, fouls){
   return h;
 }
 
+function playerLabelHTML(name){
+  const parts=name.trim().match(/^(.*?)\s+(#\S+)$/);
+  return `<span class="player-name-text">${escapeHTML(parts?parts[1]:name)}</span>${parts?`<span class="player-jersey">${escapeHTML(parts[2])}</span>`:''}`;
+}
+
 function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighlights){
   const fouledOut=p.fouls>=5;
   const isPlannedOff=planHighlights&&planHighlights.off.has(p.id);
@@ -2712,7 +2681,8 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
   // Position badge — tappable on court cards, recommendation indicator on bench
   const posDisplay = posBadgeForCard(p.id, role, isPlannedOn);
   const courtName=role==='court'&&!fouledOut;
-  const nameHTML=courtName?`<button type="button" class="court-name" onclick="event.stopPropagation();tapCourtName(${p.id})">${escapeHTML(p.name)}</button>`:escapeHTML(p.name);
+  const label=playerLabelHTML(p.name);
+  const nameHTML=courtName?`<button type="button" class="court-name player-label" title="${escapeHTML(p.name)}" onclick="event.stopPropagation();tapCourtName(${p.id})">${label}</button>`:`<span class="player-label" title="${escapeHTML(p.name)}">${label}</span>`;
 
   let badge='';
   if(fouledOut)         badge=`<span class="cbadge bred">FOULED OUT</span>`;
@@ -2734,7 +2704,7 @@ function playerCardHTML(p, role, isHigh, isSel, {targetTime,remPP}, planHighligh
 
   return `
 <div class="pc ${sk}${selClass}${foClass}${selectable}${role==='court'?' court-card':''}" ${click}>
-  <div class="ctop"><div class="cname${courtName?' court-name-row':''}">${nameHTML}${posDisplay}</div>${badge}</div>
+  <div class="ctop"><div class="cname court-name-row">${nameHTML}${posDisplay}</div>${badge}</div>
   <div class="cstats">
     <div class="stat"><span id="pt-${p.id}" class="sv svg">${fmt(p.playTime)}</span><span class="sk">Played</span></div>
     ${fcHTML}${benchHTML}
@@ -3788,7 +3758,7 @@ function scoreDiffSVG(width, height, compact){
   var htX = xf(gameTotalSecs()/2);
   var curX = xf(S.gameTime);
 
-  return '<svg width="'+width+'" height="'+height+'" style="display:block;flex-shrink:0;">'
+  return '<svg width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'" style="display:block;flex-shrink:0;">'
     +'<rect x="'+LP+'" y="0" width="'+cw+'" height="'+ch+'" fill="rgba(0,0,0,.3)" rx="3"/>'
     +'<path d="'+posA+'" fill="rgba(46,168,75,.32)"/>'
     +'<path d="'+negA+'" fill="rgba(239,68,68,.32)"/>'
@@ -3829,21 +3799,21 @@ function renderScoreBarHTML(){
 
   // ── EXPANDED ──
   var chartW = 120;
-  return '<div id="score-bar" onclick="event.stopPropagation()" style="background:#0a0c14;border-top:1px solid #1a1d2e;border-bottom:1px solid #1a1d2e;padding:8px 10px;flex-shrink:0;">'
+  return '<div id="score-bar" class="score-expanded" onclick="event.stopPropagation()" style="background:#0a0c14;border-top:1px solid #1a1d2e;border-bottom:1px solid #1a1d2e;padding:8px 10px;flex-shrink:0;">'
     // Score row + mini chart
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">'
+    +'<div class="score-overview" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">'
       +'<div style="font-family:Impact,sans-serif;font-size:28px;color:var(--green);line-height:1;">'+us+'</div>'
-      +'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;margin:0 10px;">'
+      +'<div class="score-chart" style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;margin:0 10px;">'
         +'<div style="font-family:Impact,sans-serif;font-size:11px;color:'+leadCol+';letter-spacing:1px;">'+leadTxt+'</div>'
         +scoreDiffSVG(chartW, 34, false)
-        +'<div style="display:flex;justify-content:space-between;width:'+chartW+'px;font-size:7px;color:#374151;margin-top:1px;">'
+        +'<div class="score-chart-axis" style="display:flex;justify-content:space-between;width:'+chartW+'px;font-size:7px;color:#374151;margin-top:1px;">'
           +'<span>0:00</span><span>HT</span><span>'+fmt(gameTotalSecs())+'</span>'
         +'</div>'
       +'</div>'
       +'<div style="font-family:Impact,sans-serif;font-size:28px;color:var(--red);line-height:1;">'+them+'</div>'
     +'</div>'
     // +1/+2/+3 buttons
-    +'<div style="display:flex;gap:5px;margin-bottom:6px;">'
+    +'<div class="score-points" style="display:flex;gap:5px;margin-bottom:6px;">'
       +[1,2,3].map(function(p){
         return '<button aria-pressed="'+isPlayerEventArmed('points',p)+'" onclick="event.stopPropagation();armPlayerEvent(\'points\','+p+')" style="flex:1;background:rgba(46,168,75,.15);border:1px solid rgba(46,168,75,.35);color:var(--green);border-radius:7px;padding:7px 0;font-family:Impact,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">+'+p+' US</button>';
       }).join('')
@@ -3856,7 +3826,7 @@ function renderScoreBarHTML(){
       +PLAYER_STATS.map(([kind,label,short])=>`<button type="button" class="score-stat-btn" title="${label}" aria-label="${label}" aria-pressed="${isPlayerEventArmed(kind)}" onclick="armPlayerEvent('${kind}')"><span class="stat-full">${label}</span><span class="stat-short">${short}</span></button>`).join('')
     +'</div>'
     // Undo + collapse
-    +'<div style="display:flex;gap:6px;">'
+    +'<div class="score-actions" style="display:flex;gap:6px;">'
       +(last ? '<button onclick="event.stopPropagation();undoTrackedEvent()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">↩ Undo '+last.label+'</button>' : '<div style="flex:1"></div>')
       +'<button type="button" aria-expanded="true" onclick="event.stopPropagation();toggleScoreBar()" style="flex:1;background:none;border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 0;font-size:11px;cursor:pointer;">▲ COLLAPSE</button>'
     +'</div>'
@@ -3986,14 +3956,17 @@ function renderGame(){
       ${S.opponent?`<div style="font-size:9px;color:var(--dim);margin-top:2px">vs <strong style="color:var(--text)">${escapeHTML(S.opponent)}</strong></div>`:''}
     </div>
     <div class="ghctr">
-      <div class="glbl">${usesQuarters()?'Quarter':'Half'} remaining</div>
-      <div id="hrem" class="hrem bb" ${periodEnded?'':'onclick="toggleGameClock()" title="Tap to stop/start clock"'} style="color:${halfC};${periodEnded?'':'cursor:pointer;'}">${halfRem>=0?fmt(halfRem):'+'+fmt(-halfRem)}</div>
-      ${!periodEnded&&!S.isClockRunning&&!S.isRunning?'<div style="font-size:8px;color:var(--red);font-weight:700;">⏸ STOPPED — tap time to resume</div>':''}
-      <div style="display:flex;align-items:center;gap:4px;margin-top:1px">
-        <div class="glbl">Sub in</div>
-        <div id="scdown" class="stimer bb" style="color:${subC}">${fmt(S.subCountdown)}</div>
+      <div class="game-clocks">
+        <div class="game-clock">
+          <div class="glbl">${usesQuarters()?'Quarter':'Half'} remaining</div>
+          <div id="hrem" class="hrem bb" ${periodEnded?'':'onclick="toggleGameClock()" title="Tap to stop/start clock"'} style="color:${halfC};${periodEnded?'':'cursor:pointer;'}">${halfRem>=0?fmt(halfRem):'+'+fmt(-halfRem)}</div>
+        </div>
+        <div class="game-clock">
+          <div class="glbl">Sub in</div>
+          <div id="scdown" class="stimer bb" style="color:${subC}">${fmt(S.subCountdown)}</div>
+        </div>
       </div>
-      ${coverageRowHTML()}
+      ${!periodEnded&&!S.isClockRunning&&!S.isRunning?'<div style="font-size:8px;color:var(--red);font-weight:700;">⏸ STOPPED — tap time to resume</div>':''}
     </div>
     <div class="hbtns">
       <button id="pbtn" class="pbtn${S.isRunning?' live':''}" onclick="togglePause()" ${!S.isRunning?'disabled':''}>${pbtnLabel}</button>
@@ -4119,8 +4092,16 @@ function lineupTimesHTML(){
   return `<details class="lineup-times"><summary>Playing time · target ${fmt(target)}</summary><div class="lineup-time-list">${rows}</div></details>`;
 }
 
-// Sync bench card height to exactly match court card height
+// Refit single-line names after layout changes, and align the portrait bench cards.
 function syncCardHeights(){
+  document.querySelectorAll('.game .player-label').forEach(label=>{
+    const name=label.querySelector('.player-name-text');
+    label.style.fontSize='';
+    const base=parseFloat(getComputedStyle(label).fontSize);
+    for(let size=base;size>11&&name.clientWidth<name.scrollWidth;size=Math.max(11,size-1)){
+      label.style.fontSize=Math.max(11,size-1)+'px';
+    }
+  });
   if(document.documentElement.dataset.layout==='landscape') return;
   const courtCards = document.querySelectorAll('.pc.court-card');
   if(!courtCards.length) return;
