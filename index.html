@@ -144,6 +144,10 @@ body{
 .tsd-check{color:#3ecf6e;font-size:16px;flex-shrink:0;}
 .opponent-input{width:100%;background:#222736;border:1.5px solid #2e3350;border-radius:9px;padding:10px 12px;color:#eef0f8;font-size:14px;outline:none;margin-top:0;}
 .opponent-input:focus{border-color:#4a9eff;}
+.game-details-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.game-details-fields label{display:grid;gap:5px;min-width:0;font-size:13px;color:var(--dim);}
+.game-details-fields input{min-width:0;box-sizing:border-box;}
+@media(max-width:480px){.game-details-fields{grid-template-columns:minmax(0,1fr);}}
 
 /* ── EXPORT MODAL ── */
 .export-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:3000;display:flex;align-items:flex-end;padding:0;backdrop-filter:blur(3px);}
@@ -710,7 +714,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.21.1';
+const APP_VERSION = '2026.11.21.2';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -985,6 +989,7 @@ const S = {
   phase: 'setup',
   names: ['','','','',''],
   opponent: '',
+  gameDate: '', gameVenue: '', gameStartTime: '',
   h1Dur:20, h2Dur:20,
   h1Int:180, h2Int:180,  // stored in SECONDS (180 = 3min)
   startingSlots: new Set(), // Roster field indices, independent of the order of the starting five
@@ -2598,6 +2603,7 @@ function exportReport(){
   const line='─'.repeat(68);
   const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
   let txt=`SQUAD MANAGER — GAME REPORT\nGenerated: ${now.toLocaleString()}\n${line}\n\n`;
+  txt+=gameDetailsText(S)+'\n\n';
   if(S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)){
     const us=S.finalScore.us??'—', them=S.finalScore.them??'—';
     txt+=`FINAL SCORE: ${us} — ${them}\n${line}\n\n`;
@@ -3408,8 +3414,13 @@ function renderSetup(restoreScroll){
   </div>
 
   <div class="s-sec">
-    <div class="s-hdr">OPPONENT</div>
-    <input class="opponent-input" value="${(S.opponent||'').replace(/"/g,'&quot;')}" oninput="S.opponent=this.value" placeholder="Opposing team name (optional)">
+    <div class="s-hdr">GAME DETAILS</div>
+    <div class="game-details-fields">
+      <label for="game-opponent">Opponent<input id="game-opponent" class="opponent-input" value="${escapeHTML(S.opponent||'')}" oninput="S.opponent=this.value;saveState()" placeholder="Opposing team name"></label>
+      <label for="game-date">Game date<input id="game-date" class="opponent-input" type="date" value="${escapeHTML(S.gameDate||'')}" oninput="S.gameDate=this.value;saveState()"></label>
+      <label for="game-venue">Venue<input id="game-venue" class="opponent-input" value="${escapeHTML(S.gameVenue||'')}" oninput="S.gameVenue=this.value;saveState()" placeholder="Venue / court"></label>
+      <label for="game-start-time">Tip-off time<input id="game-start-time" class="opponent-input" type="time" value="${escapeHTML(S.gameStartTime||'')}" oninput="S.gameStartTime=this.value;saveState()"></label>
+    </div>
   </div>
 
   <div class="s-sec">
@@ -3683,6 +3694,14 @@ function eventSummaryHTML(players, scores, stats){
     <thead><tr>${eventSummaryHeaders().map(label=>`<th scope="col">${label}</th>`).join('')}</tr></thead>
     <tbody>${rows.map(([name,...counts])=>`<tr><th scope="row">${escapeHTML(name)}</th>${counts.map(count=>`<td>${count}</td>`).join('')}</tr>`).join('')}</tbody>
   </table></div></section>`;
+}
+
+function gameDetailsText(data){
+  const date=(data.gameDate||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return ['Opponent: '+(data.opponent||'Not recorded'),
+    'Game date: '+(date?date[3]+'/'+date[2]+'/'+date[1]:'Not recorded'),
+    'Venue: '+(data.gameVenue||'Not recorded'),
+    'Tip-off time: '+(data.gameStartTime||'Not recorded')].join('\n');
 }
 
 function eventReportText(players, scores, stats, timingData=S){
@@ -4752,9 +4771,8 @@ function exportGamePDF(saved=null){
   }
 
   // ── Page header ───────────────────────────────────────────
-  const gameDate=saved?.date||new Date().toLocaleDateString('en-AU',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   const gameFormat=isQ?'4 × 10 min quarters':h1Dur===h2Dur?`2 × ${h1Dur} min halves`:`${h1Dur} + ${h2Dur} min halves`;
-  const reportMeta=`${escapeHTML(gameDate)} · ${sorted.length} players · ${fmt(gameTime)} played · ${gameFormat}`;
+  const reportMeta=escapeHTML(gameDetailsText(saved||S)).replace(/\n/g,' · ')+`<br>${sorted.length} players · ${fmt(gameTime)} played · ${gameFormat}`;
   var scoreLine=finalScoreStr?'<div style="text-align:right"><div style="font-size:9px;color:#888;margin-bottom:1px">FINAL SCORE</div><div style="font-size:24px;font-weight:700;letter-spacing:4px;color:#111;line-height:1">'+finalScoreStr+'</div></div>':'';
   var hdr='<div style="border-bottom:2px solid #222;padding-bottom:10px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start">'
     +'<div><div style="font-size:17px;font-weight:700;color:#111;letter-spacing:.3px">'+escapeHTML(teamName)+'</div>'
@@ -4876,6 +4894,7 @@ function exportGamePDF(saved=null){
     var lines=[];
     lines.push('SQUAD MANAGER — GAME REPORT');
     lines.push(teamName+(opponent?' vs '+opponent:''));
+    lines.push(gameDetailsText(saved||S));
     lines.push('Final score: '+(finalScoreStr||'Not recorded'));
     lines.push('Duration: '+Math.round(gameTime/60)+' min');
     var fair=Math.round(gameTime*COURT_SIZE/Math.max(sorted.length,COURT_SIZE));
@@ -4959,6 +4978,7 @@ function saveGameReport(){
     teamName: team?(team.club+' '+(team.ageBracket||'')).trim():'Unknown',
     league: team&&team.league||'',
     opponent: S.opponent||'',
+    gameDate:S.gameDate||'', gameVenue:S.gameVenue||'', gameStartTime:S.gameStartTime||'',
     date: new Date().toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',year:'numeric'}),
     score: {us: S.finalScore&&S.finalScore.us!==null ? S.finalScore.us : null,
             them: S.finalScore&&S.finalScore.them!==null ? S.finalScore.them : null},
@@ -5010,7 +5030,7 @@ function uploadToClaudeModal(){
     ?'Score: '+(S.finalScore.us??'?')+' - '+(S.finalScore.them??'?')+'\n':'';
 
   let txt='SQUAD MANAGER GAME REPORT — '+teamName+'\n';
-  txt+='Date: '+new Date().toLocaleDateString()+' | Game time: '+fmt(S.gameTime)+'\n'+score+'\n';
+  txt+=gameDetailsText(S)+'\nElapsed game time: '+fmt(S.gameTime)+'\n'+score+'\n';
   txt+='PLAYING TIME (fair share: '+fmt(fairShare)+'/player)\n'+'─'.repeat(50)+'\n';
   txt+=('Player'.padEnd(18)+('H1').padEnd(8)+('H2').padEnd(8)+('Total').padEnd(8)+'vs Fair\n');
   sorted.forEach(function(p){
@@ -5962,6 +5982,7 @@ function viewSavedReport(idx){
       const scoreStr=(r.score&&r.score.us!=null&&r.score.them!=null)?(r.score.us+' – '+r.score.them):'Not recorded';
       let txt='SQUAD MANAGER — GAME REPORT\n';
       txt+=r.teamName+(r.date?' · '+r.date:'')+'\n';
+      txt+=gameDetailsText(r)+'\n';
       txt+='Score: '+scoreStr+'\n';
       txt+='Duration: '+totalMin+' min\n';
       txt+='Fair share: '+fmtMMSS(rFairShare)+' per player\n\n';
@@ -6399,7 +6420,7 @@ function importSubPlan(){
   inp.click();
 }
 
-function newGame(){ releaseWakeLock(); S.savedGame=null; S.phase='setup'; render(); }
+function newGame(){ releaseWakeLock(); S.savedGame=null; S.opponent=''; S.gameDate=''; S.gameVenue=''; S.gameStartTime=''; S.phase='setup'; render(); }
 
 function resetAll(){
   if(!confirm('Reset everything? This clears the current game, roster and all pre-planned subs. Teams and ratings are kept.')) return;
@@ -6407,6 +6428,7 @@ function resetAll(){
   const keepPhase = 'setup';
   const defaultS = {
     phase: keepPhase, names:['','','','',''],
+    opponent:'', gameDate:'', gameVenue:'', gameStartTime:'',
     h1Dur:20, h2Dur:20, h1Int:180, h2Int:180, h1Sps:2, h2Sps:2,
     isRunning:false, gameTime:0, halfTime:0, players:[],
     subPlan:{h1:[],h2:[]}, useSubPlan:false,
@@ -6438,6 +6460,7 @@ function stateToJSON(){
     intervalUnit: 'seconds',
     names: S.names,
     opponent: S.opponent||'',
+    gameDate:S.gameDate||'', gameVenue:S.gameVenue||'', gameStartTime:S.gameStartTime||'',
     h1Dur:S.h1Dur, h2Dur:S.h2Dur,
     h1Int:S.h1Int, h2Int:S.h2Int,
     h1Sps:S.h1Sps, h2Sps:S.h2Sps,
@@ -6504,6 +6527,7 @@ function loadStateFromData(d, offerContinue=true){
     S.phase = d.phase||'setup';
     S.names = d.names||['','','','',''];
     S.opponent = d.opponent||'';
+    S.gameDate=d.gameDate||''; S.gameVenue=d.gameVenue||''; S.gameStartTime=d.gameStartTime||'';
     S.h1Dur=d.h1Dur||20; S.h2Dur=d.h2Dur||20;
     // Migrate: old saves stored minutes (e.g. 3), new stores seconds (e.g. 180)
     const storedInterval=value=>value&&(d.intervalUnit==='seconds'||value>60)?value:(value||3)*60;
