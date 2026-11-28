@@ -452,7 +452,12 @@ html[data-layout="portrait"] .game:has(.score-stat-row) .court-card{min-height:9
 .event-error{color:var(--red);font-size:12px;}
 
 /* ── GAME OVER ── */
-.go{grid-template-rows:minmax(0,1fr) auto;}
+.go{grid-template-rows:auto minmax(0,1fr) auto;}
+.go-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:calc(env(safe-area-inset-top,0px) + 8px) calc(env(safe-area-inset-right,0px) + 12px) 8px calc(env(safe-area-inset-left,0px) + 12px);background:var(--surface);border-bottom:1px solid var(--border);}
+.go-actions button{min-width:0;min-height:44px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:calc(14px * var(--ui-scale,1));font-weight:700;cursor:pointer;overflow-wrap:anywhere;}
+.go-save{background:var(--green);color:#07150b;}
+.go-import{background:var(--card);color:var(--blue);}
+.go .go-hdr{padding-top:14px;}
 .go-scroll{min-height:0;overflow:auto;overscroll-behavior:contain;}
 .go-hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top,0px) + 14px) calc(env(safe-area-inset-right,0px) + 13px) 14px calc(env(safe-area-inset-left,0px) + 13px);text-align:center;flex-shrink:0;}
 .go-title{font-family:Impact,sans-serif;font-size:54px;letter-spacing:4px;color:#f08c00;line-height:1;}
@@ -714,7 +719,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.28.2';
+const APP_VERSION = '2026.11.28.3';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -5728,10 +5733,14 @@ function renderGameover(){
 
   $('app').innerHTML=`
 <div class="go viewport-frame">
+  <nav class="go-actions" aria-label="Game report actions">
+    <button type="button" class="go-save" onclick="saveGameReport()">Save Game</button>
+    <button type="button" class="go-import" onclick="chooseReportImport()">Import TXT</button>
+  </nav>
   <div class="go-scroll">
   <div class="go-hdr">
     <div class="go-title">FULL TIME</div>
-    <div class="go-sub">${sorted.length} players · ${fmt(S.gameTime)} played</div>
+    <div class="go-sub">${sorted.length} players · ${fmt(S.gameTime)} played · v${APP_VERSION}</div>
     <div style="display:flex;align-items:flex-start;justify-content:center;gap:10px;margin-top:12px;">
       <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);">Us</div>
@@ -5759,7 +5768,6 @@ function renderGameover(){
     ${eventSummaryHTML(S.players,S.scoreLog,S.statLog)}
     ${timeoutSummaryHTML(S.statLog)}
     <button class="exp-btn" onclick="openEventEditor()">Edit Events</button>
-    <button class="exp-btn" onclick="chooseReportImport()">Import Updated TXT</button>
     ${diffChartHTML}
     ${rotChartHTML}
     ${barChartHTML}
@@ -5769,7 +5777,7 @@ function renderGameover(){
   <footer class="go-footer">
     <button class="exp-btn" onclick="exportReport()">⬆ TXT</button>
     <button class="exp-btn" onclick="exportGamePDF()" style="background:rgba(74,158,255,.15);border-color:rgba(74,158,255,.3);color:var(--blue);">📄 PDF</button>
-    <button class="exp-btn" onclick="saveGameReport()" style="background:rgba(62,207,110,.1);border-color:rgba(62,207,110,.3);color:var(--green);">💾 SAVE</button>
+    <button class="exp-btn" onclick="saveGameReport()" style="background:rgba(62,207,110,.1);border-color:rgba(62,207,110,.3);color:var(--green);">Save Game</button>
     <button class="exp-btn" onclick="uploadToClaudeModal()" style="background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.3);color:var(--purple);">🤖 CLAUDE</button>
     <button class="new-btn" onclick="newGame()">NEW GAME</button>
   </footer>
