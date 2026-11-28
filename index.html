@@ -714,7 +714,7 @@ html[data-layout="landscape"] .lineup .ht-card{min-height:68px;}
 // ═══════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════
-const APP_VERSION = '2026.11.21.2';
+const APP_VERSION = '2026.11.28.2';
 const COURT_SIZE = 5;
 const PLAYER_STATS = [
   ['miss','Missed Shot','Miss'],
@@ -772,7 +772,7 @@ function saveCurrentPlan(name){
   const plan={
     id: uid(),
     name: name.trim(),
-    createdAt: new Date().toLocaleString(),
+    createdAt: reportDateTime(),
     players: [...S.names.filter(n=>n.trim())],
     h1Dur:S.h1Dur, h2Dur:S.h2Dur,
     h1Int:S.h1Int, h2Int:S.h2Int,
@@ -1025,6 +1025,7 @@ const S = {
   q3BreakDone: false,     // quarter break between Q3 and Q4 already shown
   isClockRunning: false,  // game clock running (may differ from isRunning for EDJBL timeout)
   subLog: [],
+  startingLineup: null,
   savedGame: null,
   finalScore: {us:null, them:null}, // entered on game over screen
   selCourt: new Set(),
@@ -2247,6 +2248,7 @@ function startGame(){
   S.scoreLog = [];
   S.statLog = [];
   S.periodEnds={};
+  S.startingLineup=null;
   S.periodStartTime=0;
   S.reportId=null;
   pendingPlayerEvent=null;
@@ -2384,7 +2386,8 @@ function commitSub(){
   snapshotSubForUndo();
   const off=S.players.filter(p=>S.selCourt.has(p.id)).map(p=>p.name);
   const on =S.players.filter(p=>S.selBench.has(p.id)).map(p=>p.name);
-  S.subLog.push({gameTime:S.gameTime, halfTime:S.halfTime, half:S.phase==='h2'?2:1, on, off});
+  S.subLog.push({gameTime:S.gameTime, halfTime:S.halfTime, half:S.phase==='h2'?2:1, on, off,
+    period:getCurrentQuarter(),remaining:getPeriodRemaining()});
 
   S.players.forEach(p=>{
     if(S.selCourt.has(p.id)){ p.onCourt=false; }
@@ -2568,6 +2571,7 @@ function finishLineup(){
     else { S.phase='h2'; S.q3BreakDone=true; }
   }
   if(firstStart||isBreak) S.periodStartTime=S.gameTime;
+  if(firstStart) S.startingLineup=S.players.filter(p=>court.has(p.id)).map(p=>p.name);
   if(!firstStart&&(off.length||on.length)){
     if(!isBreak){
       snapshotSubForUndo();
@@ -2575,6 +2579,7 @@ function finishLineup(){
       S.planSubIdx++;
     }
     S.subLog.push({gameTime:S.gameTime,halfTime:S.halfTime,half:S.phase==='h2'?2:1,on,off,
+      period:getCurrentQuarter(),remaining:getPeriodRemaining(),
       ...(halftime?{isHalftime:true}:{})});
   }
   S.players.forEach(p=>{
@@ -2597,34 +2602,37 @@ function finishLineup(){
 
 function endGame(){ S.periodEnds[getCurrentQuarter()]=S.gameTime; stopTick(); releaseWakeLock(); S.isRunning=false; S.isClockRunning=false; S.lineupMode=null; S.lineupDraft=null; pendingPlayerEvent=null; S.phase='gameover'; clearCrashSnapshot(); render(); }
 
-function exportReport(){
+function buildReportText(data=S){
   const now=new Date();
-  const pad=(s,w)=>String(s).padEnd(w);
   const line='─'.repeat(68);
-  const sorted=[...S.players].sort((a,b)=>b.playTime-a.playTime);
-  let txt=`SQUAD MANAGER — GAME REPORT\nGenerated: ${now.toLocaleString()}\n${line}\n\n`;
-  txt+=gameDetailsText(S)+'\n\n';
-  if(S.finalScore&&(S.finalScore.us!==null||S.finalScore.them!==null)){
-    const us=S.finalScore.us??'—', them=S.finalScore.them??'—';
+  const sorted=[...data.players].sort((a,b)=>b.playTime-a.playTime);
+  let txt=`SQUAD MANAGER — GAME REPORT\nGenerated: ${reportDateTime(now)}\n${line}\n\n`;
+  const team=data===S?T.teams.find(t=>t.id===T.activeTeamId):null;
+  txt+='Team: '+(data.teamName||team?.club||'Not recorded')+'\nLeague: '+(data.league||team?.league||'Not recorded')+'\n';
+  txt+=gameDetailsText(data)+'\nRecorded game duration: '+fmt(data.gameSecs??data.gameTime)+'\n\n';
+  const score=data===S?data.finalScore:data.score;
+  if(score&&(score.us!==null||score.them!==null)){
+    const us=score.us??'—', them=score.them??'—';
     txt+=`FINAL SCORE: ${us} — ${them}\n${line}\n\n`;
   }
   txt+=`GAME SETTINGS\n`;
-  txt+=`• 1st Half: ${S.h1Dur} min | Sub every: ${S.h1Int} min | Per sub: ${S.h1Sps}\n`;
-  txt+=`• 2nd Half: ${S.h2Dur} min | Sub every: ${S.h2Int} min | Per sub: ${S.h2Sps}\n\n`;
+  txt+=`• 1st Half: ${data.h1Dur} min | Sub every: ${fmt(data.h1Int||180)} | Per sub: ${data.h1Sps||1}\n`;
+  txt+=`• 2nd Half: ${data.h2Dur} min | Sub every: ${fmt(data.h2Int||180)} | Per sub: ${data.h2Sps||1}\n\n`;
   txt+=`PLAYER STATISTICS (sorted by total playing time)\n${line}\n`;
-  txt+=`${pad('Player',15)}${pad('1st Half',10)}${pad('2nd Half',10)}${pad('Total',10)}Fouls\n${line}\n`;
+  txt+='Player\t1st Half\t2nd Half\tTotal\tFouls\n';
   sorted.forEach(p=>{
-    txt+=`${pad(p.name,15)}${pad(fmt(p.h1PlayTime),10)}${pad(fmt(p.h2PlayTime),10)}${pad(fmt(p.playTime),10)}${p.fouls}\n`;
+    txt+=[p.name,fmt(p.h1PlayTime),fmt(p.h2PlayTime),fmt(p.playTime),p.fouls].join('\t')+'\n';
   });
-  if(S.subLog.length){
-    txt+=`\nSUBSTITUTION LOG (${S.subLog.length} subs)\n${line}\n`;
-    txt+=`${pad('Game',10)}${pad('Half',6)}${pad('HalfT',10)}${pad('On',22)}Off\n${line}\n`;
-    S.subLog.forEach(e=>{
-      txt+=`${pad(fmt(e.gameTime),10)}${pad('H'+e.half,6)}${pad(fmt(e.halfTime),10)}${pad(e.on.join(', '),22)}${e.off.join(', ')}\n`;
-    });
-  }
-  txt+=eventReportText(S.players,S.scoreLog,S.statLog);
-  const filename=`squad_report_${now.toISOString().slice(0,10)}.txt`;
+  txt+='\n'+substitutionReportText(data);
+  txt+=eventReportText(data.players,data.scoreLog,data.statLog,data);
+  if(data.importNotes?.length) txt+='\nIMPORT NOTES\n'+data.importNotes.map(note=>'- '+note).join('\n')+'\n';
+  return txt;
+}
+
+function exportReport(){
+  const now=new Date();
+  const txt=buildReportText();
+  const filename=`squad_report_${reportDateTime(now).split(',')[0]}.txt`;
   const blob=new Blob([txt],{type:'text/plain'});
   if(navigator.canShare){
     const file=new File([blob],filename,{type:'text/plain'});
@@ -3563,7 +3571,7 @@ function statPlayerIds(event){
   return event.pids||[event.pid];
 }
 
-function signedRemaining(seconds){ return seconds<0?'+'+fmt(-seconds):fmt(seconds); }
+function signedRemaining(seconds){ return seconds<0?'-'+fmt(-seconds):fmt(seconds); }
 function timeoutCaller(who){ return who==='us'?'Us':who==='them'?'Opposition':'Official / Other'; }
 function timeoutReportText(stats){
   return [1,2].map(half=>{
@@ -3599,14 +3607,24 @@ function chooseTimeout(){
 }
 
 function reportTiming(data=S,isQ=usesQuarters()){
-  const ends=data.periodEnds||{};
+  const ends={...data.periodEnds};
   const keys=isQ?['Q1','Q2','Q3','Q4']:['H1','H2'];
+  // Older saves can lack actual endings. A recorded countdown identifies its period's start.
+  for(const e of [...(data.scoreLog||[]),...(data.statLog||[]),...(data.subLog||[])]){
+    const index=keys.indexOf(e.period);
+    if(index<=0||!Number.isFinite(e.remaining)) continue;
+    const duration=isQ?600:(index===0?data.h1Dur||20:data.h2Dur||20)*60;
+    const start=(e.t??e.gameTime)-(duration-e.remaining);
+    const previous=keys[index-1];
+    if(Number.isFinite(start)&&start>=0&&ends[previous]==null) ends[previous]=start;
+  }
   let start=0;
-  const markers=[],extensions=[];
+  const markers=[],extensions=[],periods=[];
   keys.forEach((key,index)=>{
     const duration=isQ?600:(index===0?data.h1Dur||20:data.h2Dur||20)*60;
     const plannedEnd=start+duration;
     const end=ends[key]??plannedEnd;
+    periods.push({key,start,end,duration});
     const label=index===keys.length-1?'FT':index===(isQ?1:0)?'HT':key;
     if(end>plannedEnd){
       markers.push({t:plannedEnd,label:key+' nominal',major:false});
@@ -3616,7 +3634,7 @@ function reportTiming(data=S,isQ=usesQuarters()){
     start=end;
   });
   const latest=Math.max(0,...(data.scoreLog||[]).map(e=>e.t),...(data.statLog||[]).map(e=>e.t));
-  return {markers,extensions,total:Math.max(start,data.gameSecs??data.gameTime??0,latest),
+  return {markers,extensions,periods,total:Math.max(start,data.gameSecs??data.gameTime??0,latest),
     halfEnd:ends[isQ?'Q2':'H1']??markers.find(m=>m.label==='HT').t};
 }
 function reportAnnotations(data,xf,height,isQ=usesQuarters(),print=false){
@@ -3699,9 +3717,60 @@ function eventSummaryHTML(players, scores, stats){
 function gameDetailsText(data){
   const date=(data.gameDate||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return ['Opponent: '+(data.opponent||'Not recorded'),
-    'Game date: '+(date?date[3]+'/'+date[2]+'/'+date[1]:'Not recorded'),
+    'Game date: '+(date?date[3]+'-'+date[2]+'-'+date[1]:'Not recorded'),
     'Venue: '+(data.gameVenue||'Not recorded'),
     'Tip-off time: '+(data.gameStartTime||'Not recorded')].join('\n');
+}
+
+function reportDateTime(date=new Date()){
+  return [String(date.getDate()).padStart(2,'0'),String(date.getMonth()+1).padStart(2,'0'),date.getFullYear()].join('-')+
+    ', '+date.toLocaleTimeString('en-AU');
+}
+
+function periodClock(data,t,record={}){
+  const timing=reportTiming(data,data===S?usesQuarters():leagueUsesQuarters(data.league));
+  const period=timing.periods.find(p=>p.key===record.period)||
+    timing.periods.find(p=>t<p.end)||timing.periods.at(-1);
+  return {period:period.key,remaining:record.remaining??period.duration-(t-period.start)};
+}
+
+function substitutionRows(data){
+  let lineup=data.startingLineup;
+  if(!Array.isArray(lineup)){
+    const court=new Set((data.players||[]).filter(p=>p.onCourt).map(p=>p.name));
+    for(const e of [...(data.subLog||[])].sort((a,b)=>b.gameTime-a.gameTime)){
+      (e.on||[]).forEach(name=>court.delete(name));
+      (e.off||[]).forEach(name=>court.add(name));
+    }
+    lineup=court.size===COURT_SIZE?[...court]:[];
+  }
+  return [{gameTime:0,half:1,halfTime:0,on:lineup,off:[],isStarting:true,
+    period:data===S?(usesQuarters()?'Q1':'H1'):(leagueUsesQuarters(data.league)?'Q1':'H1')},
+    ...(data.subLog||[])];
+}
+
+function substitutionReportText(data){
+  const rows=substitutionRows(data);
+  return ['SUBSTITUTION LOG ('+(data.subLog||[]).length+' subs)',
+    'Game elapsed\tQuarter / Half remaining\tPeriod\tHalf\tHalf elapsed\tOn\tOff\tDetails',
+    ...rows.map(e=>{
+      const clock=periodClock(data,e.gameTime,e);
+      return [fmt(e.gameTime),signedRemaining(clock.remaining),clock.period,'H'+e.half,fmt(e.halfTime),
+        '▲ '+(e.on.join(', ')||(e.isStarting?'Not recorded':'')),'▼ '+e.off.join(', '),
+        e.isStarting?'Starting lineup':e.isHalftime?'Half time':''].join('\t');
+    })].join('\n')+'\n';
+}
+
+function substitutionLogHTML(data){
+  return '<div class="log-title">SUBSTITUTION LOG · '+(data.subLog||[]).length+' subs</div>'+
+    substitutionRows(data).map(e=>{
+      const clock=periodClock(data,e.gameTime,e);
+      const label=clock.period+' '+signedRemaining(clock.remaining)+' remaining · H'+e.half+' '+fmt(e.halfTime)+
+        (e.isStarting?' · Starting lineup':e.isHalftime?' · Half time':'');
+      return '<div class="log-entry"><span class="log-time">'+fmt(e.gameTime)+'</span> '+escapeHTML(label)+
+        '<div><span style="color:var(--green)">▲ '+escapeHTML(e.on.join(', ')||(e.isStarting?'Not recorded':''))+
+        '</span> | <span style="color:var(--warn)">▼ '+escapeHTML(e.off.join(', '))+'</span></div></div>';
+    }).join('');
 }
 
 function eventReportText(players, scores, stats, timingData=S){
@@ -3709,15 +3778,23 @@ function eventReportText(players, scores, stats, timingData=S){
   const rows=eventSummaryRows(players,scores,stats).map(row=>row.join('\t'));
   const events=[
     ...scores.map(e=>({...e,name:e.who==='us'?(names.get(e.pid)||'Unassigned (US)'):'Opponent',label:'Points',count:e.pts})),
-    ...stats.filter(e=>statName(e.kind)).map(e=>({...e,
+    ...stats.filter(e=>statName(e.kind)&&!e.untimed).map(e=>({...e,
       name:e.kind==='timeout'?timeoutCaller(e.who):statPlayerIds(e).map(pid=>names.get(pid)||'Unknown player').join(', '),
       label:statName(e.kind),count:1,
     })),
   ].sort((a,b)=>a.t-b.t||(a.order||0)-(b.order||0));
-  const lines=['','PLAYER EVENTS',eventSummaryHeaders().join('\t'),...rows,'','TIMESTAMPED EVENT LOG',
+  const untimed=stats.filter(e=>e.untimed);
+  const lines=['','PLAYER EVENTS',eventSummaryHeaders().join('\t'),...rows,
+    ...(untimed.length?['','UNTIMESTAMPED EVENTS','Name\tEvent\tCount',...untimed.map(e=>[
+      statPlayerIds(e).map(pid=>names.get(pid)||'Unknown player').join(', '),statName(e.kind),1].join('\t'))]:[]),
+    '','TIMESTAMPED EVENT LOG',
     ...(stats.some(e=>e.kind==='shotclock')?['Each Shot Clock Violation is one incident counted against every listed player.']:[]),
-    'Game elapsed\tPeriod\tClock remaining\tName\tEvent\tCount',
-    ...events.map(e=>[fmt(e.t),e.period||'',e.remaining==null?'':signedRemaining(e.remaining),e.name,e.label,e.count].join('\t')),
+    'Game elapsed\tQuarter / Half remaining\tPeriod\tName\tEvent\tCount',
+    ...events.map(e=>{
+      if(!e.period&&e.remaining==null) return [fmt(e.t),'','',e.name,e.label,e.count].join('\t');
+      const clock=periodClock(timingData,e.t,e);
+      return [fmt(e.t),signedRemaining(clock.remaining),e.period||clock.period,e.name,e.label,e.count].join('\t');
+    }),
     '',timeoutReportText(stats)];
   if(players.reduce((sum,p)=>sum+(p.fouls||0),0)>stats.filter(e=>e.kind==='foul').length)
     lines.push('Some fouls were recorded or adjusted without a timestamp.');
@@ -3730,6 +3807,225 @@ function downloadTextFile(text, filename){
   link.href=url; link.download=filename;
   link.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function parseReportText(text){
+  if(typeof text!=='string'||text.length>1000000||!/^SQUAD MANAGER/m.test(text)) throw new Error('Choose a Squad Manager TXT report (maximum 1 MB).');
+  const lines=text.replace(/^\uFEFF/,'').replace(/\r/g,'').split('\n');
+  const warnings=[];
+  const value=label=>lines.find(line=>line.startsWith(label+': '))?.slice(label.length+2).trim()||'';
+  const clock=(v,signed=false)=>{
+    const m=String(v).trim().match(/^([+-]?)(\d+):([0-5]\d)$/);
+    if(!m||(!signed&&m[1]==='-')) throw new Error('Invalid time: '+v);
+    return (m[1]==='-'||(signed&&m[1]==='+')?-1:1)*(Number(m[2])*60+Number(m[3]));
+  };
+  const count=v=>{if(!/^\d+$/.test(String(v))||!Number.isSafeInteger(Number(v))) throw new Error('Invalid count: '+v); return Number(v);};
+  const safeName=name=>{
+    if(!name||/[<>"`\\\t\r\n]/.test(name)) throw new Error('Invalid player name: '+name);
+    return name;
+  };
+  const section=title=>{
+    const start=lines.findIndex(line=>line.startsWith(title));
+    if(start<0) throw new Error('Missing section: '+title);
+    let end=start+1;
+    while(end<lines.length&&!/^(?:GAME SETTINGS|PLAYER STATISTICS|SUBSTITUTION LOG|PLAYER EVENTS|UNTIMESTAMPED EVENTS|TIMESTAMPED EVENT LOG|ACTUAL PERIOD ENDS|H[12] timeouts:)/.test(lines[end])) end++;
+    return lines.slice(start+1,end).filter(line=>line.trim()&&!/^[─-]+$/.test(line));
+  };
+  const r={teamName:value('Team')||'Imported game',league:value('League'),opponent:value('Opponent'),
+    gameVenue:value('Venue'),gameStartTime:value('Tip-off time'),gameDate:'',players:[],scoreLog:[],statLog:[],subLog:[],
+    startingLineup:null,periodEnds:{},h1Dur:20,h2Dur:20,h1Int:180,h2Int:180,h1Sps:1,h2Sps:1,notes:''};
+  for(const key of ['teamName','league','opponent','gameVenue','gameStartTime']){
+    if(r[key]==='Not recorded') r[key]='';
+    if(/[<>\t\r\n]/.test(r[key])) throw new Error('Invalid game detail: '+key);
+  }
+  const date=value('Game date').match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+  if(date){
+    r.gameDate=date[3]+'-'+date[2]+'-'+date[1];
+    const check=new Date(r.gameDate+'T12:00:00');
+    if(!Number.isFinite(check.getTime())||check.getFullYear()!==Number(date[3])||check.getMonth()+1!==Number(date[2])||check.getDate()!==Number(date[1])) throw new Error('Invalid game date.');
+  } else if(value('Game date')&&!['Not recorded',''].includes(value('Game date'))) throw new Error('Use DD-MM-YYYY for the game date.');
+  if(r.gameStartTime&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(r.gameStartTime)) throw new Error('Use HH:MM for tip-off time.');
+  for(const line of section('PLAYER STATISTICS').slice(1)){
+    const m=line.match(/^(.*?)\s+(\d+:[0-5]\d)\s+(\d+:[0-5]\d)\s+(\d+:[0-5]\d)\s+(\d+)\s*$/);
+    if(!m) throw new Error('Invalid player statistics row: '+line);
+    const name=safeName(m[1].trim());
+    if(r.players.some(p=>p.name===name)) throw new Error('Duplicate player: '+name);
+    r.players.push({id:r.players.length,name,h1PlayTime:clock(m[2]),h2PlayTime:clock(m[3]),playTime:clock(m[4]),fouls:count(m[5]),onCourt:false});
+  }
+  if(!r.players.length||r.players.length>50) throw new Error('The report must contain 1 to 50 players.');
+  const names=new Map(r.players.map(p=>[p.name,p.id]));
+  const playerId=name=>{if(!names.has(name)) throw new Error('Unknown player: '+name);return names.get(name);};
+  const list=str=>{
+    const s=str.replace(/^[▲▼]\s*/,'').trim();
+    return !s||s==='Not recorded'?[]:s.split(',').map(n=>{const name=n.trim();playerId(name);return name;});
+  };
+  for(const line of lines){
+    const end=line.match(/^(Q[1-4]|H[12])\t(\d+:[0-5]\d)$/);
+    if(end) r.periodEnds[end[1]]=clock(end[2]);
+    const setting=line.match(/([12])(?:st|nd) Half: (\d+) min \| Sub every: ([\d:]+)( min)? \| Per sub: (\d+)/);
+    if(setting){
+      r['h'+setting[1]+'Dur']=count(setting[2]);
+      r['h'+setting[1]+'Int']=setting[3].includes(':')?clock(setting[3]):Number(setting[3])*(Number(setting[3])<=60?60:1);
+      r['h'+setting[1]+'Sps']=count(setting[5]);
+    }
+  }
+  let order=0;
+  const eventLines=section('TIMESTAMPED EVENT LOG');
+  const newOrder=eventLines[0]?.startsWith('Game elapsed\tQuarter');
+  for(const line of eventLines.slice(1)){
+    if(!/^\d+:/.test(line)) continue;
+    const cells=line.split('\t');
+    if(cells.length!==6) throw new Error('Invalid event row: '+line);
+    const [time,a,b,name,label,number]=cells;
+    const period=newOrder?b:a,remaining=newOrder?a:b;
+    if(period&&!/^(Q[1-4]|H[12])$/.test(period)) throw new Error('Invalid event period: '+period);
+    const e={t:clock(time),...(period?{period}:{}),...(remaining?{remaining:clock(remaining,true)}:{}),order:++order};
+    const n=count(number);
+    if(label==='Points'){
+      if(n<1||n>3) throw new Error('A scoring event must contain 1, 2 or 3 points.');
+      const who=/^(Opponent|Opposition)$/.test(name)?'them':'us';
+      r.scoreLog.push({...e,who,pts:n,...(who==='us'&&!name.startsWith('Unassigned')?{pid:playerId(name)}:{})});
+    } else {
+      if(n!==1) throw new Error('Use one timestamped row per event.');
+      const kind=label==='Foul'?'foul':label==='Timeout'?'timeout':PLAYER_STATS.find(s=>s[1]===label)?.[0];
+      if(!kind) throw new Error('Unknown event: '+label);
+      if(kind==='timeout'){
+        if(!['Us','Opposition','Official / Other'].includes(name)) throw new Error('Invalid timeout caller: '+name);
+        r.statLog.push({...e,kind,who:name==='Us'?'us':name==='Opposition'?'them':'other',half:/Q[34]|H2/.test(period)?2:1});
+      } else r.statLog.push({...e,kind,...(kind==='shotclock'?{pids:list(name).map(playerId)}:{pid:playerId(name)})});
+    }
+  }
+  if(!r.league) r.league=[...r.scoreLog,...r.statLog].some(e=>/^Q/.test(e.period||''))?'VJBL':'EDJBL';
+  if(lines.includes('UNTIMESTAMPED EVENTS')) for(const line of section('UNTIMESTAMPED EVENTS').slice(1)){
+    const c=line.split('\t'),kind=PLAYER_STATS.find(s=>s[1]===c[1])?.[0];
+    if(c.length!==3||!kind) throw new Error('Invalid untimestamped event row.');
+    const n=count(c[2]);if(n>1000) throw new Error('Too many untimestamped events.');
+    const ids=list(c[0]).map(playerId);
+    if(kind!=='shotclock'&&ids.length!==1) throw new Error('Choose one player for the untimestamped event.');
+    for(let i=0;i<n;i++) r.statLog.push({kind,t:null,untimed:true,order:++order,...(kind==='shotclock'?{pids:ids}:{pid:ids[0]})});
+  }
+  const subs=section('SUBSTITUTION LOG');
+  const tsv=subs[0]?.startsWith('Game elapsed\t');
+  for(const line of subs.slice(1)){
+    if(!/^\d+:/.test(line)) continue;
+    let e;
+    if(tsv){
+      const c=line.split('\t');
+      if(c.length!==8) throw new Error('Invalid substitution row: '+line);
+      e={gameTime:clock(c[0]),remaining:clock(c[1],true),period:c[2],half:Number(c[3].replace('H','')),halfTime:clock(c[4]),on:list(c[5]),off:list(c[6]),isHalftime:c[7]==='Half time'};
+      if(c[7]==='Starting lineup'){if(e.gameTime!==0||r.startingLineup) throw new Error('Invalid starting lineup row.');r.startingLineup=e.on;continue;}
+    } else {
+      const m=line.match(/^(\d+:[0-5]\d)\s+H([12])\s+(\d+:[0-5]\d)\s*(.*)$/);
+      if(!m) throw new Error('Invalid legacy substitution row: '+line);
+      let rest=m[4],found=[];
+      while(rest.trim()){
+        rest=rest.replace(/^[\s,]+/,'');
+        if(!rest) break;
+        const name=[...names.keys()].sort((a,b)=>b.length-a.length).find(n=>rest.startsWith(n));
+        if(!name) throw new Error('Cannot separate the legacy player lists. Use tab-separated On and Off columns.');
+        found.push(name);rest=rest.slice(name.length);
+      }
+      if(!found.length||found.length%2) throw new Error('Ambiguous legacy substitution. Use tab-separated On and Off columns.');
+      e={gameTime:clock(m[1]),half:Number(m[2]),halfTime:clock(m[3]),on:found.slice(0,found.length/2),off:found.slice(found.length/2),isHalftime:m[2]==='2'&&clock(m[3])===0};
+    }
+    if(![1,2].includes(e.half)||e.period&&!/^(Q[1-4]|H[12])$/.test(e.period)) throw new Error('Invalid substitution period.');
+    r.subLog.push(e);
+  }
+  r.subLog.sort((a,b)=>a.gameTime-b.gameTime);
+  if(!tsv) warnings.push('Legacy merged On/Off lists were separated as equal-size swaps; please check the substitution log.');
+  if(!r.startingLineup){
+    const first=new Map();
+    r.subLog.forEach(e=>{e.off.forEach(n=>{if(!first.has(n))first.set(n,true)});e.on.forEach(n=>{if(!first.has(n))first.set(n,false)});});
+    const start=r.players.filter(p=>first.get(p.name)===true).map(p=>p.name);
+    if(start.length===COURT_SIZE){r.startingLineup=start;warnings.push('Starting lineup reconstructed from the first substitution for each player.');}
+    else warnings.push('Starting lineup could not be established and is marked Not recorded.');
+  }
+  const court=new Set(r.startingLineup||[]);
+  r.subLog.forEach(e=>{e.off.forEach(n=>court.delete(n));e.on.forEach(n=>court.add(n));});
+  r.players.forEach(p=>{p.onCourt=court.has(p.name)&&p.fouls<5;});
+  r.gameSecs=value('Recorded game duration')?clock(value('Recorded game duration')):Math.max(0,...Object.values(r.periodEnds),...r.scoreLog.map(e=>e.t),...r.statLog.map(e=>e.t),...r.subLog.map(e=>e.gameTime));
+  if(!r.gameSecs||r.gameSecs>86400) throw new Error('Missing or invalid recorded game duration.');
+  const keys=leagueUsesQuarters(r.league)?['Q1','Q2','Q3','Q4']:['H1','H2'];
+  let last=0;
+  for(const key of keys) if(r.periodEnds[key]!=null){if(r.periodEnds[key]<last||r.periodEnds[key]>r.gameSecs)throw new Error('Invalid period ending: '+key);last=r.periodEnds[key];}
+  let correctedCountdowns=false;
+  for(const e of [...r.scoreLog,...r.statLog]){
+    if(e.t>r.gameSecs) throw new Error('An event is after the recorded game duration.');
+    const period=reportTiming(r,leagueUsesQuarters(r.league)).periods.find(p=>p.key===e.period);
+    if(period&&(e.t<period.start||e.t>period.end)) throw new Error('Event time is outside '+e.period+': '+fmt(e.t));
+    if(period){
+      const remaining=period.duration-(e.t-period.start);
+      if(e.remaining!==remaining) correctedCountdowns=true;
+      e.remaining=remaining;
+    }
+  }
+  for(const e of r.subLog){
+    const position=periodClock(r,e.gameTime,e);
+    const period=reportTiming(r,leagueUsesQuarters(r.league)).periods.find(p=>p.key===position.period);
+    if(e.gameTime<period.start||e.gameTime>period.end) throw new Error('Substitution time is outside '+position.period);
+    const remaining=period.duration-(e.gameTime-period.start);
+    if(e.remaining!=null&&e.remaining!==remaining)correctedCountdowns=true;
+    e.period=period.key;e.remaining=remaining;
+  }
+  if(correctedCountdowns)warnings.push('Countdowns were recalculated from elapsed event times and actual period endings.');
+  if(r.subLog.some(e=>e.gameTime>r.gameSecs)) throw new Error('A substitution is after the recorded game duration.');
+  const score=lines.find(line=>line.startsWith('FINAL SCORE:'))?.match(/FINAL SCORE:\s*(\d+)\s*[—–-]\s*(\d+)/);
+  r.score=score?{us:Number(score[1]),them:Number(score[2])}:calcScoreTotals(r.scoreLog);
+  const tracked=calcScoreTotals(r.scoreLog);
+  if(r.score.us!==tracked.us||r.score.them!==tracked.them) warnings.push('Final score differs from timestamped scores. The final score is retained; charts use the timestamped scores.');
+  if(r.players.some(p=>p.fouls!==r.statLog.filter(e=>e.kind==='foul'&&e.pid===p.id).length)) warnings.push('Foul totals differ from timestamped fouls. Player totals are retained; update both sections when correcting fouls.');
+  const matrix=section('PLAYER EVENTS').slice(1);
+  let restoredUntimed=0;
+  for(const line of matrix){
+    const c=line.split('\t');
+    if(c.length!==13) throw new Error('Invalid player-event matrix row: '+line);
+    if(c[0]==='Unassigned') continue;
+    const pid=playerId(c[0]),values=c.slice(1).map(count);
+    const row=eventSummaryRows(r.players,r.scoreLog,r.statLog).find(row=>row[0]===c[0]);
+    if(values[0]!==row[1]) warnings.push(c[0]+': points differ between the matrix and event log; timestamped points are used.');
+    if(values[1]!==row[2]) warnings.push(c[0]+': foul totals differ between summary tables; Player Statistics is used.');
+    for(let i=0;i<EVENT_MATRIX_STATS.length;i++){
+      const delta=values[i+2]-row[i+3];
+      if(delta<0) throw new Error(c[0]+': '+statName(EVENT_MATRIX_STATS[i])+' total is below its event log. Update both sections.');
+      if(delta>1000) throw new Error('Too many summary-only events.');
+      for(let n=0;n<delta;n++){
+        const kind=EVENT_MATRIX_STATS[i];
+        r.statLog.push({kind,t:null,untimed:true,order:++order,...(kind==='shotclock'?{pids:[pid]}:{pid})});restoredUntimed++;
+      }
+    }
+  }
+  if(restoredUntimed) warnings.push(restoredUntimed+' summary-only stat(s) preserved without inventing timestamps.');
+  const declared=lines.find(line=>line.startsWith('SUBSTITUTION LOG'))?.match(/\((\d+)/);
+  if(declared&&Number(declared[1])!==r.subLog.length) warnings.push('The substitution heading count differs from its rows; '+r.subLog.length+' rows were imported.');
+  const notesStart=lines.indexOf('IMPORT NOTES');
+  r.importNotes=[...new Set([...(notesStart<0?[]:lines.slice(notesStart+1).filter(line=>line.startsWith('- ')).map(line=>line.slice(2))),...warnings])];
+  return {report:r,warnings};
+}
+
+function saveImportedReport(report){
+  const reports=JSON.parse(localStorage.getItem(REPORTS_KEY)||'[]');
+  if(reports.length>=20) throw new Error('Saved reports are full. Remove an old saved report before importing.');
+  const imported={...report,id:'rep_'+uid(),savedAt:Date.now(),date:reportDateTime().split(',')[0],teamId:null};
+  localStorage.setItem(REPORTS_KEY,JSON.stringify([imported,...reports]));
+  return imported;
+}
+
+function chooseReportImport(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='.txt,text/plain';
+  input.onchange=async()=>{
+    const file=input.files?.[0];if(!file)return;
+    try{
+      if(file.size>1000000) throw new Error('Choose a TXT file smaller than 1 MB.');
+      const {report,warnings}=parseReportText(await file.text());
+      const summary=[report.opponent||report.teamName,fmt(report.gameSecs)+' recorded',report.players.length+' players',
+        report.scoreLog.length+report.statLog.length+' events',report.subLog.length+' substitutions',...warnings];
+      if(!confirm('Import as a separate saved report? Your current game will be kept.\n\n'+summary.join('\n')))return;
+      saveImportedReport(report);viewSavedReport(0);
+      showToast('TXT imported. Open PDF to generate the updated report.');
+    }catch(error){showToast('Import failed: '+error.message);}
+  };
+  input.click();
 }
 
 function eventRecords(data){
@@ -3767,12 +4063,10 @@ function editRecordedEvent(data,original,change){
     const keys=isQ?['Q1','Q2','Q3','Q4']:['H1','H2'];
     const period=change.period;
     if(!keys.includes(period)) throw new Error('Choose a period.');
-    const index=keys.indexOf(period);
-    const starts=index===0?0:(data.periodEnds||{})[keys[index-1]]??
-      (isQ?index*600:(data.h1Dur||20)*60);
-    const ends=(data.periodEnds||{})[period]??duration;
-    if(change.t<starts||change.t>ends) throw new Error('The event time is outside the selected period.');
-    const remaining=(isQ?600:(index===0?data.h1Dur||20:data.h2Dur||20)*60)-(change.t-starts);
+    const bounds=reportTiming(data,isQ).periods.find(p=>p.key===period);
+    const ends=data.periodEnds?.[period]??Math.min(duration,bounds.end);
+    if(change.t<bounds.start||change.t>ends) throw new Error(period+' events must be between '+fmt(bounds.start)+' and '+fmt(ends)+' elapsed game time.');
+    const remaining=bounds.duration-(change.t-bounds.start);
     const record={t:change.t,period,remaining,half:/Q[34]|H2/.test(period)?2:1,
       order:original?data[original.log][original.index].order||0:
         Math.max(0,...data.scoreLog.map(e=>e.order||0),...data.statLog.map(e=>e.order||0))+1,
@@ -3818,9 +4112,9 @@ function openEventEditor(data=S,onSave=null){
       '<label>Points<select name="pts">'+[1,2,3].map(n=>'<option '+(n===(current?.pts||2)?'selected':'')+'>'+n+'</option>').join('')+'</select></label>'+
       '<div class="event-players" data-shotclock>'+[...names].map(([id,name])=>'<label><input type="checkbox" name="pids" value="'+id+
         '" '+(current?.pids?.includes(id)?'checked':'')+'>'+escapeHTML(name)+'</label>').join('')+'</div>'+
-      '<button type="submit">'+(current?'Save changes':'Add event')+'</button><div class="event-error" role="alert"></div></form>'+
+      '<div class="event-range"></div><button type="submit">'+(current?'Save changes':'Add event')+'</button><div class="event-error" role="alert"></div></form>'+
       '<table><thead><tr><th>Elapsed</th><th>Period</th><th>Player / Team</th><th>Event</th><th></th></tr></thead><tbody>'+
-      records.map((item,i)=>'<tr><td>'+fmt(item.e.t)+'</td><td>'+escapeHTML(item.e.period||'')+'</td><td>'+escapeHTML(item.name)+
+      records.map((item,i)=>'<tr><td>'+(item.e.untimed?'Not recorded':fmt(item.e.t))+'</td><td>'+escapeHTML(item.e.period||'')+'</td><td>'+escapeHTML(item.name)+
         '</td><td>'+escapeHTML(item.label)+(item.log==='scoreLog'?' +'+item.e.pts:'')+'</td><td><button data-edit="'+i+'">Edit</button>'+
         '<button data-delete="'+i+'">Delete</button></td></tr>').join('')+'</tbody></table>';
     const form=dialog.querySelector('form');
@@ -3831,6 +4125,12 @@ function openEventEditor(data=S,onSave=null){
       form.querySelector('[data-shotclock]').style.display=kind.value==='shotclock'?'':'none';
     };
     kind.onchange=showFields; showFields();
+    const showRange=()=>{
+      const bounds=reportTiming(data,isQ).periods.find(p=>p.key===form.elements.period.value);
+      form.querySelector('.event-range').textContent=bounds.key+': '+fmt(bounds.start)+' to '+
+        fmt(Math.min(data===S?data.gameTime:data.gameSecs,bounds.end))+' elapsed';
+    };
+    form.elements.period.onchange=showRange; showRange();
     form.onsubmit=event=>{
       event.preventDefault();
       const input=form.elements,match=input.time.value.trim().match(/^(\d+):([0-5]\d)$/);
@@ -4757,15 +5057,15 @@ function exportGamePDF(saved=null){
 
   // ── Substitutions and player events ────────────────────────
   function subLogHTML(){
-    if(!subLog.length)return'';
-    const entries=subLog.map(e=>{
-      const period=e.isHalftime?'Half time':('H'+e.half+' \u00b7 '+fmt(e.halfTime));
+    const entries=substitutionRows(saved||S).map(e=>{
+      const clock=periodClock(saved||S,e.gameTime,e);
+      const period=clock.period+' · H'+e.half+' '+fmt(e.halfTime)+(e.isStarting?' · Starting lineup':e.isHalftime?' · Half time':'');
       return `<tr${e.isHalftime?' class="sub-halftime"':''}><td>${fmt(e.gameTime)}</td>
-        <td>${period}</td><td>${escapeHTML(e.on.join(', '))}</td><td>${escapeHTML(e.off.join(', '))}</td></tr>`;
+        <td>${signedRemaining(clock.remaining)}</td><td>${period}</td><td>▲ ${escapeHTML(e.on.join(', ')||(e.isStarting?'Not recorded':''))}</td><td>▼ ${escapeHTML(e.off.join(', '))}</td></tr>`;
     }).join('');
     return `<table class="report-sub-log">
-      <caption>Substitution Log \u00b7 ${subLog.length} entries</caption>
-      <thead><tr><th scope="col">Elapsed</th><th scope="col">Period</th><th scope="col">On</th><th scope="col">Off</th></tr></thead>
+      <caption>Substitution Log \u00b7 ${subLog.length} subs + starting lineup</caption>
+      <thead><tr><th scope="col">Elapsed</th><th scope="col">Remaining</th><th scope="col">Period / Half elapsed</th><th scope="col">On</th><th scope="col">Off</th></tr></thead>
       <tbody>${entries}</tbody>
     </table>`;
   }
@@ -4779,7 +5079,7 @@ function exportGamePDF(saved=null){
     +'<div class="report-meta">'+reportMeta+'</div></div>'
     +scoreLine+'</div>';
 
-  var footer='<div style="font-size:8px;color:#bbb;margin-top:16px;text-align:center;border-top:1px solid #eee;padding-top:8px">Generated by Squad Manager &middot; '+new Date().toLocaleString()+'</div>';
+  var footer='<div style="font-size:8px;color:#bbb;margin-top:16px;text-align:center;border-top:1px solid #eee;padding-top:8px">Generated by Squad Manager &middot; '+reportDateTime()+'</div>';
 
   // ── Assemble pages ────────────────────────────────────────
   var css='*{box-sizing:border-box;margin:0;padding:0}'
@@ -4793,7 +5093,7 @@ function exportGamePDF(saved=null){
     +'.report-sub-log caption,.event-summary caption{text-align:left;font-size:11px;font-weight:700;padding-bottom:4px;break-after:avoid}'
     +'.report-sub-log th,.report-sub-log td,.event-summary th,.event-summary td{border-bottom:1px solid #ddd;padding:4px 3px;overflow-wrap:anywhere}'
     +'.report-sub-log tr,.event-summary tr{break-inside:avoid;page-break-inside:avoid}'
-    +'.report-sub-log{text-align:left}.report-sub-log thead{background:#f0f0f0}.report-sub-log th:first-child{width:9%}.report-sub-log th:nth-child(2){width:13%}'
+    +'.report-sub-log{text-align:left}.report-sub-log thead{background:#f0f0f0}.report-sub-log th:first-child{width:9%}.report-sub-log th:nth-child(2){width:11%}.report-sub-log th:nth-child(3){width:18%}'
     +'.report-sub-log .sub-halftime{background:#fffbea}.event-summary th,.event-summary td{text-align:center}'
     +'.event-summary th:first-child{width:14%;text-align:left}.event-summary thead{background:#f0f0f0}'
     +'@page{size:A4 portrait;margin:10mm}'
@@ -4907,14 +5207,7 @@ function exportGamePDF(saved=null){
       var ds=(diff>=0?'+':'-')+fmt(Math.abs(diff));
       lines.push(p.name.padEnd(20)+fmt(p.playTime).padStart(6)+'  '+ds.padStart(7)+'  '+p.fouls+'f');
     });
-    if(subLog.length){
-      lines.push('');
-      lines.push('SUBSTITUTIONS ('+subLog.length+')');
-      lines.push('--------------------------------------------');
-      subLog.forEach(function(e){
-        lines.push(fmt(e.gameTime).padEnd(8)+(e.isHalftime?'HALF':'H'+e.half)+'  ▲ '+e.on.join(', ')+'  ▼ '+e.off.join(', '));
-      });
-    }
+    lines.push(substitutionReportText(saved||S));
     lines.push(eventReportText(players,scoreLog,statLog,saved||S));
     lines.push('--------------------------------------------');
     lines.push('Suggested questions: Who needs more court time next game? Were minutes distributed fairly? Any players at foul trouble?');
@@ -4979,7 +5272,7 @@ function saveGameReport(){
     league: team&&team.league||'',
     opponent: S.opponent||'',
     gameDate:S.gameDate||'', gameVenue:S.gameVenue||'', gameStartTime:S.gameStartTime||'',
-    date: new Date().toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',year:'numeric'}),
+    date: reportDateTime().split(',')[0],
     score: {us: S.finalScore&&S.finalScore.us!==null ? S.finalScore.us : null,
             them: S.finalScore&&S.finalScore.them!==null ? S.finalScore.them : null},
     // Full player data for charts
@@ -4990,6 +5283,7 @@ function saveGameReport(){
     })),
     // Substitution and scoring logs for chart reconstruction
     subLog: S.subLog||[],
+    startingLineup:S.startingLineup,
     scoreLog: S.scoreLog||[],
     statLog: S.statLog||[],
     periodEnds: {...S.periodEnds},
@@ -5039,13 +5333,7 @@ function uploadToClaudeModal(){
     txt+=(p.name.padEnd(18)+fmt(p.h1PlayTime).padEnd(8)+fmt(p.h2PlayTime).padEnd(8)+fmt(p.playTime).padEnd(8)+dStr+' | '+p.fouls+'f\n');
   });
   txt+=eventReportText(S.players,S.scoreLog,S.statLog);
-  if(S.subLog.length){
-    txt+='\nSUBSTITUTION LOG ('+S.subLog.length+' entries)\n'+'─'.repeat(50)+'\n';
-    S.subLog.forEach(function(e){
-      const period=e.isHalftime?'HALF TIME':('H'+e.half+' '+fmt(e.halfTime));
-      txt+=fmt(e.gameTime)+' '+period+': ON '+e.on.join(',')+' | OFF '+e.off.join(',')+'\n';
-    });
-  }
+  txt+='\n'+substitutionReportText(S);
 
   // Build modal using DOM (no innerHTML template literals — avoids escaping issues)
   const modal=document.createElement('div');
@@ -5251,20 +5539,7 @@ function goPlayingTimeBarsHTML(markers){
 }
 
 function goSubLogHTML(){
-  if(!S.subLog||!S.subLog.length) return '';
-  var entries=S.subLog.map(function(e){
-    var periodLabel=e.isHalftime?'🏀 HALF TIME':('H'+e.half+' · '+fmt(e.halfTime));
-    var bgStyle=e.isHalftime?'background:rgba(255,204,0,.08);border-left:2px solid var(--warn);':'';
-    return '<div class="log-entry" style="'+bgStyle+'">'
-      +'<span class="log-time">'+fmt(e.gameTime)+'</span>'
-      +'<span style="color:#7a80a0;margin-left:7px;font-size:9px">'+periodLabel+'</span>'
-      +'<div style="margin-top:2px;font-size:10px">'
-      +'<span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span>'
-      +'<span style="color:#7a80a0;margin:0 5px">←</span>'
-      +'<span style="color:#ff8c00">▼ '+e.off.join(', ')+'</span>'
-      +'</div></div>';
-  }).join('');
-  return '<div class="log-title">SUBSTITUTION LOG · '+S.subLog.length+' sub'+(S.subLog.length!==1?'s':'')+'</div>'+entries;
+  return substitutionLogHTML(S);
 }
 
 function renderGameover(){
@@ -5298,21 +5573,7 @@ function renderGameover(){
   }).join('');
 
   // ── Sub log ──────────────────────────────────────────────────
-  const logEntries=Array.from(S.subLog).map(function(e){
-    const periodLabel=e.isHalftime?'🏀 HALF TIME':('H'+e.half+' · '+fmt(e.halfTime));
-    const bgStyle=e.isHalftime?'background:rgba(255,204,0,.08);border-left:2px solid var(--warn);':'';
-    return '<div class="log-entry" style="'+bgStyle+'">'
-      +'<span class="log-time">'+fmt(e.gameTime)+'</span>'
-      +'<span style="color:#7a80a0;margin-left:7px;font-size:9px">'+periodLabel+'</span>'
-      +'<div style="margin-top:2px;font-size:10px">'
-        +'<span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span>'
-        +'<span style="color:#7a80a0;margin:0 5px">←</span>'
-        +'<span style="color:#ff8c00">▼ '+e.off.join(', ')+'</span>'
-      +'</div></div>';
-  });
-  const logHTML=S.subLog.length
-    ?'<div class="log-title">SUBSTITUTION LOG · '+S.subLog.length+' sub'+(S.subLog.length!==1?'s':'')+'</div>'+logEntries.join('')
-    :'';
+  const logHTML=substitutionLogHTML(S);
 
   // ── Chart helpers ────────────────────────────────────────────
   const CW=320;
@@ -5498,6 +5759,7 @@ function renderGameover(){
     ${eventSummaryHTML(S.players,S.scoreLog,S.statLog)}
     ${timeoutSummaryHTML(S.statLog)}
     <button class="exp-btn" onclick="openEventEditor()">Edit Events</button>
+    <button class="exp-btn" onclick="chooseReportImport()">Import Updated TXT</button>
     ${diffChartHTML}
     ${rotChartHTML}
     ${barChartHTML}
@@ -5754,7 +6016,7 @@ function viewSavedReport(idx){
               h2PlayTime:p.h2PlayTime||0,fouls:p.fouls||0};
     });
     const rSubLog=r.subLog.map(function(e){
-      return {gameTime:e.gameTime||0,halfTime:e.halfTime||0,
+      return {...e,gameTime:e.gameTime||0,halfTime:e.halfTime||0,
               half:e.half||1,isHalftime:!!e.isHalftime,
               on:Array.isArray(e.on)?e.on:[],off:Array.isArray(e.off)?e.off:[]};
     });
@@ -5832,20 +6094,7 @@ function viewSavedReport(idx){
     }
 
     function buildSubLogHTML(subLog){
-      if(!subLog.length) return '';
-      const entries=subLog.map(function(e){
-        const pl=e.isHalftime?'🏀 HALF TIME':('H'+e.half+' · '+fmtMMSS(e.halfTime));
-        const bg=e.isHalftime?'background:rgba(255,204,0,.08);border-left:2px solid var(--warn);':'';
-        return '<div class="log-entry" style="'+bg+'">'
-          +'<span class="log-time">'+fmtMMSS(e.gameTime)+'</span>'
-          +'<span style="color:#7a80a0;margin-left:7px;font-size:9px">'+pl+'</span>'
-          +'<div style="margin-top:2px;font-size:10px">'
-          +'<span style="color:#3ecf6e">▲ '+e.on.join(', ')+'</span>'
-          +'<span style="color:#7a80a0;margin:0 5px">←</span>'
-          +'<span style="color:#ff8c00">▼ '+e.off.join(', ')+'</span>'
-          +'</div></div>';
-      }).join('');
-      return '<div class="log-title">SUBSTITUTION LOG · '+subLog.length+' sub'+(subLog.length!==1?'s':'')+'</div>'+entries;
+      return substitutionLogHTML({...r,subLog});
     }
 
     // ── Re-render body ──────────────────────────────────────────
@@ -5993,13 +6242,7 @@ function viewSavedReport(idx){
         txt+=p.name.padEnd(20)+fmtMMSS(p.playTime).padStart(6)+'  '+diffStr.padStart(7)+'  '+p.fouls+'f\n';
       });
       txt+=eventReportText(r.players,r.scoreLog,r.statLog,r);
-      if(r.subLog&&r.subLog.length){
-        txt+='\nSUBSTITUTIONS ('+r.subLog.length+')\n'+'─'.repeat(48)+'\n';
-        r.subLog.forEach(function(e){
-          txt+=fmtMMSS(e.gameTime).padEnd(8)+(e.isHalftime?'HALF TIME':'H'+e.half)+'  ';
-          txt+='▲ '+e.on.join(', ')+'  ▼ '+e.off.join(', ')+'\n';
-        });
-      }
+      txt+='\n'+substitutionReportText(r);
       txt+='\n─'.repeat(48)+'\n';
       txt+='Questions to ask: Who needs more time next game? Were subs evenly distributed? Which players had the most court time in each half?';
 
@@ -6079,6 +6322,9 @@ function viewSavedReport(idx){
     toolbar.appendChild(tbBtn('🤖 AI EXPORT','167,139,250,.12',function(){exportToAI();}));
     toolbar.appendChild(tbBtn('EDIT EVENTS','96,165,250,.12',function(){
       openEventEditor(r,()=>{saveReport(); viewSavedReport(idx);});
+    }));
+    toolbar.appendChild(tbBtn('TXT','96,165,250,.12',function(){
+      downloadTextFile(buildReportText(r),'squad_report_'+reportDateTime().split(',')[0]+'.txt');
     }));
 
     const body=document.createElement('div');
@@ -6435,6 +6681,7 @@ function resetAll(){
     useH2Preset:false, h2PresetIds:new Set(),
     useFinalPreset:false, finalPresetIds:new Set(),
     subLog:[], scoreLog:[], statLog:[], periodEnds:{}, periodStartTime:0, reportId:null, alertState:null, savedGame:null,
+    startingLineup:null,
     priorityPlayerIds:new Set(), useAutoMode:false,
     startingSlots:new Set(), lineupDraft:null, lineupMode:null,
     finalScore:{us:null,them:null},
@@ -6487,6 +6734,7 @@ function stateToJSON(){
     subCountdown: S.subCountdown,
     alertState: S.alertState,
     subLog: S.subLog,
+    startingLineup:S.startingLineup,
     scoreLog: S.scoreLog||[],
     statLog: S.statLog||[],
     periodEnds: S.periodEnds,
@@ -6558,6 +6806,7 @@ function loadStateFromData(d, offerContinue=true){
     S.alertState=d.alertState||null;
     prevAlert=d.alertState||null;
     S.subLog=d.subLog||[];
+    S.startingLineup=Array.isArray(d.startingLineup)?d.startingLineup:null;
     S.scoreLog=d.scoreLog||[];
     S.statLog=d.statLog||[];
     S.periodEnds=d.periodEnds||{};
